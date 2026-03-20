@@ -271,36 +271,14 @@ DASHBOARD_HTML = """\
             background: #0a0e14;
         }
 
-        /* Map panel */
+        /* Scene graph */
         #map-panel {
             padding: 16px;
             border-bottom: 1px solid #21262d;
         }
         #map-panel h2 { color: #e3b341; font-size: 13px; margin-bottom: 10px; font-family: monospace; }
-        #map-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-        .room-card {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            padding: 8px 10px;
-            min-width: 120px;
-            flex: 1;
-            font-family: monospace;
-            font-size: 11px;
-            transition: border-color 0.3s;
-        }
-        .room-card.has-agent { border-color: #58a6ff; }
-        .room-card .room-name { color: #e6edf3; font-weight: bold; font-size: 12px; margin-bottom: 4px; }
-        .room-card .room-agents { color: #58a6ff; margin-bottom: 3px; }
-        .room-card .room-agents .agent-icon { margin-right: 2px; }
-        .room-card .room-items { color: #8b949e; font-size: 10px; }
-        .room-card .room-doors { color: #484f58; font-size: 10px; margin-top: 3px; }
-        .door-locked { color: #f85149; }
-        .door-open { color: #3fb950; }
+        #scene-graph { width: 100%; }
+        #scene-graph svg { width: 100%; height: auto; }
 
         /* Puzzle panel */
         #puzzle-panel {
@@ -390,8 +368,8 @@ DASHBOARD_HTML = """\
     </div>
     <div id="right-panel">
         <div id="map-panel">
-            <h2>ENVIRONMENT MAP</h2>
-            <div id="map-container"></div>
+            <h2>SCENE VIEW</h2>
+            <div id="scene-graph"></div>
         </div>
         <div id="puzzle-panel">
             <h2>PUZZLE PROGRESS</h2>
@@ -410,7 +388,7 @@ DASHBOARD_HTML = """\
         const storyDiv = document.getElementById('story');
         const eventsDiv = document.getElementById('events');
         const statusDiv = document.getElementById('status');
-        const mapDiv = document.getElementById('map-container');
+        const sceneDiv = document.getElementById('scene-graph');
         const puzzleDiv = document.getElementById('puzzle-list');
         const agentDiv = document.getElementById('agent-list');
         const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -489,54 +467,169 @@ DASHBOARD_HTML = """\
             'lever_controller': { icon: '\\u{1F579}', name: 'Sequential Levers (Gate)', checkDoor: 'door_vault_hallway_secret' },
         };
 
+        // Puzzle annotations for rooms
+        const ROOM_PUZZLES = {
+            'start':    'Clues: Note, Book',
+            'workshop': 'Puzzles: Lock+Key, Combo Lock',
+            'vault':    'Puzzles: Pressure Plate, Levers',
+            'sanctum':  'Puzzles: Password, Brazier',
+            'hallway':  'Exit: Iron Door',
+            'library':  'Clues: Code Note, Hint Book',
+            'lab':      'Puzzles: Lock Box, Trial',
+        };
+
+        // Agent colors
+        const AGENT_COLORS = ['#58a6ff', '#f78166', '#3fb950', '#d2a8ff'];
+
         function updateMap(ws_data) {
             if (!ws_data) return;
             const rooms = ws_data.rooms || {};
             const agents = ws_data.agents || {};
             const doors = ws_data.doors || {};
 
-            // Build agent location lookup
+            // Auto-layout: assign positions to rooms in a grid
+            const roomIds = Object.keys(rooms);
+            const positions = autoLayout(roomIds, rooms, doors);
+
+            // Compute SVG bounds
+            const allX = Object.values(positions).map(p => p.x);
+            const allY = Object.values(positions).map(p => p.y);
+            const pad = 80;
+            const minX = Math.min(...allX) - pad, maxX = Math.max(...allX) + pad;
+            const minY = Math.min(...allY) - pad, maxY = Math.max(...allY) + pad;
+            const w = maxX - minX, h = maxY - minY;
+
+            // Agent lookup
             const agentsByRoom = {};
-            for (const a of Object.values(agents)) {
+            const agentList = Object.values(agents);
+            for (const a of agentList) {
                 if (!agentsByRoom[a.room_id]) agentsByRoom[a.room_id] = [];
                 agentsByRoom[a.room_id].push(a);
             }
 
-            // Room display order
-            const roomOrder = ['start', 'workshop', 'vault', 'sanctum', 'hallway'];
-            let html = '';
-            for (const rid of roomOrder) {
-                const room = rooms[rid];
-                if (!room) continue;
-                const hasAgent = !!agentsByRoom[rid];
-                const agentNames = (agentsByRoom[rid] || []).map(a =>
-                    `<span class="agent-icon">\\u{1F464}</span>${a.name}`
-                ).join(' ');
+            let svg = `<svg viewBox="${minX - 10} ${minY - 10} ${w + 20} ${h + 20}" xmlns="http://www.w3.org/2000/svg">`;
+            svg += `<defs>
+                <marker id="arrow" viewBox="0 0 10 6" refX="10" refY="3" markerWidth="8" markerHeight="6" orient="auto">
+                    <path d="M 0 0 L 10 3 L 0 6 z" fill="#484f58"/>
+                </marker>
+            </defs>`;
 
-                // Visible items (skip hidden, skip lever_controller)
-                const items = Object.values(room.entities || {})
-                    .filter(e => e.state !== 'hidden' && e.id !== 'lever_controller')
-                    .map(e => e.name)
-                    .slice(0, 5);
-                const itemsStr = items.length ? items.join(', ') : 'empty';
+            // Draw edges (doors)
+            const drawnDoors = new Set();
+            for (const [rid, room] of Object.entries(rooms)) {
+                const p1 = positions[rid];
+                if (!p1) continue;
+                for (const [dir, did] of Object.entries(room.doors || {})) {
+                    if (drawnDoors.has(did)) continue;
+                    drawnDoors.add(did);
+                    const door = doors[did];
+                    if (!door) continue;
+                    const otherRid = door.room_a === rid ? door.room_b : door.room_a;
+                    const p2 = positions[otherRid];
+                    if (!p2) continue;
 
-                // Doors from this room
-                const doorInfo = Object.entries(room.doors || {}).map(([dir, did]) => {
-                    const d = doors[did];
-                    if (!d) return '';
-                    const cls = d.locked ? 'door-locked' : 'door-open';
-                    const icon = d.locked ? '\\u{1F512}' : '\\u{1F513}';
-                    return `<span class="${cls}">${icon} ${dir}</span>`;
-                }).join(' ');
+                    const locked = door.locked;
+                    const edgeColor = locked ? '#f85149' : '#3fb950';
+                    const dashArray = locked ? '6,4' : 'none';
+                    const lockIcon = locked ? '\\u{1F512}' : '\\u{1F513}';
 
-                html += `<div class="room-card ${hasAgent ? 'has-agent' : ''}">
-                    <div class="room-name">${room.name}</div>
-                    ${agentNames ? `<div class="room-agents">${agentNames}</div>` : ''}
-                    <div class="room-items">${itemsStr}</div>
-                    <div class="room-doors">${doorInfo}</div>
-                </div>`;
+                    // Shorten line so it doesn't overlap node
+                    const dx = p2.x - p1.x, dy = p2.y - p1.y;
+                    const len = Math.sqrt(dx*dx + dy*dy);
+                    const nx = dx/len, ny = dy/len;
+                    const r = 40;
+                    const x1 = p1.x + nx*r, y1 = p1.y + ny*r;
+                    const x2 = p2.x - nx*r, y2 = p2.y - ny*r;
+                    const mx = (p1.x + p2.x)/2, my = (p1.y + p2.y)/2;
+
+                    svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${edgeColor}" stroke-width="2" stroke-dasharray="${dashArray}" opacity="0.7"/>`;
+                    svg += `<text x="${mx}" y="${my - 6}" text-anchor="middle" font-size="12" fill="${edgeColor}">${lockIcon}</text>`;
+                    svg += `<text x="${mx}" y="${my + 10}" text-anchor="middle" font-size="8" font-family="monospace" fill="#484f58">${door.name}</text>`;
+                }
             }
-            mapDiv.innerHTML = html;
+
+            // Draw room nodes
+            for (const [rid, room] of Object.entries(rooms)) {
+                const p = positions[rid];
+                if (!p) continue;
+                const hasAgent = !!agentsByRoom[rid];
+                const stroke = hasAgent ? '#58a6ff' : '#30363d';
+                const fill = hasAgent ? '#161b22' : '#0d1117';
+
+                svg += `<rect x="${p.x - 55}" y="${p.y - 30}" width="110" height="60" rx="8" fill="${fill}" stroke="${stroke}" stroke-width="${hasAgent ? 2 : 1}"/>`;
+                svg += `<text x="${p.x}" y="${p.y - 12}" text-anchor="middle" font-size="11" font-weight="bold" font-family="monospace" fill="#e6edf3">${room.name}</text>`;
+
+                // Puzzle annotation
+                const note = ROOM_PUZZLES[rid] || '';
+                if (note) {
+                    svg += `<text x="${p.x}" y="${p.y + 3}" text-anchor="middle" font-size="8" font-family="monospace" fill="#8b949e">${note}</text>`;
+                }
+
+                // Agents in this room
+                const roomAgents = agentsByRoom[rid] || [];
+                roomAgents.forEach((a, i) => {
+                    const color = AGENT_COLORS[agentList.indexOf(a) % AGENT_COLORS.length];
+                    const ax = p.x - 20 + i * 25;
+                    const ay = p.y + 18;
+                    svg += `<circle cx="${ax}" cy="${ay}" r="7" fill="${color}" opacity="0.9"/>`;
+                    svg += `<text x="${ax}" y="${ay + 3}" text-anchor="middle" font-size="7" font-weight="bold" fill="#0d1117">${a.name[0]}</text>`;
+                });
+            }
+
+            svg += '</svg>';
+            sceneDiv.innerHTML = svg;
+        }
+
+        function autoLayout(roomIds, rooms, doors) {
+            // Use door connections to build a graph, then do a BFS layout
+            const adj = {};
+            const dirOffset = {
+                east: [160, 0], west: [-160, 0],
+                south: [0, 120], north: [0, -120],
+            };
+            for (const rid of roomIds) adj[rid] = [];
+            for (const door of Object.values(doors)) {
+                const room = rooms[door.room_a];
+                if (!room) continue;
+                // Find direction
+                for (const [dir, did] of Object.entries(room.doors || {})) {
+                    if (did === door.id) {
+                        adj[door.room_a].push({ to: door.room_b, dir });
+                        const rev = {east:'west',west:'east',north:'south',south:'north'}[dir] || dir;
+                        adj[door.room_b].push({ to: door.room_a, dir: rev });
+                        break;
+                    }
+                }
+            }
+
+            const positions = {};
+            const visited = new Set();
+            const queue = [{ id: roomIds[0], x: 0, y: 0 }];
+            positions[roomIds[0]] = { x: 0, y: 0 };
+            visited.add(roomIds[0]);
+
+            while (queue.length > 0) {
+                const cur = queue.shift();
+                for (const edge of (adj[cur.id] || [])) {
+                    if (visited.has(edge.to)) continue;
+                    visited.add(edge.to);
+                    const off = dirOffset[edge.dir] || [160, 0];
+                    const nx = cur.x + off[0], ny = cur.y + off[1];
+                    positions[edge.to] = { x: nx, y: ny };
+                    queue.push({ id: edge.to, x: nx, y: ny });
+                }
+            }
+
+            // Place any unvisited rooms (disconnected)
+            let ox = 0;
+            for (const rid of roomIds) {
+                if (!positions[rid]) {
+                    positions[rid] = { x: ox, y: 200 };
+                    ox += 160;
+                }
+            }
+
+            return positions;
         }
 
         function updatePuzzles(ws_data) {
