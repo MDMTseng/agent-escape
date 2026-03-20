@@ -140,15 +140,36 @@ async def run_simulation(
 
 
 def main() -> None:
-    """CLI entry point — runs the escape room demo with random brains."""
+    """CLI entry point — runs the escape room demo.
+
+    Usage:
+        agenttown              # random brains (no API key needed)
+        agenttown --claude     # Claude-powered agents (needs ANTHROPIC_API_KEY)
+    """
+    import argparse
+
     from agenttown.scenarios.escape_room import build_escape_room
+
+    parser = argparse.ArgumentParser(description="AgentTown — virtual world simulation")
+    parser.add_argument("--claude", action="store_true", help="Use Claude-powered agent brains")
+    parser.add_argument("--model", default="claude-sonnet-4-20250514", help="Claude model to use")
+    parser.add_argument("--ticks", type=int, default=50, help="Max ticks before stopping")
+    parser.add_argument("--interval", type=float, default=1.0, help="Seconds between ticks")
+    args = parser.parse_args()
 
     world, agent_ids = build_escape_room()
 
-    brains: dict[str, AgentBrain] = {aid: RandomBrain() for aid in agent_ids}
+    if args.claude:
+        from agenttown.agents.brain import ClaudeBrain
+
+        brains: dict[str, AgentBrain] = {
+            aid: ClaudeBrain(model=args.model) for aid in agent_ids
+        }
+    else:
+        brains = {aid: RandomBrain() for aid in agent_ids}
 
     try:
-        asyncio.run(run_simulation(world, brains, tick_interval=0.5, max_ticks=50))
+        asyncio.run(run_simulation(world, brains, tick_interval=args.interval, max_ticks=args.ticks))
     except KeyboardInterrupt:
         console.print("\n[yellow]Simulation interrupted.[/yellow]")
         sys.exit(0)

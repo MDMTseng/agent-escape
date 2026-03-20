@@ -5,6 +5,7 @@ A virtual world where LLM-powered agents live, interact with each other, and sol
 ## Dev Rules
 
 - **Every feature/milestone must have tests before committing.** No code lands without corresponding test coverage.
+- **Only touch files inside this project folder.** Do not modify files outside of `C:\Users\TRS001\Documents\workspace\agenttown\`.
 - Run tests with: `python -m pytest tests/ -v`
 - Install for development: `pip install -e ".[dev]"`
 
