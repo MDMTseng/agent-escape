@@ -167,7 +167,7 @@ class LLMBrain:
 
         # Extract action from response
         choice = response.choices[0]
-        action = self._parse_response(choice, agent)
+        action = self._parse_response(choice, agent, perception)
 
         # Track consecutive waits for stuck detection
         if hasattr(action, "type") and action.type == "wait":
@@ -255,8 +255,8 @@ class LLMBrain:
         except Exception as e:
             logger.debug(f"Reflection failed for {agent.name}: {e}")
 
-    def _parse_response(self, choice, agent: AgentState) -> Action:
-        """Extract an Action from the LLM response."""
+    def _parse_response(self, choice, agent: AgentState, perception: dict | None = None) -> Action:
+        """Extract an Action from the LLM response, with smart fallback."""
         msg = choice.message
 
         # Check for tool calls (function calling)
@@ -272,14 +272,29 @@ class LLMBrain:
             logger.info(f"{agent.name} decides: {tool_name}({json.dumps(tool_input)})")
             return parse_action(action_data)
 
-        # Fallback: try to parse action from text response
-        if msg.content:
-            logger.info(f"{agent.name} says: {msg.content[:100]}")
-            parsed = _parse_json(msg.content)
+        # Fallback 1: try to parse action from text response
+        text = msg.content or ""
+        if text:
+            # Strip <think>...</think> tags from reasoning models
+            import re
+            cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+            logger.info(f"{agent.name} text (no tool call): {cleaned[:150]}")
+
+            # Try to find JSON in the text
+            parsed = _parse_json(cleaned)
             if parsed and "type" in parsed:
                 return parse_action(parsed)
 
-        return Wait()
+            # Try to extract action keywords from text
+            action = _extract_action_from_text(cleaned, perception)
+            if action:
+                logger.info(f"{agent.name} extracted from text: {action.type}")
+                return action
+
+        # Fallback 2: smart default based on perception
+        fallback = _smart_fallback(agent, perception)
+        logger.info(f"{agent.name} fallback: {fallback.type}")
+        return fallback
 
     @property
     def memory(self) -> AgentMemory:
@@ -306,6 +321,68 @@ class LLMBrain:
 
 # Keep backward compat alias
 ClaudeBrain = LLMBrain
+
+
+def _extract_action_from_text(text: str, perception: dict | None) -> Action | None:
+    """Try to extract an action from free-form LLM text."""
+    import re
+    text_lower = text.lower()
+
+    # Look for common action patterns in text
+    # "examine the old book" / "I'll examine the painting"
+    m = re.search(r"(?:examine|look at|inspect)\s+(?:the\s+)?([\"']?[\w\s]+[\"']?)", text_lower)
+    if m:
+        target = m.group(1).strip().strip("'\"")
+        return parse_action({"type": "examine", "target": target})
+
+    # "pick up the key" / "grab the note"
+    m = re.search(r"(?:pick up|grab|take)\s+(?:the\s+)?([\"']?[\w\s]+[\"']?)", text_lower)
+    if m:
+        target = m.group(1).strip().strip("'\"")
+        return parse_action({"type": "pick_up", "target": target})
+
+    # "move east" / "go north" / "head south"
+    m = re.search(r"(?:move|go|head|walk)\s+(?:to the\s+)?(\w+)", text_lower)
+    if m:
+        direction = m.group(1).strip()
+        if direction in ("east", "west", "north", "south"):
+            return parse_action({"type": "move", "direction": direction})
+
+    # "enter 1847" / "code is 1847"
+    m = re.search(r"(?:enter|input|code|type)\s+[\"']?(\d{3,})[\"']?", text_lower)
+    if m and perception:
+        code = m.group(1)
+        # Find a combination lock in entities
+        for e in perception.get("entities", []):
+            return parse_action({"type": "interact", "target": e["name"], "payload": code})
+
+    return None
+
+
+def _smart_fallback(agent, perception: dict | None) -> Action:
+    """Pick a reasonable action when the LLM fails to respond properly."""
+    if not perception:
+        return parse_action({"type": "examine", "target": "room"})
+
+    entities = perception.get("entities", [])
+    exits = perception.get("exits", [])
+    inventory = perception.get("inventory", [])
+    others = perception.get("others", [])
+
+    # Priority 1: examine unexamined entities
+    for e in entities:
+        return parse_action({"type": "examine", "target": e["name"]})
+
+    # Priority 2: move to a new room
+    for ex in exits:
+        return parse_action({"type": "move", "direction": ex["direction"]})
+
+    # Priority 3: talk to someone
+    for o in others:
+        return parse_action({"type": "talk", "message": "What should we do next?", "to": o["name"]})
+
+    # Priority 4: examine room
+    return parse_action({"type": "examine", "target": "room"})
 
 
 def _parse_json(text: str) -> dict | None:
