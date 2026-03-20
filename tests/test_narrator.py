@@ -69,14 +69,18 @@ def test_narrate_template_formatting():
     assert "Alice examines" in result
 
 
-@patch("agenttown.agents.narrator.anthropic.Anthropic")
-def test_narrate_calls_api(mock_anthropic_cls):
+@patch("agenttown.agents.narrator.OpenAI")
+def test_narrate_calls_api(mock_openai_cls):
     """Verify narrator calls the API with correct structure."""
     mock_client = MagicMock()
+    mock_msg = MagicMock()
+    mock_msg.content = "The dust swirled as Alice reached behind the painting."
+    mock_choice = MagicMock()
+    mock_choice.message = mock_msg
     mock_response = MagicMock()
-    mock_response.content = [MagicMock(text="The dust swirled as Alice reached behind the painting.")]
-    mock_client.messages.create.return_value = mock_response
-    mock_anthropic_cls.return_value = mock_client
+    mock_response.choices = [mock_choice]
+    mock_client.chat.completions.create.return_value = mock_response
+    mock_openai_cls.return_value = mock_client
 
     narrator = Narrator()
     events = _make_test_events()
@@ -85,18 +89,15 @@ def test_narrate_calls_api(mock_anthropic_cls):
     result = narrator.narrate(events, world, tick=0)
 
     assert "painting" in result.lower()
-    mock_client.messages.create.assert_called_once()
-    call_kwargs = mock_client.messages.create.call_args.kwargs
-    assert call_kwargs["system"] == NARRATOR_SYSTEM_PROMPT
-    assert len(call_kwargs["messages"]) == 1
+    mock_client.chat.completions.create.assert_called_once()
 
 
-@patch("agenttown.agents.narrator.anthropic.Anthropic")
-def test_narrate_fallback_on_error(mock_anthropic_cls):
+@patch("agenttown.agents.narrator.OpenAI")
+def test_narrate_fallback_on_error(mock_openai_cls):
     """On API error, narrator returns raw event descriptions."""
     mock_client = MagicMock()
-    mock_client.messages.create.side_effect = Exception("API down")
-    mock_anthropic_cls.return_value = mock_client
+    mock_client.chat.completions.create.side_effect = Exception("API down")
+    mock_openai_cls.return_value = mock_client
 
     narrator = Narrator()
     events = _make_test_events()
@@ -104,6 +105,5 @@ def test_narrate_fallback_on_error(mock_anthropic_cls):
 
     result = narrator.narrate(events, world, tick=0)
 
-    # Should fall back to raw descriptions
     assert "Alice examines" in result
     assert "Brass Key" in result

@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+import os
 
-import anthropic
+from openai import OpenAI
 
 from agenttown.world.events import Event
 from agenttown.world.models import WorldState
@@ -51,13 +51,17 @@ class Narrator:
 
     def __init__(
         self,
-        model: str = "claude-haiku-4-5-20251001",
+        model: str | None = None,
         max_tokens: int = 512,
         api_key: str | None = None,
+        base_url: str | None = None,
     ) -> None:
-        self._client = anthropic.Anthropic(api_key=api_key)
-        self._model = model
+        self._model = model or os.environ.get("FEATHERLESS_MODEL", "Qwen/Qwen3-8B")
         self._max_tokens = max_tokens
+        self._client = OpenAI(
+            api_key=api_key or os.environ.get("FEATHERLESS_API_KEY", ""),
+            base_url=base_url or os.environ.get("FEATHERLESS_BASE_URL", "https://api.featherless.ai/v1"),
+        )
 
     def narrate(
         self, events: list[Event], world_state: WorldState, tick: int
@@ -66,14 +70,12 @@ class Narrator:
         if not events:
             return ""
 
-        # Filter out boring events
         interesting = [e for e in events if e.event_type != "wait"]
         if not interesting:
             return "_The manor is silent. Dust motes drift through stale air._"
 
         raw_lines = "\n".join(f"- [{e.event_type}] {e.description}" for e in interesting)
 
-        # Build room context
         rooms_involved = {e.room_id for e in interesting}
         room_descs = []
         for rid in rooms_involved:
@@ -82,7 +84,6 @@ class Narrator:
                 room_descs.append(f"**{r.name}**: {r.description}")
         room_text = "\n".join(room_descs) if room_descs else "Unknown location."
 
-        # Build agent context
         agent_descs = []
         for agent in world_state.agents.values():
             inv = ", ".join(i.name for i in agent.inventory) or "nothing"
@@ -100,14 +101,15 @@ class Narrator:
         )
 
         try:
-            response = self._client.messages.create(
+            response = self._client.chat.completions.create(
                 model=self._model,
                 max_tokens=self._max_tokens,
-                system=NARRATOR_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[
+                    {"role": "system", "content": NARRATOR_SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
             )
-            return response.content[0].text.strip()
+            return (response.choices[0].message.content or "").strip()
         except Exception as e:
             logger.error(f"Narrator error: {e}")
-            # Fallback: return raw events as-is
             return "\n".join(e.description for e in interesting)

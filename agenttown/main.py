@@ -152,7 +152,7 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="AgentTown — virtual world simulation")
     parser.add_argument("--claude", action="store_true", help="Use Claude-powered agent brains")
-    parser.add_argument("--model", default="claude-haiku-4-5-20251001", help="Claude model to use")
+    parser.add_argument("--model", default="claude-3-haiku-20240307", help="Claude model to use")
     parser.add_argument("--ticks", type=int, default=50, help="Max ticks before stopping")
     parser.add_argument("--interval", type=float, default=1.0, help="Seconds between ticks")
     args = parser.parse_args()

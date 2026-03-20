@@ -58,10 +58,10 @@ async def lifespan(app: FastAPI):
     # Try to auto-resume from latest save
     latest = sim_store.latest()
     if latest and latest["scenario"] == sim_scenario:
-        from agenttown.agents.brain import ClaudeBrain
+        from agenttown.agents.brain import LLMBrain
         sim_world = World.from_full_snapshot(latest["world_snapshot"])
         sim_brains = {
-            aid: ClaudeBrain.from_snapshot(bdata)
+            aid: LLMBrain.from_snapshot(bdata)
             for aid, bdata in latest["brain_snapshots"].items()
         }
         logger.info(f"Resumed from save '{latest['name']}' at tick {latest['tick']}")
@@ -76,8 +76,8 @@ async def lifespan(app: FastAPI):
             logger.info("Loaded scenario: escape_room")
 
         if use_claude:
-            from agenttown.agents.brain import ClaudeBrain
-            sim_brains = {aid: ClaudeBrain() for aid in agent_ids}
+            from agenttown.agents.brain import LLMBrain
+            sim_brains = {aid: LLMBrain() for aid in agent_ids}
             logger.info("Using Claude Haiku brains")
         else:
             sim_brains = {aid: RandomBrain() for aid in agent_ids}
@@ -259,11 +259,11 @@ async def load_game(save_id: int):
 
     sim_paused = True
 
-    from agenttown.agents.brain import ClaudeBrain
+    from agenttown.agents.brain import LLMBrain
     sim_world = World.from_full_snapshot(data["world_snapshot"])
     sim_brains.clear()
     sim_brains.update({
-        aid: ClaudeBrain.from_snapshot(bdata)
+        aid: LLMBrain.from_snapshot(bdata)
         for aid, bdata in data["brain_snapshots"].items()
     })
 

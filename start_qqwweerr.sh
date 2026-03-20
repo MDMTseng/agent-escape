@@ -32,7 +32,9 @@ fi
 start_server() {
     echo "Starting AgentTown server on port $PORT..."
     cd "$PROJECT_DIR"
-    ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
+    FEATHERLESS_API_KEY="$FEATHERLESS_API_KEY" \
+    FEATHERLESS_BASE_URL="${FEATHERLESS_BASE_URL:-https://api.featherless.ai/v1}" \
+    FEATHERLESS_MODEL="${FEATHERLESS_MODEL:-Qwen/Qwen3-8B}" \
     AGENTTOWN_CLAUDE="1" \
     AGENTTOWN_NARRATOR="1" \
     AGENTTOWN_SCENARIO="${AGENTTOWN_SCENARIO:-escape_room}" \
