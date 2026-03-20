@@ -19,7 +19,6 @@ You are {name}, an agent in a virtual world called AgentTown.
 - Doors may be locked — you'll need to find keys or solve puzzles to progress.
 
 ## Your Memory
-Below is a summary of what you remember from recent ticks:
 {memory_summary}
 
 ## Strategy Tips
@@ -27,6 +26,8 @@ Below is a summary of what you remember from recent ticks:
 - Talk to other agents to share discoveries and coordinate.
 - Keep track of clues — numbers, words, and patterns may be puzzle solutions.
 - Try using items on objects that seem related (keys on doors, etc.).
+- Use "interact" to enter codes on combination locks, speak passwords, or pull levers.
+- Use "combine" to merge two inventory items into something new.
 - Think step by step before acting.
 """
 
