@@ -193,6 +193,42 @@ AGENT_TOOLS = [
         },
     },
     {
+        "name": "interact",
+        "description": "Interact with a puzzle or mechanism by providing input. Use this to: enter a combination code on a lock, speak a password to a magic door, or pull a lever. The payload is the input you provide (a code, a password, or 'pull').",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "target": {
+                    "type": "string",
+                    "description": "The name of the puzzle or mechanism to interact with",
+                },
+                "payload": {
+                    "type": "string",
+                    "description": "The input to provide: a combination code (e.g. '1847'), a password (e.g. 'open sesame'), or 'pull' for a lever",
+                },
+            },
+            "required": ["target", "payload"],
+        },
+    },
+    {
+        "name": "combine",
+        "description": "Combine two items from your inventory to create something new. Some items can be combined together to form a new useful item.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "item_a": {
+                    "type": "string",
+                    "description": "Name of the first item from your inventory",
+                },
+                "item_b": {
+                    "type": "string",
+                    "description": "Name of the second item from your inventory",
+                },
+            },
+            "required": ["item_a", "item_b"],
+        },
+    },
+    {
         "name": "wait",
         "description": "Do nothing this turn. Use when you want to observe or let others act first.",
         "input_schema": {

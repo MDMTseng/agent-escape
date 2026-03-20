@@ -39,11 +39,27 @@ class Talk(BaseModel):
     to: str | None = None  # agent name, or None for everyone in room
 
 
+class Interact(BaseModel):
+    """Generic interaction providing input to an entity (enter code, pull lever)."""
+
+    type: Literal["interact"] = "interact"
+    target: str  # entity name in room
+    payload: str  # free-form input: code, password, lever choice, etc.
+
+
+class Combine(BaseModel):
+    """Combine two inventory items to create a new item."""
+
+    type: Literal["combine"] = "combine"
+    item_a: str  # first item name
+    item_b: str  # second item name
+
+
 class Wait(BaseModel):
     type: Literal["wait"] = "wait"
 
 
-Action = Move | PickUp | Drop | Use | Examine | Talk | Wait
+Action = Move | PickUp | Drop | Use | Examine | Talk | Interact | Combine | Wait
 
 
 def parse_action(data: dict) -> Action:
@@ -55,6 +71,8 @@ def parse_action(data: dict) -> Action:
         "use": Use,
         "examine": Examine,
         "talk": Talk,
+        "interact": Interact,
+        "combine": Combine,
         "wait": Wait,
     }
     action_type = data.get("type", "wait")

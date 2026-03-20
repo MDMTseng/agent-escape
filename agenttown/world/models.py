@@ -21,6 +21,7 @@ class EntityState(str, Enum):
     CLOSED = "closed"
     HIDDEN = "hidden"
     SOLVED = "solved"
+    ACTIVATED = "activated"
 
 
 class Entity(BaseModel):
