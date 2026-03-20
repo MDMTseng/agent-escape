@@ -326,10 +326,21 @@ ClaudeBrain = LLMBrain
 def _extract_action_from_text(text: str, perception: dict | None) -> Action | None:
     """Try to extract an action from free-form LLM text."""
     import re
+
+    # Pattern 1: "Action: tool_name({json})" — common Qwen3 output
+    m = re.search(r"(\w+)\s*\(\s*(\{.*?\})\s*\)", text)
+    if m:
+        tool_name = m.group(1).strip().lower()
+        try:
+            tool_input = json.loads(m.group(2))
+            action_data = {"type": tool_name, **tool_input}
+            return parse_action(action_data)
+        except json.JSONDecodeError:
+            pass
+
     text_lower = text.lower()
 
-    # Look for common action patterns in text
-    # "examine the old book" / "I'll examine the painting"
+    # Pattern 2: "examine the old book" / "I'll examine the painting"
     m = re.search(r"(?:examine|look at|inspect)\s+(?:the\s+)?([\"']?[\w\s]+[\"']?)", text_lower)
     if m:
         target = m.group(1).strip().strip("'\"")
@@ -359,30 +370,34 @@ def _extract_action_from_text(text: str, perception: dict | None) -> Action | No
     return None
 
 
+_fallback_index: dict[str, int] = {}  # agent_id -> rotating index
+
 def _smart_fallback(agent, perception: dict | None) -> Action:
-    """Pick a reasonable action when the LLM fails to respond properly."""
+    """Pick a reasonable action when the LLM fails to respond properly.
+    Rotates through options to avoid repeating the same fallback."""
     if not perception:
         return parse_action({"type": "examine", "target": "room"})
 
-    entities = perception.get("entities", [])
-    exits = perception.get("exits", [])
-    inventory = perception.get("inventory", [])
-    others = perception.get("others", [])
+    # Build list of all possible actions
+    options: list[dict] = []
 
-    # Priority 1: examine unexamined entities
-    for e in entities:
-        return parse_action({"type": "examine", "target": e["name"]})
+    for e in perception.get("entities", []):
+        options.append({"type": "examine", "target": e["name"]})
+        options.append({"type": "pick_up", "target": e["name"]})
 
-    # Priority 2: move to a new room
-    for ex in exits:
-        return parse_action({"type": "move", "direction": ex["direction"]})
+    for ex in perception.get("exits", []):
+        options.append({"type": "move", "direction": ex["direction"]})
 
-    # Priority 3: talk to someone
-    for o in others:
-        return parse_action({"type": "talk", "message": "What should we do next?", "to": o["name"]})
+    for o in perception.get("others", []):
+        options.append({"type": "talk", "message": "What have you found?", "to": o["name"]})
 
-    # Priority 4: examine room
-    return parse_action({"type": "examine", "target": "room"})
+    if not options:
+        return parse_action({"type": "examine", "target": "room"})
+
+    # Rotate through options
+    idx = _fallback_index.get(agent.id, 0) % len(options)
+    _fallback_index[agent.id] = idx + 1
+    return parse_action(options[idx])
 
 
 def _parse_json(text: str) -> dict | None:
