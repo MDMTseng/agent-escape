@@ -361,6 +361,43 @@ async def delete_save(save_id: int):
     return {"error": "Save not found"}
 
 
+@app.post("/api/reset")
+async def reset_game():
+    """Reset the game to a fresh state without restarting the server."""
+    global sim_world, sim_brains, sim_paused, sim_token_usage
+
+    sim_paused = True
+
+    scenario = os.environ.get("AGENTTOWN_SCENARIO", "escape_room")
+    if scenario == "memory_test":
+        from agenttown.scenarios.memory_test import build_memory_test
+        sim_world, agent_ids = build_memory_test()
+    else:
+        sim_world, agent_ids = build_escape_room()
+
+    use_claude = os.environ.get("AGENTTOWN_CLAUDE", "").lower() in ("1", "true", "yes")
+    if use_claude:
+        from agenttown.agents.brain import LLMBrain
+        sim_brains.clear()
+        sim_brains.update({aid: LLMBrain() for aid in agent_ids})
+    else:
+        sim_brains.clear()
+        sim_brains.update({aid: RandomBrain() for aid in agent_ids})
+
+    sim_token_usage.update({"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+    _log_buffer.clear()
+    logger.info(f"Game reset — scenario: {scenario}")
+
+    await broadcast({
+        "type": "snapshot",
+        "tick": sim_world.tick,
+        "paused": True,
+        "world_state": sim_world.snapshot(),
+    })
+
+    return {"status": "reset", "scenario": scenario}
+
+
 @app.get("/api/log")
 async def get_log(n: int = 50):
     """Return recent log lines. View from mobile: /api/log?n=100"""
@@ -645,6 +682,7 @@ DASHBOARD_HTML = """\
             <span class="sep">|</span>
             <button id="btn-save" onclick="simSave()">Save</button>
             <button id="btn-load" onclick="toggleSaveList()">Load</button>
+            <button id="btn-reset" onclick="simReset()" style="color:#f85149">Reset</button>
             <span id="status">Connecting...</span>
             <span id="token-display">Tokens: 0</span>
         </div>
@@ -818,6 +856,17 @@ DASHBOARD_HTML = """\
         }
         function simDelete(saveId) {
             fetch('/api/saves/' + saveId, {method:'DELETE'}).then(() => refreshSaveList());
+        }
+        function simReset() {
+            if (!confirm('Reset the game? All unsaved progress will be lost.')) return;
+            fetch('/api/reset', {method:'POST'}).then(r => r.json()).then(d => {
+                statusDiv.textContent = `Game reset (${d.scenario}) — press Resume or Step`;
+                statusDiv.style.color = '#e3b341';
+                setButtonState(true);
+                storyDiv.innerHTML = '';
+                eventsDiv.innerHTML = '';
+                tokenDiv.textContent = 'Tokens: 0';
+            });
         }
 
         ws.onopen = () => {
