@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -43,7 +44,15 @@ async def lifespan(app: FastAPI):
     """Start simulation on server startup."""
     global sim_world, sim_task
     sim_world, agent_ids = build_escape_room()
-    brains = {aid: RandomBrain() for aid in agent_ids}
+
+    use_claude = os.environ.get("AGENTTOWN_CLAUDE", "").lower() in ("1", "true", "yes")
+    if use_claude:
+        from agenttown.agents.brain import ClaudeBrain
+        brains = {aid: ClaudeBrain() for aid in agent_ids}
+        logger.info("Using Claude Haiku brains")
+    else:
+        brains = {aid: RandomBrain() for aid in agent_ids}
+        logger.info("Using random brains")
 
     async def sim_loop():
         """Tick loop that broadcasts state to WebSocket clients."""
@@ -154,7 +163,8 @@ DASHBOARD_HTML = """\
     <script>
         const eventsDiv = document.getElementById('events');
         const statusDiv = document.getElementById('status');
-        const ws = new WebSocket(`ws://${location.host}/ws`);
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${proto}//${location.host}/ws`);
 
         ws.onopen = () => { statusDiv.textContent = 'Connected — watching simulation...'; };
         ws.onclose = () => { statusDiv.textContent = 'Disconnected'; statusDiv.style.color = '#f85149'; };

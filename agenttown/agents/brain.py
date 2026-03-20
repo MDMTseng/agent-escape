@@ -22,7 +22,7 @@ class ClaudeBrain:
 
     def __init__(
         self,
-        model: str = "claude-sonnet-4-20250514",
+        model: str = "claude-haiku-4-5-20251001",
         max_tokens: int = 1024,
         api_key: str | None = None,
     ) -> None:
@@ -56,8 +56,19 @@ class ClaudeBrain:
         perception_text = build_perception_message(perception)
         history = self._get_history(agent.id)
 
-        # Add the new perception as a user message
-        history.append({"role": "user", "content": perception_text})
+        # If the last message is a user message (tool_result from previous turn),
+        # merge the new perception into it to avoid consecutive user messages.
+        if history and history[-1]["role"] == "user":
+            last_content = history[-1]["content"]
+            if isinstance(last_content, list):
+                last_content.append({"type": "text", "text": perception_text})
+            else:
+                history[-1]["content"] = [
+                    {"type": "text", "text": last_content},
+                    {"type": "text", "text": perception_text},
+                ]
+        else:
+            history.append({"role": "user", "content": perception_text})
 
         try:
             response = self._client.messages.create(
@@ -65,10 +76,13 @@ class ClaudeBrain:
                 max_tokens=self._max_tokens,
                 system=system_prompt,
                 tools=AGENT_TOOLS,
+                tool_choice={"type": "any"},  # force exactly one tool call
                 messages=history,
             )
-        except anthropic.APIError as e:
+        except Exception as e:
             logger.error(f"Claude API error for {agent.name}: {e}")
+            # Clear corrupted history to avoid cascading failures
+            self._message_history[agent.id] = []
             return Wait()
 
         # Extract the action from tool use
@@ -89,18 +103,17 @@ class ClaudeBrain:
 
         history.append({"role": "assistant", "content": assistant_content})
 
-        # Add a tool_result message so Claude's conversation stays valid
+        # Add tool_result for EVERY tool_use block — API requires it
+        tool_results = []
         for block in response.content:
             if block.type == "tool_use":
-                history.append({
-                    "role": "user",
-                    "content": [{
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": "Action submitted. You will see the results next turn.",
-                    }],
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": "Action submitted. You will see the results next turn.",
                 })
-                break
+        if tool_results:
+            history.append({"role": "user", "content": tool_results})
 
         # Record memory
         self._memory.record(
