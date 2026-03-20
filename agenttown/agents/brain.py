@@ -99,6 +99,7 @@ class LLMBrain:
         self._memory = AgentMemory()
         self._message_history: dict[str, list[dict[str, Any]]] = {}
         self.token_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        self._consecutive_waits: dict[str, int] = {}  # agent_id -> count
 
     def _get_history(self, agent_id: str) -> list[dict[str, Any]]:
         if agent_id not in self._message_history:
@@ -130,6 +131,18 @@ class LLMBrain:
         )
 
         perception_text = build_perception_message(perception)
+
+        # Stuck detection — nudge if agent has been waiting
+        waits = self._consecutive_waits.get(agent.id, 0)
+        if waits >= 2:
+            nudge = (
+                f"\n\n**WARNING: You have waited {waits} turns in a row. "
+                "You MUST take a different action NOW. "
+                "Suggestions: examine an object, pick up an item, move to another room, "
+                "or talk to another agent. Do NOT wait again.**"
+            )
+            perception_text += nudge
+
         history = self._get_history(agent.id)
 
         # Build messages — OpenAI format uses system + user/assistant alternation
@@ -155,6 +168,12 @@ class LLMBrain:
         # Extract action from response
         choice = response.choices[0]
         action = self._parse_response(choice, agent)
+
+        # Track consecutive waits for stuck detection
+        if hasattr(action, "type") and action.type == "wait":
+            self._consecutive_waits[agent.id] = self._consecutive_waits.get(agent.id, 0) + 1
+        else:
+            self._consecutive_waits[agent.id] = 0
 
         # Update conversation history (simplified — just user + assistant text)
         history.append({"role": "user", "content": perception_text})

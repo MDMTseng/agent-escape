@@ -186,7 +186,7 @@ class TestPrompts:
             assert tool["input_schema"]["type"] == "object"
 
         tool_names = {t["name"] for t in AGENT_TOOLS}
-        assert tool_names == {"move", "pick_up", "drop", "use", "examine", "talk", "interact", "combine", "wait"}
+        assert tool_names == {"move", "pick_up", "drop", "use", "examine", "talk", "interact", "combine"}
 
 
 class TestParseJson:
