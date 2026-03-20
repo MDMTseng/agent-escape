@@ -43,7 +43,15 @@ async def broadcast(message: dict) -> None:
 async def lifespan(app: FastAPI):
     """Start simulation on server startup."""
     global sim_world, sim_task
-    sim_world, agent_ids = build_escape_room()
+
+    scenario = os.environ.get("AGENTTOWN_SCENARIO", "escape_room")
+    if scenario == "memory_test":
+        from agenttown.scenarios.memory_test import build_memory_test
+        sim_world, agent_ids = build_memory_test()
+        logger.info("Loaded scenario: memory_test")
+    else:
+        sim_world, agent_ids = build_escape_room()
+        logger.info("Loaded scenario: escape_room")
 
     use_claude = os.environ.get("AGENTTOWN_CLAUDE", "").lower() in ("1", "true", "yes")
     if use_claude:
