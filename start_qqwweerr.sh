@@ -35,6 +35,7 @@ start_server() {
     ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
     AGENTTOWN_CLAUDE="1" \
     AGENTTOWN_NARRATOR="1" \
+    AGENTTOWN_SCENARIO="${AGENTTOWN_SCENARIO:-escape_room}" \
     nohup python run_qqwweerr.py > /tmp/agenttown_server.log 2>&1 &
     sleep 5
 

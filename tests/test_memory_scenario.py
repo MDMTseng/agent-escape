@@ -38,6 +38,7 @@ def test_full_memory_chain():
     assert any("clicks open" in e.description.lower() for e in events)
     assert world.state.rooms["lab"].entities["lock_box"].state == EntityState.SOLVED
     assert world.state.rooms["lab"].entities["exit_key"].state == EntityState.DEFAULT
+    assert world.state.rooms["lab"].entities["trial"].state == EntityState.DEFAULT  # trial now visible
 
     # Agent B examines the plaque
     events = world.process_action(Examine(target="Wall Plaque"), b)

@@ -25,6 +25,8 @@ connected_clients: set[WebSocket] = set()
 # Shared simulation state
 sim_world: World | None = None
 sim_task: asyncio.Task | None = None
+sim_paused: bool = False
+sim_step_event: asyncio.Event | None = None  # signals single-step advance
 
 
 async def broadcast(message: dict) -> None:
@@ -70,53 +72,68 @@ async def lifespan(app: FastAPI):
         narrator = Narrator()
         logger.info("Narrator enabled")
 
-    async def sim_loop():
-        """Tick loop that broadcasts state to WebSocket clients."""
-        while not sim_world.finished and sim_world.tick < 200:
-            agents = list(sim_world.state.agents.values())
-            perceptions = {a.id: sim_world.perceive(a) for a in agents}
+    global sim_step_event
+    sim_step_event = asyncio.Event()
 
-            decisions = await asyncio.gather(*[
-                brains[a.id].decide(a, perceptions[a.id]) for a in agents
-            ])
+    async def run_one_tick():
+        """Execute a single simulation tick."""
+        agents = list(sim_world.state.agents.values())
+        perceptions = {a.id: sim_world.perceive(a) for a in agents}
 
-            tick_events: list[Event] = []
-            for agent, action in zip(agents, decisions):
-                events = sim_world.process_action(action, agent)
-                tick_events.extend(events)
+        decisions = await asyncio.gather(*[
+            brains[a.id].decide(a, perceptions[a.id]) for a in agents
+        ])
 
-            # Generate narrative prose
-            narrative = ""
-            if narrator and tick_events:
-                narrative = narrator.narrate(tick_events, sim_world.state, sim_world.tick)
+        tick_events: list[Event] = []
+        for agent, action in zip(agents, decisions):
+            events = sim_world.process_action(action, agent)
+            tick_events.extend(events)
 
+        narrative = ""
+        if narrator and tick_events:
+            narrative = narrator.narrate(tick_events, sim_world.state, sim_world.tick)
+
+        await broadcast({
+            "type": "tick",
+            "tick": sim_world.tick,
+            "events": [
+                {"type": e.event_type, "description": e.description, "room": e.room_id}
+                for e in tick_events
+            ],
+            "narrative": narrative,
+            "world_state": sim_world.snapshot(),
+        })
+
+        sim_world.advance_tick()
+
+        if sim_world.finished:
+            finish_narrative = ""
+            if narrator:
+                finish_narrative = narrator.narrate(
+                    tick_events, sim_world.state, sim_world.tick
+                )
             await broadcast({
-                "type": "tick",
-                "tick": sim_world.tick,
-                "events": [
-                    {"type": e.event_type, "description": e.description, "room": e.room_id}
-                    for e in tick_events
-                ],
-                "narrative": narrative,
-                "world_state": sim_world.snapshot(),
+                "type": "finished",
+                "reason": sim_world.state.finish_reason,
+                "narrative": finish_narrative,
             })
 
-            sim_world.advance_tick()
-
-            if sim_world.finished:
-                finish_narrative = ""
-                if narrator:
-                    finish_narrative = narrator.narrate(
-                        tick_events, sim_world.state, sim_world.tick
-                    )
-                await broadcast({
-                    "type": "finished",
-                    "reason": sim_world.state.finish_reason,
-                    "narrative": finish_narrative,
-                })
-                break
-
-            await asyncio.sleep(1.0)
+    async def sim_loop():
+        """Tick loop with pause/resume/step support."""
+        global sim_paused
+        while not sim_world.finished and sim_world.tick < 200:
+            if sim_paused:
+                # Wait for a step signal or unpause
+                sim_step_event.clear()
+                await broadcast({"type": "paused", "tick": sim_world.tick})
+                await sim_step_event.wait()
+                if sim_paused:
+                    # Single step — run one tick then stay paused
+                    await run_one_tick()
+                    continue
+            await run_one_tick()
+            if not sim_world.finished:
+                await asyncio.sleep(1.0)
 
     sim_task = asyncio.create_task(sim_loop())
     yield
@@ -159,6 +176,31 @@ async def get_state():
     return {"error": "No simulation running"}
 
 
+@app.post("/api/pause")
+async def pause():
+    global sim_paused
+    sim_paused = True
+    return {"status": "paused"}
+
+
+@app.post("/api/resume")
+async def resume():
+    global sim_paused
+    sim_paused = False
+    if sim_step_event:
+        sim_step_event.set()
+    return {"status": "running"}
+
+
+@app.post("/api/step")
+async def step():
+    global sim_paused
+    sim_paused = True
+    if sim_step_event:
+        sim_step_event.set()
+    return {"status": "stepped"}
+
+
 DASHBOARD_HTML = """\
 <!DOCTYPE html>
 <html>
@@ -184,7 +226,18 @@ DASHBOARD_HTML = """\
         }
         #story-panel h1 { color: #e3b341; font-size: 24px; margin-bottom: 4px; }
         .subtitle { color: #8b949e; font-style: italic; margin-bottom: 12px; font-size: 13px; }
-        #status { color: #3fb950; margin-bottom: 12px; font-family: monospace; font-size: 11px; }
+        #controls {
+            display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+        }
+        #controls button {
+            font-family: monospace; font-size: 11px; padding: 4px 12px;
+            border: 1px solid #30363d; border-radius: 4px; cursor: pointer;
+            background: #21262d; color: #c9d1d9; transition: all 0.2s;
+        }
+        #controls button:hover:not(:disabled) { background: #30363d; border-color: #58a6ff; }
+        #controls button:disabled { opacity: 0.4; cursor: default; }
+        #controls button.active { background: #1f6feb; border-color: #58a6ff; color: #fff; }
+        #status { color: #3fb950; font-family: monospace; font-size: 11px; }
         #story { flex: 1; overflow-y: auto; }
         .narrative-block {
             margin-bottom: 16px; padding: 12px; background: #161b22;
@@ -316,7 +369,12 @@ DASHBOARD_HTML = """\
     <div id="story-panel">
         <h1>Ravenwood Manor</h1>
         <div class="subtitle">An escape room experience</div>
-        <div id="status">Connecting...</div>
+        <div id="controls">
+            <button id="btn-pause" onclick="simPause()">Pause</button>
+            <button id="btn-resume" onclick="simResume()" disabled>Resume</button>
+            <button id="btn-step" onclick="simStep()" disabled>Step 1 Tick</button>
+            <span id="status">Connecting...</span>
+        </div>
         <div id="story"></div>
     </div>
     <div id="right-panel">
@@ -347,7 +405,44 @@ DASHBOARD_HTML = """\
         const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
         const ws = new WebSocket(`${proto}//${location.host}/ws`);
 
-        ws.onopen = () => { statusDiv.textContent = 'Connected — watching simulation...'; };
+        const btnPause = document.getElementById('btn-pause');
+        const btnResume = document.getElementById('btn-resume');
+        const btnStep = document.getElementById('btn-step');
+        let isPaused = false;
+
+        function setButtonState(paused) {
+            isPaused = paused;
+            btnPause.disabled = paused;
+            btnResume.disabled = !paused;
+            btnStep.disabled = !paused;
+            if (paused) btnPause.classList.remove('active');
+            else btnPause.classList.add('active');
+        }
+
+        function simPause() {
+            fetch('/api/pause', {method:'POST'}).then(() => {
+                setButtonState(true);
+                statusDiv.textContent = 'Paused';
+                statusDiv.style.color = '#e3b341';
+            });
+        }
+        function simResume() {
+            fetch('/api/resume', {method:'POST'}).then(() => {
+                setButtonState(false);
+                statusDiv.textContent = 'Running...';
+                statusDiv.style.color = '#3fb950';
+            });
+        }
+        function simStep() {
+            statusDiv.textContent = 'Stepping...';
+            statusDiv.style.color = '#58a6ff';
+            fetch('/api/step', {method:'POST'}).then(() => {
+                statusDiv.textContent = 'Paused (after step)';
+                statusDiv.style.color = '#e3b341';
+            });
+        }
+
+        ws.onopen = () => { statusDiv.textContent = 'Running...'; statusDiv.style.color = '#3fb950'; };
         ws.onclose = () => { statusDiv.textContent = 'Disconnected'; statusDiv.style.color = '#f85149'; };
 
         // Puzzle definitions — which entities are puzzles and how to label them
@@ -546,6 +641,10 @@ DASHBOARD_HTML = """\
                 });
                 eventsDiv.appendChild(group);
                 eventsDiv.scrollTop = eventsDiv.scrollHeight;
+            } else if (msg.type === 'paused') {
+                setButtonState(true);
+                statusDiv.textContent = `Paused at tick ${msg.tick}`;
+                statusDiv.style.color = '#e3b341';
             } else if (msg.type === 'finished') {
                 const block = document.createElement('div');
                 block.className = 'finished-narrative';
@@ -556,6 +655,11 @@ DASHBOARD_HTML = """\
                 div.style.fontWeight = 'bold';
                 div.textContent = msg.reason;
                 eventsDiv.appendChild(div);
+                btnPause.disabled = true;
+                btnResume.disabled = true;
+                btnStep.disabled = true;
+                statusDiv.textContent = 'Simulation complete';
+                statusDiv.style.color = '#3fb950';
             }
         };
     </script>

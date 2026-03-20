@@ -98,8 +98,8 @@ def build_memory_test() -> tuple[World, list[str]]:
             "examine_text": "The lock has four dials. Enter the correct code to open it.",
             "on_solve": {
                 "set_state": "solved",
-                "reveal": ["exit_key"],
-                "message": "The lock clicks open! Inside you find a golden key!",
+                "reveal": ["exit_key", "trial"],
+                "message": "The lock clicks open! A golden key and a glowing pedestal are revealed!",
             },
         },
     )
@@ -134,6 +134,7 @@ def build_memory_test() -> tuple[World, list[str]]:
         id="trial",
         name="Trial Pedestal",
         description="A stone pedestal with a glowing rune. It seems to be listening.",
+        state=EntityState.HIDDEN,
         properties={
             "puzzle_type": "password_door",
             "password": "phoenix",
