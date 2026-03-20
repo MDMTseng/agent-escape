@@ -249,6 +249,24 @@ class ClaudeBrain:
     def memory(self) -> AgentMemory:
         return self._memory
 
+    # --- Persistence ---
+
+    def snapshot(self) -> dict:
+        """Serialize brain state for saving."""
+        return {
+            "model": self._model,
+            "memory": self._memory.snapshot(),
+            "message_history": dict(self._message_history),
+        }
+
+    @classmethod
+    def from_snapshot(cls, data: dict) -> ClaudeBrain:
+        """Restore brain from a saved snapshot."""
+        brain = cls(model=data.get("model", "claude-haiku-4-5-20251001"))
+        brain._memory = AgentMemory.from_snapshot(data["memory"])
+        brain._message_history = data.get("message_history", {})
+        return brain
+
 
 def _parse_json(text: str) -> dict | None:
     """Extract JSON from LLM response, handling markdown fences."""

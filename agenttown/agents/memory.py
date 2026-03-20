@@ -152,3 +152,24 @@ class AgentMemory:
         self._working.clear()
         self._reflections.clear()
         self._ticks_since_reflect = 0
+
+    # --- Persistence ---
+
+    def snapshot(self) -> dict:
+        """Serialize full memory state for saving."""
+        return {
+            "working": list(self._working),
+            "stream": [e.model_dump() for e in self._stream],
+            "reflections": [e.model_dump() for e in self._reflections],
+            "ticks_since_reflect": self._ticks_since_reflect,
+        }
+
+    @classmethod
+    def from_snapshot(cls, data: dict) -> AgentMemory:
+        """Restore memory from a saved snapshot."""
+        mem = cls()
+        mem._working = data.get("working", [])
+        mem._stream = [MemoryEntry.model_validate(e) for e in data.get("stream", [])]
+        mem._reflections = [MemoryEntry.model_validate(e) for e in data.get("reflections", [])]
+        mem._ticks_since_reflect = data.get("ticks_since_reflect", 0)
+        return mem

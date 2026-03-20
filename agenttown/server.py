@@ -26,7 +26,10 @@ connected_clients: set[WebSocket] = set()
 sim_world: World | None = None
 sim_task: asyncio.Task | None = None
 sim_paused: bool = False
-sim_step_event: asyncio.Event | None = None  # signals single-step advance
+sim_step_event: asyncio.Event | None = None
+sim_brains: dict = {}  # agent_id -> brain, module-level so save/load can access
+sim_scenario: str = ""
+sim_store: Any = None  # GameStore instance
 
 
 async def broadcast(message: dict) -> None:
@@ -43,26 +46,42 @@ async def broadcast(message: dict) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Start simulation on server startup."""
-    global sim_world, sim_task
+    """Start simulation on server startup. Auto-resumes from latest save if available."""
+    global sim_world, sim_task, sim_brains, sim_scenario, sim_store
 
-    scenario = os.environ.get("AGENTTOWN_SCENARIO", "escape_room")
-    if scenario == "memory_test":
-        from agenttown.scenarios.memory_test import build_memory_test
-        sim_world, agent_ids = build_memory_test()
-        logger.info("Loaded scenario: memory_test")
-    else:
-        sim_world, agent_ids = build_escape_room()
-        logger.info("Loaded scenario: escape_room")
+    from agenttown.persistence import GameStore
+    sim_store = GameStore()
 
+    sim_scenario = os.environ.get("AGENTTOWN_SCENARIO", "escape_room")
     use_claude = os.environ.get("AGENTTOWN_CLAUDE", "").lower() in ("1", "true", "yes")
-    if use_claude:
+
+    # Try to auto-resume from latest save
+    latest = sim_store.latest()
+    if latest and latest["scenario"] == sim_scenario:
         from agenttown.agents.brain import ClaudeBrain
-        brains = {aid: ClaudeBrain() for aid in agent_ids}
-        logger.info("Using Claude Haiku brains")
+        sim_world = World.from_full_snapshot(latest["world_snapshot"])
+        sim_brains = {
+            aid: ClaudeBrain.from_snapshot(bdata)
+            for aid, bdata in latest["brain_snapshots"].items()
+        }
+        logger.info(f"Resumed from save '{latest['name']}' at tick {latest['tick']}")
     else:
-        brains = {aid: RandomBrain() for aid in agent_ids}
-        logger.info("Using random brains")
+        # Fresh start
+        if sim_scenario == "memory_test":
+            from agenttown.scenarios.memory_test import build_memory_test
+            sim_world, agent_ids = build_memory_test()
+            logger.info("Loaded scenario: memory_test")
+        else:
+            sim_world, agent_ids = build_escape_room()
+            logger.info("Loaded scenario: escape_room")
+
+        if use_claude:
+            from agenttown.agents.brain import ClaudeBrain
+            sim_brains = {aid: ClaudeBrain() for aid in agent_ids}
+            logger.info("Using Claude Haiku brains")
+        else:
+            sim_brains = {aid: RandomBrain() for aid in agent_ids}
+            logger.info("Using random brains")
 
     # Narrator — transforms events into story prose
     narrator = None
@@ -81,7 +100,7 @@ async def lifespan(app: FastAPI):
         perceptions = {a.id: sim_world.perceive(a) for a in agents}
 
         decisions = await asyncio.gather(*[
-            brains[a.id].decide(a, perceptions[a.id]) for a in agents
+            sim_brains[a.id].decide(a, perceptions[a.id]) for a in agents
         ])
 
         tick_events: list[Event] = []
@@ -212,6 +231,59 @@ async def step():
     return {"status": "stepped"}
 
 
+@app.post("/api/save")
+async def save_game(name: str | None = None):
+    if not sim_world or not sim_store:
+        return {"error": "No simulation running"}
+    save_name = name or f"Tick {sim_world.tick}"
+    save_id = sim_store.save(sim_world, sim_brains, sim_scenario, save_name)
+    return {"save_id": save_id, "name": save_name, "status": "saved"}
+
+
+@app.get("/api/saves")
+async def list_saves():
+    if not sim_store:
+        return {"saves": []}
+    return {"saves": sim_store.list_saves()}
+
+
+@app.post("/api/load/{save_id}")
+async def load_game(save_id: int):
+    global sim_world, sim_brains, sim_paused
+    if not sim_store:
+        return {"error": "Store not initialized"}
+
+    data = sim_store.load(save_id)
+    if not data:
+        return {"error": "Save not found"}
+
+    sim_paused = True
+
+    from agenttown.agents.brain import ClaudeBrain
+    sim_world = World.from_full_snapshot(data["world_snapshot"])
+    sim_brains.clear()
+    sim_brains.update({
+        aid: ClaudeBrain.from_snapshot(bdata)
+        for aid, bdata in data["brain_snapshots"].items()
+    })
+
+    await broadcast({
+        "type": "snapshot",
+        "tick": sim_world.tick,
+        "paused": True,
+        "world_state": sim_world.snapshot(),
+    })
+
+    return {"status": "loaded", "tick": sim_world.tick, "name": data["name"]}
+
+
+@app.delete("/api/saves/{save_id}")
+async def delete_save(save_id: int):
+    if sim_store and sim_store.delete(save_id):
+        return {"status": "deleted"}
+    return {"error": "Save not found"}
+
+
 DASHBOARD_HTML = """\
 <!DOCTYPE html>
 <html>
@@ -248,7 +320,26 @@ DASHBOARD_HTML = """\
         #controls button:hover:not(:disabled) { background: #30363d; border-color: #58a6ff; }
         #controls button:disabled { opacity: 0.4; cursor: default; }
         #controls button.active { background: #1f6feb; border-color: #58a6ff; color: #fff; }
+        #controls .sep { color: #30363d; margin: 0 2px; }
         #status { color: #3fb950; font-family: monospace; font-size: 11px; }
+        #save-list {
+            background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+            padding: 10px; font-family: monospace; font-size: 11px; max-height: 150px; overflow-y: auto;
+        }
+        .save-entry {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 4px 6px; border-bottom: 1px solid #21262d;
+        }
+        .save-entry:last-child { border-bottom: none; }
+        .save-entry .save-info { color: #8b949e; }
+        .save-entry .save-name { color: #e6edf3; font-weight: bold; }
+        .save-entry button {
+            font-family: monospace; font-size: 10px; padding: 2px 8px;
+            border: 1px solid #30363d; border-radius: 3px; cursor: pointer;
+            background: #21262d; color: #c9d1d9; margin-left: 6px;
+        }
+        .save-entry button:hover { border-color: #58a6ff; }
+        .save-entry button.del:hover { border-color: #f85149; color: #f85149; }
         #story { flex: 1; overflow-y: auto; }
         .narrative-block {
             margin-bottom: 16px; padding: 12px; background: #161b22;
@@ -362,8 +453,12 @@ DASHBOARD_HTML = """\
             <button id="btn-pause" onclick="simPause()">Pause</button>
             <button id="btn-resume" onclick="simResume()" disabled>Resume</button>
             <button id="btn-step" onclick="simStep()" disabled>Step 1 Tick</button>
+            <span class="sep">|</span>
+            <button id="btn-save" onclick="simSave()">Save</button>
+            <button id="btn-load" onclick="toggleSaveList()">Load</button>
             <span id="status">Connecting...</span>
         </div>
+        <div id="save-list" style="display:none; margin-bottom: 12px;"></div>
         <div id="story"></div>
     </div>
     <div id="right-panel">
@@ -429,6 +524,55 @@ DASHBOARD_HTML = """\
                 statusDiv.textContent = 'Paused (after step)';
                 statusDiv.style.color = '#e3b341';
             });
+        }
+        function simSave() {
+            fetch('/api/save', {method:'POST'}).then(r => r.json()).then(d => {
+                statusDiv.textContent = `Saved: ${d.name} (id=${d.save_id})`;
+                statusDiv.style.color = '#3fb950';
+            });
+        }
+        const saveListDiv = document.getElementById('save-list');
+        let saveListOpen = false;
+        function toggleSaveList() {
+            saveListOpen = !saveListOpen;
+            if (saveListOpen) {
+                refreshSaveList();
+                saveListDiv.style.display = 'block';
+            } else {
+                saveListDiv.style.display = 'none';
+            }
+        }
+        function refreshSaveList() {
+            fetch('/api/saves').then(r => r.json()).then(d => {
+                if (!d.saves || d.saves.length === 0) {
+                    saveListDiv.innerHTML = '<div style="color:#8b949e">No saves yet</div>';
+                    return;
+                }
+                saveListDiv.innerHTML = d.saves.map(s => `
+                    <div class="save-entry">
+                        <div>
+                            <span class="save-name">${s.name}</span>
+                            <span class="save-info"> — ${s.scenario} — ${s.created_at.slice(0,19)}</span>
+                        </div>
+                        <div>
+                            <button onclick="simLoad(${s.id})">Load</button>
+                            <button class="del" onclick="simDelete(${s.id})">Del</button>
+                        </div>
+                    </div>
+                `).join('');
+            });
+        }
+        function simLoad(saveId) {
+            fetch('/api/load/' + saveId, {method:'POST'}).then(r => r.json()).then(d => {
+                statusDiv.textContent = `Loaded: ${d.name} (tick ${d.tick})`;
+                statusDiv.style.color = '#58a6ff';
+                setButtonState(true);
+                saveListDiv.style.display = 'none';
+                saveListOpen = false;
+            });
+        }
+        function simDelete(saveId) {
+            fetch('/api/saves/' + saveId, {method:'DELETE'}).then(() => refreshSaveList());
         }
 
         ws.onopen = () => {

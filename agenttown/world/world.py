@@ -80,3 +80,18 @@ class World:
         """Restore a world from a serialized snapshot."""
         state = WorldState.model_validate(data)
         return cls(state=state)
+
+    def full_snapshot(self) -> dict:
+        """Snapshot including event log (for persistence)."""
+        return {
+            "state": self.state.model_dump(),
+            "events": [e.model_dump() for e in self.event_log.all_events()],
+        }
+
+    @classmethod
+    def from_full_snapshot(cls, data: dict) -> World:
+        """Restore world with event history."""
+        w = cls.from_snapshot(data["state"])
+        for e_data in data.get("events", []):
+            w.event_log.record(Event.model_validate(e_data))
+        return w
