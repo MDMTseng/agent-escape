@@ -17,7 +17,22 @@ from agenttown.scenarios.escape_room import build_escape_room
 from agenttown.world.events import Event
 from agenttown.world.world import World
 
+# In-memory ring buffer for recent log lines (viewable via /api/log)
+_log_buffer: list[str] = []
+_LOG_BUFFER_MAX = 200
+
+
+class _BufferHandler(logging.Handler):
+    def emit(self, record):
+        line = self.format(record)
+        _log_buffer.append(line)
+        if len(_log_buffer) > _LOG_BUFFER_MAX:
+            del _log_buffer[: len(_log_buffer) - _LOG_BUFFER_MAX]
+
 logger = logging.getLogger(__name__)
+_bh = _BufferHandler()
+_bh.setFormatter(logging.Formatter("%(asctime)s %(message)s", datefmt="%H:%M:%S"))
+logger.addHandler(_bh)
 
 # Connected WebSocket clients
 connected_clients: set[WebSocket] = set()
@@ -97,17 +112,51 @@ async def lifespan(app: FastAPI):
 
     async def run_one_tick():
         """Execute a single simulation tick."""
+        tick = sim_world.tick
         agents = list(sim_world.state.agents.values())
         perceptions = {a.id: sim_world.perceive(a) for a in agents}
+
+        logger.info(f"{'='*60}")
+        logger.info(f"TICK {tick}")
+        logger.info(f"{'='*60}")
+
+        # Log agent positions before decisions
+        for a in agents:
+            room = sim_world.state.rooms.get(a.room_id)
+            room_name = room.name if room else a.room_id
+            inv = [i.name for i in a.inventory]
+            logger.info(f"  {a.name}: {room_name} | inv={inv}")
 
         decisions = await asyncio.gather(*[
             sim_brains[a.id].decide(a, perceptions[a.id]) for a in agents
         ])
 
+        # Log decisions
+        for agent, action in zip(agents, decisions):
+            action_str = f"{action.type}"
+            if hasattr(action, "direction"):
+                action_str += f"({action.direction})"
+            elif hasattr(action, "target"):
+                action_str += f"({action.target})"
+            elif hasattr(action, "message"):
+                action_str += f"(\"{action.message[:50]}\")"
+            elif hasattr(action, "item_a"):
+                action_str += f"({action.item_a} + {action.item_b})"
+            elif hasattr(action, "payload"):
+                action_str += f"({action.target}: {action.payload})"
+            logger.info(f"  {agent.name} -> {action_str}")
+
         tick_events: list[Event] = []
         for agent, action in zip(agents, decisions):
             events = sim_world.process_action(action, agent)
             tick_events.extend(events)
+
+        # Log events
+        for e in tick_events:
+            icon = {"move": ">>", "pick_up": "++", "drop": "--", "use": "**",
+                    "examine": "??", "talk": "''", "fail": "XX", "state_change": "!!",
+                    "wait": ".."}.get(e.event_type, "  ")
+            logger.info(f"  {icon} {e.description}")
 
         narrative = ""
         if narrator and tick_events:
@@ -116,9 +165,19 @@ async def lifespan(app: FastAPI):
         # Aggregate token usage from all brains
         _update_token_usage()
 
+        # Log memory & tokens
+        for aid, brain in sim_brains.items():
+            if hasattr(brain, "memory"):
+                wm = brain.memory.get_working_memory()
+                if wm:
+                    logger.info(f"  [{aid} memory] {wm}")
+        t = sim_token_usage
+        logger.info(f"  TOKENS: {t['total_tokens']} total ({t['prompt_tokens']} in / {t['completion_tokens']} out)")
+        logger.info("")
+
         await broadcast({
             "type": "tick",
-            "tick": sim_world.tick,
+            "tick": tick,
             "events": [
                 {"type": e.event_type, "description": e.description, "room": e.room_id}
                 for e in tick_events
@@ -131,6 +190,7 @@ async def lifespan(app: FastAPI):
         sim_world.advance_tick()
 
         if sim_world.finished:
+            logger.info(f"GAME OVER: {sim_world.state.finish_reason}")
             finish_narrative = ""
             if narrator:
                 finish_narrative = narrator.narrate(
@@ -299,6 +359,93 @@ async def delete_save(save_id: int):
     if sim_store and sim_store.delete(save_id):
         return {"status": "deleted"}
     return {"error": "Save not found"}
+
+
+@app.get("/api/log")
+async def get_log(n: int = 50):
+    """Return recent log lines. View from mobile: /api/log?n=100"""
+    return {"lines": _log_buffer[-n:]}
+
+
+@app.get("/log")
+async def log_page():
+    """Simple HTML log viewer for mobile."""
+    return HTMLResponse(LOG_HTML)
+
+
+LOG_HTML = """\
+<!DOCTYPE html>
+<html>
+<head>
+<title>AgentTown Log</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+    body { background: #0d1117; color: #c9d1d9; font-family: monospace; font-size: 12px; padding: 10px; margin: 0; }
+    h1 { color: #e3b341; font-size: 16px; margin-bottom: 8px; }
+    #controls { margin-bottom: 10px; }
+    button { font-family: monospace; font-size: 11px; padding: 4px 10px; border: 1px solid #30363d; border-radius: 4px; background: #21262d; color: #c9d1d9; cursor: pointer; margin-right: 5px; }
+    button:hover { border-color: #58a6ff; }
+    #log { white-space: pre-wrap; line-height: 1.5; }
+    .tick-line { color: #e3b341; font-weight: bold; }
+    .event-line { color: #79c0ff; }
+    .memory-line { color: #d2a8ff; }
+    .token-line { color: #3fb950; }
+    .error-line { color: #f85149; }
+    .action-line { color: #f0f6fc; }
+</style>
+</head>
+<body>
+<h1>AgentTown Log</h1>
+<div id="controls">
+    <button onclick="refresh()">Refresh</button>
+    <button onclick="autoRefresh()">Auto (3s)</button>
+    <button onclick="stopAuto()">Stop</button>
+    <span id="status" style="color:#8b949e"></span>
+</div>
+<div id="log"></div>
+<script>
+    let timer = null;
+    const logDiv = document.getElementById('log');
+    const statusEl = document.getElementById('status');
+
+    function colorize(line) {
+        if (line.includes('TICK ') || line.includes('====')) return 'tick-line';
+        if (line.includes('->')) return 'action-line';
+        if (line.includes('??') || line.includes('>>') || line.includes('++') || line.includes('**') || line.includes("''") || line.includes('!!') || line.includes('XX')) return 'event-line';
+        if (line.includes('[') && line.includes('memory]')) return 'memory-line';
+        if (line.includes('TOKENS:')) return 'token-line';
+        if (line.includes('error') || line.includes('Error') || line.includes('GAME OVER')) return 'error-line';
+        return '';
+    }
+
+    function refresh() {
+        fetch('/api/log?n=100').then(r => r.json()).then(d => {
+            logDiv.innerHTML = d.lines.map(l => {
+                const cls = colorize(l);
+                return cls ? `<span class="${cls}">${l}</span>` : l;
+            }).join('\\n');
+            logDiv.scrollTop = logDiv.scrollHeight;
+            statusEl.textContent = 'Updated ' + new Date().toLocaleTimeString();
+        });
+    }
+
+    function autoRefresh() {
+        if (timer) clearInterval(timer);
+        timer = setInterval(refresh, 3000);
+        refresh();
+        statusEl.textContent = 'Auto-refreshing...';
+    }
+
+    function stopAuto() {
+        if (timer) { clearInterval(timer); timer = null; }
+        statusEl.textContent = 'Stopped';
+    }
+
+    refresh();
+</script>
+</body>
+</html>
+"""
 
 
 DASHBOARD_HTML = """\
