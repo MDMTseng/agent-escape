@@ -98,11 +98,19 @@ class LLMBrain:
         )
         self._memory = AgentMemory()
         self._message_history: dict[str, list[dict[str, Any]]] = {}
+        self.token_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
     def _get_history(self, agent_id: str) -> list[dict[str, Any]]:
         if agent_id not in self._message_history:
             self._message_history[agent_id] = []
         return self._message_history[agent_id]
+
+    def _track_usage(self, response) -> None:
+        """Accumulate token usage from an API response."""
+        if hasattr(response, "usage") and response.usage:
+            self.token_usage["prompt_tokens"] += getattr(response.usage, "prompt_tokens", 0) or 0
+            self.token_usage["completion_tokens"] += getattr(response.usage, "completion_tokens", 0) or 0
+            self.token_usage["total_tokens"] += getattr(response.usage, "total_tokens", 0) or 0
 
     def _trim_history(self, agent_id: str, max_turns: int = 30) -> None:
         """Keep message history from growing unbounded."""
@@ -141,6 +149,8 @@ class LLMBrain:
             logger.error(f"LLM API error for {agent.name}: {e}")
             self._message_history[agent.id] = []
             return Wait()
+
+        self._track_usage(response)
 
         # Extract action from response
         choice = response.choices[0]
@@ -184,6 +194,7 @@ class LLMBrain:
                 max_tokens=300,
                 messages=[{"role": "user", "content": prompt}],
             )
+            self._track_usage(response)
             text = response.choices[0].message.content or ""
             parsed = _parse_json(text)
             if parsed:
@@ -217,6 +228,7 @@ class LLMBrain:
                 max_tokens=200,
                 messages=[{"role": "user", "content": prompt}],
             )
+            self._track_usage(response)
             reflection = (response.choices[0].message.content or "").strip()
             if reflection:
                 self._memory.add_reflection(tick, reflection)

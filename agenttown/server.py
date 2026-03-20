@@ -30,6 +30,7 @@ sim_step_event: asyncio.Event | None = None
 sim_brains: dict = {}  # agent_id -> brain, module-level so save/load can access
 sim_scenario: str = ""
 sim_store: Any = None  # GameStore instance
+sim_token_usage: dict = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
 
 async def broadcast(message: dict) -> None:
@@ -112,6 +113,9 @@ async def lifespan(app: FastAPI):
         if narrator and tick_events:
             narrative = narrator.narrate(tick_events, sim_world.state, sim_world.tick)
 
+        # Aggregate token usage from all brains
+        _update_token_usage()
+
         await broadcast({
             "type": "tick",
             "tick": sim_world.tick,
@@ -120,6 +124,7 @@ async def lifespan(app: FastAPI):
                 for e in tick_events
             ],
             "narrative": narrative,
+            "token_usage": dict(sim_token_usage),
             "world_state": sim_world.snapshot(),
         })
 
@@ -159,6 +164,18 @@ async def lifespan(app: FastAPI):
     yield
     if sim_task and not sim_task.done():
         sim_task.cancel()
+
+
+def _update_token_usage() -> None:
+    """Sum token usage from all brains into the global counter."""
+    sim_token_usage["prompt_tokens"] = 0
+    sim_token_usage["completion_tokens"] = 0
+    sim_token_usage["total_tokens"] = 0
+    for brain in sim_brains.values():
+        if hasattr(brain, "token_usage"):
+            sim_token_usage["prompt_tokens"] += brain.token_usage.get("prompt_tokens", 0)
+            sim_token_usage["completion_tokens"] += brain.token_usage.get("completion_tokens", 0)
+            sim_token_usage["total_tokens"] += brain.token_usage.get("total_tokens", 0)
 
 
 def _auto_pause_if_no_clients() -> None:
@@ -322,6 +339,12 @@ DASHBOARD_HTML = """\
         #controls button.active { background: #1f6feb; border-color: #58a6ff; color: #fff; }
         #controls .sep { color: #30363d; margin: 0 2px; }
         #status { color: #3fb950; font-family: monospace; font-size: 11px; }
+        #token-display {
+            margin-left: auto;
+            font-family: monospace; font-size: 12px; font-weight: bold;
+            color: #e3b341; background: #2d2006; padding: 3px 10px;
+            border-radius: 4px; border: 1px solid #e3b341;
+        }
         #save-list {
             background: #161b22; border: 1px solid #30363d; border-radius: 6px;
             padding: 10px; font-family: monospace; font-size: 11px; max-height: 150px; overflow-y: auto;
@@ -457,6 +480,7 @@ DASHBOARD_HTML = """\
             <button id="btn-save" onclick="simSave()">Save</button>
             <button id="btn-load" onclick="toggleSaveList()">Load</button>
             <span id="status">Connecting...</span>
+            <span id="token-display">Tokens: 0</span>
         </div>
         <div id="save-list" style="display:none; margin-bottom: 12px;"></div>
         <div id="story"></div>
@@ -483,9 +507,19 @@ DASHBOARD_HTML = """\
         const storyDiv = document.getElementById('story');
         const eventsDiv = document.getElementById('events');
         const statusDiv = document.getElementById('status');
+        const tokenDiv = document.getElementById('token-display');
         const sceneDiv = document.getElementById('scene-graph');
         const puzzleDiv = document.getElementById('puzzle-list');
         const agentDiv = document.getElementById('agent-list');
+
+        function updateTokens(usage) {
+            if (!usage) return;
+            const t = usage.total_tokens || 0;
+            const p = usage.prompt_tokens || 0;
+            const c = usage.completion_tokens || 0;
+            const fmt = n => n >= 1000 ? (n/1000).toFixed(1) + 'k' : n;
+            tokenDiv.textContent = `Tokens: ${fmt(t)} (${fmt(p)} in / ${fmt(c)} out)`;
+        }
         const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
         const ws = new WebSocket(`${proto}//${location.host}/ws`);
 
@@ -889,6 +923,10 @@ DASHBOARD_HTML = """\
                     updateMap(msg.world_state);
                     updatePuzzles(msg.world_state);
                     updateAgents(msg.world_state);
+                }
+                // Update token counter
+                if (msg.token_usage) {
+                    updateTokens(msg.token_usage);
                 }
                 // Sync pause state on snapshot (reconnect)
                 if (msg.type === 'snapshot' && msg.paused !== undefined) {
