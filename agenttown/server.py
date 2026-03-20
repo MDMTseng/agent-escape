@@ -54,6 +54,14 @@ async def lifespan(app: FastAPI):
         brains = {aid: RandomBrain() for aid in agent_ids}
         logger.info("Using random brains")
 
+    # Narrator — transforms events into story prose
+    narrator = None
+    use_narrator = os.environ.get("AGENTTOWN_NARRATOR", "").lower() in ("1", "true", "yes")
+    if use_narrator:
+        from agenttown.agents.narrator import Narrator
+        narrator = Narrator()
+        logger.info("Narrator enabled")
+
     async def sim_loop():
         """Tick loop that broadcasts state to WebSocket clients."""
         while not sim_world.finished and sim_world.tick < 200:
@@ -69,6 +77,11 @@ async def lifespan(app: FastAPI):
                 events = sim_world.process_action(action, agent)
                 tick_events.extend(events)
 
+            # Generate narrative prose
+            narrative = ""
+            if narrator and tick_events:
+                narrative = narrator.narrate(tick_events, sim_world.state, sim_world.tick)
+
             await broadcast({
                 "type": "tick",
                 "tick": sim_world.tick,
@@ -76,15 +89,22 @@ async def lifespan(app: FastAPI):
                     {"type": e.event_type, "description": e.description, "room": e.room_id}
                     for e in tick_events
                 ],
+                "narrative": narrative,
                 "world_state": sim_world.snapshot(),
             })
 
             sim_world.advance_tick()
 
             if sim_world.finished:
+                finish_narrative = ""
+                if narrator:
+                    finish_narrative = narrator.narrate(
+                        tick_events, sim_world.state, sim_world.tick
+                    )
                 await broadcast({
                     "type": "finished",
                     "reason": sim_world.state.finish_reason,
+                    "narrative": finish_narrative,
                 })
                 break
 
@@ -135,32 +155,109 @@ DASHBOARD_HTML = """\
 <!DOCTYPE html>
 <html>
 <head>
-    <title>AgentTown</title>
+    <title>AgentTown — Ravenwood Manor</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Courier New', monospace; background: #0d1117; color: #c9d1d9; padding: 20px; }
-        h1 { color: #58a6ff; margin-bottom: 10px; }
-        #status { color: #3fb950; margin-bottom: 20px; }
-        #events { max-height: 80vh; overflow-y: auto; }
-        .tick-group { margin-bottom: 12px; border-left: 2px solid #30363d; padding-left: 12px; }
-        .tick-label { color: #8b949e; font-size: 12px; margin-bottom: 4px; }
-        .event { padding: 2px 0; }
+        body {
+            font-family: 'Georgia', serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            display: flex;
+            height: 100vh;
+        }
+        /* Left panel — narrative story */
+        #story-panel {
+            flex: 3;
+            padding: 30px;
+            overflow-y: auto;
+            border-right: 1px solid #21262d;
+        }
+        #story-panel h1 {
+            font-family: 'Georgia', serif;
+            color: #e3b341;
+            font-size: 28px;
+            margin-bottom: 5px;
+        }
+        #story-panel .subtitle {
+            color: #8b949e;
+            font-style: italic;
+            margin-bottom: 20px;
+        }
+        #status { color: #3fb950; margin-bottom: 20px; font-family: monospace; font-size: 12px; }
+        .narrative-block {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #161b22;
+            border-left: 3px solid #e3b341;
+            border-radius: 0 6px 6px 0;
+            line-height: 1.7;
+            font-size: 15px;
+        }
+        .narrative-block .chapter {
+            color: #8b949e;
+            font-size: 11px;
+            font-family: monospace;
+            margin-bottom: 8px;
+        }
+        .narrative-block p {
+            color: #e6edf3;
+        }
+        .finished-narrative {
+            margin-top: 20px;
+            padding: 20px;
+            background: #0d2818;
+            border-left: 3px solid #3fb950;
+            border-radius: 0 6px 6px 0;
+            font-size: 18px;
+            color: #3fb950;
+            line-height: 1.7;
+        }
+        /* Right panel — raw event log */
+        #log-panel {
+            flex: 2;
+            padding: 20px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            background: #0a0e14;
+        }
+        #log-panel h2 {
+            color: #58a6ff;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        .tick-group { margin-bottom: 10px; border-left: 2px solid #30363d; padding-left: 10px; }
+        .tick-label { color: #8b949e; font-size: 11px; margin-bottom: 2px; }
+        .event { padding: 1px 0; font-size: 12px; }
         .event.move { color: #79c0ff; }
         .event.pick_up { color: #3fb950; }
+        .event.drop { color: #d29922; }
         .event.use { color: #d2a8ff; }
         .event.examine { color: #58a6ff; }
         .event.talk { color: #f0f6fc; }
         .event.fail { color: #f85149; }
         .event.state_change { color: #e3b341; }
         .event.wait { color: #484f58; }
-        .finished { color: #3fb950; font-size: 18px; font-weight: bold; margin-top: 20px; }
+        @media (max-width: 768px) {
+            body { flex-direction: column; }
+            #story-panel { border-right: none; border-bottom: 1px solid #21262d; flex: 1; }
+            #log-panel { flex: 1; }
+        }
     </style>
 </head>
 <body>
-    <h1>AgentTown</h1>
-    <div id="status">Connecting...</div>
-    <div id="events"></div>
+    <div id="story-panel">
+        <h1>Ravenwood Manor</h1>
+        <div class="subtitle">An escape room experience</div>
+        <div id="status">Connecting...</div>
+        <div id="story"></div>
+    </div>
+    <div id="log-panel">
+        <h2>Event Log</h2>
+        <div id="events"></div>
+    </div>
     <script>
+        const storyDiv = document.getElementById('story');
         const eventsDiv = document.getElementById('events');
         const statusDiv = document.getElementById('status');
         const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -172,6 +269,16 @@ DASHBOARD_HTML = """\
         ws.onmessage = (e) => {
             const msg = JSON.parse(e.data);
             if (msg.type === 'tick') {
+                // Narrative panel
+                if (msg.narrative) {
+                    const block = document.createElement('div');
+                    block.className = 'narrative-block';
+                    block.innerHTML = `<div class="chapter">Chapter ${msg.tick + 1}</div><p>${msg.narrative.replace(/\\n/g, '<br>')}</p>`;
+                    storyDiv.appendChild(block);
+                    storyDiv.scrollTop = storyDiv.scrollHeight;
+                }
+
+                // Raw event log
                 const group = document.createElement('div');
                 group.className = 'tick-group';
                 group.innerHTML = `<div class="tick-label">Tick ${msg.tick}</div>`;
@@ -184,8 +291,16 @@ DASHBOARD_HTML = """\
                 eventsDiv.appendChild(group);
                 eventsDiv.scrollTop = eventsDiv.scrollHeight;
             } else if (msg.type === 'finished') {
+                // Narrative ending
+                const block = document.createElement('div');
+                block.className = 'finished-narrative';
+                block.innerHTML = msg.narrative || msg.reason;
+                storyDiv.appendChild(block);
+
+                // Log ending
                 const div = document.createElement('div');
-                div.className = 'finished';
+                div.className = 'event state_change';
+                div.style.fontWeight = 'bold';
                 div.textContent = msg.reason;
                 eventsDiv.appendChild(div);
             }
