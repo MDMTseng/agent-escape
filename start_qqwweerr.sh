@@ -21,18 +21,22 @@ TOKEN="qqwweerr"
 TUNNEL_LOG="/tmp/agenttown_tunnel.log"
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Load keys from .env
+# Load keys from .env — export each KEY=VALUE line
 if [ -f "$PROJECT_DIR/.env" ]; then
-    set -a
-    source "$PROJECT_DIR/.env"
-    set +a
+    while IFS='=' read -r key value; do
+        [[ -z "$key" || "$key" == \#* ]] && continue
+        export "$key=$value"
+    done < "$PROJECT_DIR/.env"
 fi
 
 start_server() {
     echo "Starting AgentTown server on port $PORT..."
     cd "$PROJECT_DIR"
-    nohup python run_qqwweerr.py > /dev/null 2>&1 &
-    sleep 2
+    ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
+    AGENTTOWN_CLAUDE="1" \
+    AGENTTOWN_NARRATOR="1" \
+    nohup python run_qqwweerr.py > /tmp/agenttown_server.log 2>&1 &
+    sleep 5
 
     if curl -s "http://localhost:$PORT/api/state" > /dev/null 2>&1; then
         echo "Server is up at http://localhost:$PORT"
