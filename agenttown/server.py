@@ -586,15 +586,34 @@ DASHBOARD_HTML = """\
         .agent-card .agent-inv { color: #3fb950; font-size: 10px; }
         .agent-card .agent-inv-empty { color: #484f58; font-size: 10px; }
 
-        /* Event log */
+        /* Tabbed log panel */
         #log-panel {
             flex: 1;
-            padding: 16px;
-            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
             font-family: 'Courier New', monospace;
             font-size: 11px;
         }
-        #log-panel h2 { color: #58a6ff; font-size: 13px; margin-bottom: 8px; }
+        .log-tabs {
+            display: flex; gap: 0; padding: 8px 16px 0; flex-shrink: 0;
+        }
+        .log-tab {
+            padding: 4px 14px; cursor: pointer; font-family: monospace; font-size: 11px;
+            border: 1px solid #30363d; border-bottom: none; border-radius: 4px 4px 0 0;
+            background: #0a0e14; color: #8b949e;
+        }
+        .log-tab.active { background: #161b22; color: #58a6ff; border-color: #58a6ff; }
+        .log-content {
+            flex: 1; overflow-y: auto; padding: 12px 16px;
+        }
+        #server-log { display: none; white-space: pre-wrap; line-height: 1.5; }
+        #server-log .sl-tick { color: #e3b341; font-weight: bold; }
+        #server-log .sl-action { color: #f0f6fc; }
+        #server-log .sl-event { color: #79c0ff; }
+        #server-log .sl-memory { color: #d2a8ff; }
+        #server-log .sl-token { color: #3fb950; }
+        #server-log .sl-error { color: #f85149; }
         .tick-group { margin-bottom: 8px; border-left: 2px solid #30363d; padding-left: 8px; }
         .tick-label { color: #8b949e; font-size: 10px; margin-bottom: 2px; }
         .event { padding: 1px 0; font-size: 11px; }
@@ -646,8 +665,12 @@ DASHBOARD_HTML = """\
             <div id="agent-list"></div>
         </div>
         <div id="log-panel">
-            <h2>EVENT LOG</h2>
-            <div id="events"></div>
+            <div class="log-tabs">
+                <div class="log-tab active" onclick="switchLogTab('events')">Events</div>
+                <div class="log-tab" onclick="switchLogTab('server-log')">Server Log</div>
+            </div>
+            <div id="events" class="log-content"></div>
+            <div id="server-log" class="log-content"></div>
         </div>
     </div>
     <script>
@@ -658,6 +681,47 @@ DASHBOARD_HTML = """\
         const sceneDiv = document.getElementById('scene-graph');
         const puzzleDiv = document.getElementById('puzzle-list');
         const agentDiv = document.getElementById('agent-list');
+
+        // --- Log tab switching ---
+        const serverLogDiv = document.getElementById('server-log');
+        let activeLogTab = 'events';
+        let logTimer = null;
+
+        function switchLogTab(tab) {
+            activeLogTab = tab;
+            document.querySelectorAll('.log-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.log-content').forEach(c => c.style.display = 'none');
+            event.target.classList.add('active');
+            document.getElementById(tab).style.display = 'block';
+
+            if (tab === 'server-log') {
+                refreshServerLog();
+                if (!logTimer) logTimer = setInterval(refreshServerLog, 3000);
+            } else {
+                if (logTimer) { clearInterval(logTimer); logTimer = null; }
+            }
+        }
+
+        function slColorize(line) {
+            if (line.includes('TICK ') || line.includes('====')) return 'sl-tick';
+            if (line.includes('->')) return 'sl-action';
+            if (line.includes('??') || line.includes('>>') || line.includes('++') || line.includes('**') || line.includes("''") || line.includes('!!') || line.includes('XX')) return 'sl-event';
+            if (line.includes('memory]')) return 'sl-memory';
+            if (line.includes('TOKENS:')) return 'sl-token';
+            if (line.includes('error') || line.includes('Error') || line.includes('GAME OVER')) return 'sl-error';
+            return '';
+        }
+
+        function refreshServerLog() {
+            fetch('/api/log?n=100').then(r => r.json()).then(d => {
+                serverLogDiv.innerHTML = d.lines.map(l => {
+                    const cls = slColorize(l);
+                    const escaped = l.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    return cls ? `<span class="${cls}">${escaped}</span>` : escaped;
+                }).join('\\n');
+                serverLogDiv.scrollTop = serverLogDiv.scrollHeight;
+            }).catch(() => {});
+        }
 
         function updateTokens(usage) {
             if (!usage) return;
