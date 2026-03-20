@@ -63,7 +63,7 @@ Be specific about puzzle progress and unsolved mysteries.\
 
 # Convert our tool definitions to OpenAI function format
 def _tools_to_openai_functions() -> list[dict]:
-    """Convert AGENT_TOOLS (Anthropic format) to OpenAI function calling format."""
+    """Convert AGENT_TOOLS to OpenAI function calling format."""
     functions = []
     for tool in AGENT_TOOLS:
         functions.append({

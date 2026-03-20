@@ -94,7 +94,7 @@ async def lifespan(app: FastAPI):
         if use_claude:
             from agenttown.agents.brain import LLMBrain
             sim_brains = {aid: LLMBrain() for aid in agent_ids}
-            logger.info("Using Claude Haiku brains")
+            logger.info("Using LLM brains")
         else:
             sim_brains = {aid: RandomBrain() for aid in agent_ids}
             logger.info("Using random brains")

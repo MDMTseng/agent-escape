@@ -144,26 +144,25 @@ def main() -> None:
 
     Usage:
         agenttown              # random brains (no API key needed)
-        agenttown --claude     # Claude-powered agents (needs ANTHROPIC_API_KEY)
+        agenttown --llm        # LLM-powered agents (needs FEATHERLESS_API_KEY)
     """
     import argparse
 
     from agenttown.scenarios.escape_room import build_escape_room
 
     parser = argparse.ArgumentParser(description="AgentTown — virtual world simulation")
-    parser.add_argument("--claude", action="store_true", help="Use Claude-powered agent brains")
-    parser.add_argument("--model", default="claude-3-haiku-20240307", help="Claude model to use")
+    parser.add_argument("--llm", action="store_true", help="Use LLM-powered agent brains")
     parser.add_argument("--ticks", type=int, default=50, help="Max ticks before stopping")
     parser.add_argument("--interval", type=float, default=1.0, help="Seconds between ticks")
     args = parser.parse_args()
 
     world, agent_ids = build_escape_room()
 
-    if args.claude:
-        from agenttown.agents.brain import ClaudeBrain
+    if args.llm:
+        from agenttown.agents.brain import LLMBrain
 
         brains: dict[str, AgentBrain] = {
-            aid: ClaudeBrain(model=args.model) for aid in agent_ids
+            aid: LLMBrain() for aid in agent_ids
         }
     else:
         brains = {aid: RandomBrain() for aid in agent_ids}
