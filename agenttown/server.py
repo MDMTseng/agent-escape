@@ -119,8 +119,9 @@ async def lifespan(app: FastAPI):
             })
 
     async def sim_loop():
-        """Tick loop with pause/resume/step support."""
+        """Tick loop with pause/resume/step support. Starts paused."""
         global sim_paused
+        sim_paused = True  # start paused — user must press Resume or Step
         while not sim_world.finished and sim_world.tick < 200:
             if sim_paused:
                 # Wait for a step signal or unpause
@@ -141,6 +142,14 @@ async def lifespan(app: FastAPI):
         sim_task.cancel()
 
 
+def _auto_pause_if_no_clients() -> None:
+    """Pause simulation when all viewers disconnect."""
+    global sim_paused
+    if not connected_clients and not sim_paused:
+        sim_paused = True
+        logger.info("No clients connected — auto-paused")
+
+
 app = FastAPI(title="AgentTown", lifespan=lifespan)
 
 
@@ -154,14 +163,16 @@ async def websocket_endpoint(ws: WebSocket):
         await ws.send_text(json.dumps({
             "type": "snapshot",
             "tick": sim_world.tick,
+            "paused": sim_paused,
             "world_state": sim_world.snapshot(),
         }))
 
     try:
         while True:
-            await ws.receive_text()  # keep alive, ignore client messages for now
+            await ws.receive_text()
     except WebSocketDisconnect:
         connected_clients.discard(ws)
+        _auto_pause_if_no_clients()
 
 
 @app.get("/")
@@ -442,8 +453,32 @@ DASHBOARD_HTML = """\
             });
         }
 
-        ws.onopen = () => { statusDiv.textContent = 'Running...'; statusDiv.style.color = '#3fb950'; };
-        ws.onclose = () => { statusDiv.textContent = 'Disconnected'; statusDiv.style.color = '#f85149'; };
+        ws.onopen = () => {
+            statusDiv.textContent = 'Paused — press Resume or Step to begin';
+            statusDiv.style.color = '#e3b341';
+            setButtonState(true);
+        };
+        ws.onclose = () => {
+            statusDiv.textContent = 'Disconnected';
+            statusDiv.style.color = '#f85149';
+            btnPause.disabled = true;
+            btnResume.disabled = true;
+            btnStep.disabled = true;
+        };
+
+        // Pause when user switches tabs or minimizes
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && !isPaused) {
+                simPause();
+            }
+        });
+
+        // Pause when window loses focus
+        window.addEventListener('blur', () => {
+            if (!isPaused) {
+                simPause();
+            }
+        });
 
         // Puzzle definitions — which entities are puzzles and how to label them
         const PUZZLE_DEFS = {
@@ -617,6 +652,14 @@ DASHBOARD_HTML = """\
                     updateMap(msg.world_state);
                     updatePuzzles(msg.world_state);
                     updateAgents(msg.world_state);
+                }
+                // Sync pause state on snapshot (reconnect)
+                if (msg.type === 'snapshot' && msg.paused !== undefined) {
+                    setButtonState(msg.paused);
+                    if (msg.paused) {
+                        statusDiv.textContent = `Paused at tick ${msg.tick} — press Resume or Step`;
+                        statusDiv.style.color = '#e3b341';
+                    }
                 }
             }
 
