@@ -9,18 +9,60 @@ Retrieval scoring (Stanford Generative Agents):
   score = recency × importance × relevance
   - recency:    exponential decay (0.95^age)
   - importance: 1-5 scale from LLM extraction
-  - relevance:  keyword overlap between memory and current query
+  - relevance:  embedding cosine similarity (local model, no API calls)
+               falls back to keyword overlap if embeddings unavailable
 """
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
+import numpy as np
 from pydantic import BaseModel, Field
 
+logger = logging.getLogger(__name__)
 
-# Common words to ignore when computing keyword relevance
+
+# ---------------------------------------------------------------------------
+# Embedding model — loaded once, shared across all agents
+# ---------------------------------------------------------------------------
+
+_embedder = None
+_EMBED_DIM = 384
+
+
+def _get_embedder():
+    """Lazy-load the sentence-transformers model (once)."""
+    global _embedder
+    if _embedder is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+            _embedder = SentenceTransformer("all-MiniLM-L6-v2")
+            logger.info("Embedding model loaded: all-MiniLM-L6-v2")
+        except Exception as e:
+            logger.warning(f"Embedding model unavailable, using keyword fallback: {e}")
+    return _embedder
+
+
+def _embed(text: str) -> np.ndarray | None:
+    """Embed a text string. Returns 384-dim vector or None."""
+    model = _get_embedder()
+    if model is None:
+        return None
+    return model.encode(text, normalize_embeddings=True)
+
+
+def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
+    """Cosine similarity between two normalized vectors."""
+    return float(np.dot(a, b))
+
+
+# ---------------------------------------------------------------------------
+# Keyword fallback (used when embeddings unavailable)
+# ---------------------------------------------------------------------------
+
 _STOPWORDS = frozenset({
     "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
     "have", "has", "had", "do", "does", "did", "will", "would", "could",
@@ -37,20 +79,17 @@ _STOPWORDS = frozenset({
 
 
 def _extract_keywords(text: str) -> set[str]:
-    """Extract meaningful keywords from text, lowercased, stopwords removed."""
     words = set(re.findall(r"[a-zA-Z]{3,}", text.lower()))
     return words - _STOPWORDS
 
 
 def _keyword_relevance(memory_text: str, query_keywords: set[str]) -> float:
-    """Compute relevance score (0.0-1.0) based on keyword overlap."""
     if not query_keywords:
-        return 0.5  # neutral if no query
+        return 0.5
     mem_keywords = _extract_keywords(memory_text)
     if not mem_keywords:
         return 0.1
     overlap = len(mem_keywords & query_keywords)
-    # Normalize by query size, cap at 1.0
     return min(overlap / max(len(query_keywords) * 0.3, 1.0), 1.0)
 
 
@@ -61,17 +100,42 @@ class MemoryEntry(BaseModel):
     content: str
     category: str = "observation"
     importance: int = 3  # 1-5 scale
+    embedding: list[float] | None = Field(default=None, exclude=True)
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    def compute_embedding(self) -> None:
+        """Compute and cache the embedding for this entry."""
+        vec = _embed(self.content)
+        if vec is not None:
+            self.embedding = vec.tolist()
 
     def recency_score(self, current_tick: int, decay: float = 0.95) -> float:
-        """Exponential decay — recent memories score higher."""
         age = max(current_tick - self.tick, 0)
         return decay ** age
 
-    def retrieval_score(self, current_tick: int, query_keywords: set[str] | None = None) -> float:
-        """Score = recency × importance × relevance (Stanford Generative Agents formula)."""
+    def relevance_score(self, query_embedding: np.ndarray | None = None,
+                        query_keywords: set[str] | None = None) -> float:
+        """Compute relevance: embedding similarity if available, keyword fallback otherwise."""
+        # Prefer embedding similarity
+        if query_embedding is not None and self.embedding is not None:
+            sim = _cosine_similarity(np.array(self.embedding), query_embedding)
+            # Shift from [-1,1] to [0,1] range
+            return max((sim + 1.0) / 2.0, 0.0)
+
+        # Keyword fallback
+        if query_keywords:
+            return _keyword_relevance(self.content, query_keywords)
+
+        return 0.5  # neutral
+
+    def retrieval_score(self, current_tick: int,
+                        query_embedding: np.ndarray | None = None,
+                        query_keywords: set[str] | None = None) -> float:
+        """Score = recency × importance × relevance."""
         recency = self.recency_score(current_tick)
         importance = self.importance / 5.0
-        relevance = _keyword_relevance(self.content, query_keywords) if query_keywords else 0.5
+        relevance = self.relevance_score(query_embedding, query_keywords)
         return recency * importance * relevance
 
 
@@ -118,19 +182,25 @@ class AgentMemory:
     def record(
         self, tick: int, content: str, category: str = "observation", importance: int = 3
     ) -> None:
-        """Add an entry to the memory stream."""
-        self._stream.append(
-            MemoryEntry(tick=tick, content=content, category=category, importance=importance)
-        )
+        """Add an entry to the memory stream with embedding."""
+        entry = MemoryEntry(tick=tick, content=content, category=category, importance=importance)
+        entry.compute_embedding()
+        self._stream.append(entry)
         if len(self._stream) > self._max_stream:
             self._stream = self._stream[-self._max_stream :]
         self._ticks_since_reflect += 1
 
     def retrieve(self, current_tick: int, query: str = "", top_k: int = 8) -> list[MemoryEntry]:
-        """Retrieve memories by recency × importance × relevance to query."""
-        query_kw = _extract_keywords(query) if query else None
+        """Retrieve memories by recency × importance × relevance.
+
+        Uses embedding cosine similarity for relevance if available,
+        falls back to keyword overlap otherwise.
+        """
+        query_emb = _embed(query) if query else None
+        query_kw = _extract_keywords(query) if query and query_emb is None else None
+
         scored = [
-            (entry, entry.retrieval_score(current_tick, query_kw))
+            (entry, entry.retrieval_score(current_tick, query_emb, query_kw))
             for entry in self._stream
         ]
         scored.sort(key=lambda x: x[1], reverse=True)
@@ -145,8 +215,8 @@ class AgentMemory:
     def add_reflection(self, tick: int, content: str) -> None:
         """Store a reflection (high-importance summary)."""
         entry = MemoryEntry(tick=tick, content=content, category="reflection", importance=5)
+        entry.compute_embedding()
         self._reflections.append(entry)
-        # Also add to stream so it can be retrieved
         self._stream.append(entry)
         self._ticks_since_reflect = 0
 
