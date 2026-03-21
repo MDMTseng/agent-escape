@@ -87,7 +87,9 @@ class LLMBrain:
         )
         self._memory = AgentMemory()
         self._message_history: dict[str, list[dict[str, Any]]] = {}
+        self._history_summary: dict[str, str] = {}  # agent_id -> summary of old turns
         self.token_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        self._keep_turns = 3  # only keep last N turns in raw history
 
     def _get_history(self, agent_id: str) -> list[dict[str, Any]]:
         if agent_id not in self._message_history:
@@ -104,10 +106,33 @@ class LLMBrain:
                 + (getattr(response.usage, "output_tokens", 0) or 0)
             )
 
-    def _trim_history(self, agent_id: str, max_turns: int = 30) -> None:
-        history = self._get_history(agent_id)
-        if len(history) > max_turns * 2:
-            self._message_history[agent_id] = history[-(max_turns * 2) :]
+    def _trim_history(self, agent: AgentState) -> None:
+        """Keep only last N turns. Summarize evicted turns into a compact summary."""
+        history = self._get_history(agent.id)
+        max_msgs = self._keep_turns * 3  # each turn ~ user + assistant + user(tool_result)
+
+        if len(history) <= max_msgs:
+            return
+
+        # Extract old turns to summarize
+        old_msgs = history[:-max_msgs]
+        self._message_history[agent.id] = history[-max_msgs:]
+
+        # Build summary from old messages
+        old_actions = []
+        for msg in old_msgs:
+            if msg["role"] == "assistant":
+                content = msg.get("content", [])
+                if isinstance(content, list):
+                    for block in content:
+                        if isinstance(block, dict) and block.get("type") == "tool_use":
+                            old_actions.append(f"{block['name']}({json.dumps(block.get('input', {}))})")
+                elif isinstance(content, str) and content:
+                    old_actions.append(content[:80])
+
+        if old_actions:
+            new_summary = "Previous actions: " + " → ".join(old_actions[-10:])
+            self._history_summary[agent.id] = new_summary
 
     async def decide(self, agent: AgentState, perception: dict) -> Action:
         """Given the agent's perception, ask Claude to choose an action."""
@@ -121,6 +146,12 @@ class LLMBrain:
         )
 
         perception_text = build_perception_message(perception)
+
+        # Inject history summary into perception if we have one
+        summary = self._history_summary.get(agent.id, "")
+        if summary:
+            perception_text = f"[{summary}]\n\n{perception_text}"
+
         history = self._get_history(agent.id)
 
         # If last message is user (tool_result from previous turn),
@@ -143,7 +174,7 @@ class LLMBrain:
                 max_tokens=self._max_tokens,
                 system=system_prompt,
                 tools=ANTHROPIC_TOOLS,
-                tool_choice={"type": "any"},  # force exactly one tool call
+                tool_choice={"type": "any"},
                 messages=history,
             )
         except Exception as e:
@@ -194,7 +225,7 @@ class LLMBrain:
         if self._memory.should_reflect():
             self._reflect(agent, tick)
 
-        self._trim_history(agent.id)
+        self._trim_history(agent)
         return action
 
     def _extract_facts(self, agent: AgentState, events: str, action: str, tick: int) -> None:
@@ -277,6 +308,7 @@ class LLMBrain:
             "model": self._model,
             "memory": self._memory.snapshot(),
             "message_history": dict(self._message_history),
+            "history_summary": dict(self._history_summary),
         }
 
     @classmethod
@@ -284,6 +316,7 @@ class LLMBrain:
         brain = cls(model=data.get("model"))
         brain._memory = AgentMemory.from_snapshot(data["memory"])
         brain._message_history = data.get("message_history", {})
+        brain._history_summary = data.get("history_summary", {})
         return brain
 
 
