@@ -2,16 +2,56 @@
 
 Architecture:
   Working Memory  — always in prompt, key facts the agent self-manages (~10 items)
-  Memory Stream   — append-only log of observations, scored by recency + importance
+  Memory Stream   — append-only log, scored by recency × importance × relevance
   Reflections     — periodic higher-level summaries ("what have I learned?")
+
+Retrieval scoring (Stanford Generative Agents):
+  score = recency × importance × relevance
+  - recency:    exponential decay (0.95^age)
+  - importance: 1-5 scale from LLM extraction
+  - relevance:  keyword overlap between memory and current query
 """
 
 from __future__ import annotations
 
-import math
+import re
 from typing import Any
 
 from pydantic import BaseModel, Field
+
+
+# Common words to ignore when computing keyword relevance
+_STOPWORDS = frozenset({
+    "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+    "have", "has", "had", "do", "does", "did", "will", "would", "could",
+    "should", "may", "might", "shall", "can", "to", "of", "in", "for",
+    "on", "with", "at", "by", "from", "as", "into", "through", "during",
+    "before", "after", "and", "but", "or", "nor", "not", "no", "so",
+    "if", "then", "than", "that", "this", "it", "its", "i", "you", "he",
+    "she", "they", "we", "my", "your", "his", "her", "their", "our",
+    "me", "him", "them", "us", "what", "which", "who", "whom", "how",
+    "when", "where", "why", "all", "each", "every", "both", "few",
+    "more", "most", "some", "any", "also", "just", "about", "up",
+    "out", "very", "here", "there", "now", "then", "room", "see",
+})
+
+
+def _extract_keywords(text: str) -> set[str]:
+    """Extract meaningful keywords from text, lowercased, stopwords removed."""
+    words = set(re.findall(r"[a-zA-Z]{3,}", text.lower()))
+    return words - _STOPWORDS
+
+
+def _keyword_relevance(memory_text: str, query_keywords: set[str]) -> float:
+    """Compute relevance score (0.0-1.0) based on keyword overlap."""
+    if not query_keywords:
+        return 0.5  # neutral if no query
+    mem_keywords = _extract_keywords(memory_text)
+    if not mem_keywords:
+        return 0.1
+    overlap = len(mem_keywords & query_keywords)
+    # Normalize by query size, cap at 1.0
+    return min(overlap / max(len(query_keywords) * 0.3, 1.0), 1.0)
 
 
 class MemoryEntry(BaseModel):
@@ -19,17 +59,20 @@ class MemoryEntry(BaseModel):
 
     tick: int
     content: str
-    category: str = "observation"  # observation, action, dialogue, discovery, reflection
-    importance: int = 3  # 1-5 scale, set by the LLM or heuristics
+    category: str = "observation"
+    importance: int = 3  # 1-5 scale
 
     def recency_score(self, current_tick: int, decay: float = 0.95) -> float:
         """Exponential decay — recent memories score higher."""
         age = max(current_tick - self.tick, 0)
         return decay ** age
 
-    def retrieval_score(self, current_tick: int) -> float:
-        """Combined score for retrieval ranking."""
-        return self.recency_score(current_tick) * (self.importance / 5.0)
+    def retrieval_score(self, current_tick: int, query_keywords: set[str] | None = None) -> float:
+        """Score = recency × importance × relevance (Stanford Generative Agents formula)."""
+        recency = self.recency_score(current_tick)
+        importance = self.importance / 5.0
+        relevance = _keyword_relevance(self.content, query_keywords) if query_keywords else 0.5
+        return recency * importance * relevance
 
 
 class AgentMemory:
@@ -83,9 +126,13 @@ class AgentMemory:
             self._stream = self._stream[-self._max_stream :]
         self._ticks_since_reflect += 1
 
-    def retrieve(self, current_tick: int, top_k: int = 8) -> list[MemoryEntry]:
-        """Retrieve the most relevant memories by recency × importance."""
-        scored = [(entry, entry.retrieval_score(current_tick)) for entry in self._stream]
+    def retrieve(self, current_tick: int, query: str = "", top_k: int = 8) -> list[MemoryEntry]:
+        """Retrieve memories by recency × importance × relevance to query."""
+        query_kw = _extract_keywords(query) if query else None
+        scored = [
+            (entry, entry.retrieval_score(current_tick, query_kw))
+            for entry in self._stream
+        ]
         scored.sort(key=lambda x: x[1], reverse=True)
         return [entry for entry, _ in scored[:top_k]]
 
@@ -108,8 +155,13 @@ class AgentMemory:
 
     # --- Prompt Building ---
 
-    def build_memory_prompt(self, current_tick: int) -> str:
-        """Build the full memory section for the system prompt."""
+    def build_memory_prompt(self, current_tick: int, query: str = "") -> str:
+        """Build the full memory section for the system prompt.
+
+        Args:
+            current_tick: current world tick for recency scoring
+            query: current perception text for relevance scoring
+        """
         sections = []
 
         # Working memory
@@ -123,8 +175,8 @@ class AgentMemory:
             for r in reflections:
                 sections.append(f"[Tick {r.tick}] {r.content}")
 
-        # Retrieved memories
-        retrieved = self.retrieve(current_tick, top_k=6)
+        # Retrieved memories — scored by recency × importance × relevance
+        retrieved = self.retrieve(current_tick, query=query, top_k=6)
         if retrieved:
             sections.append("\n### Relevant Memories")
             for m in retrieved:

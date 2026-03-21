@@ -107,14 +107,14 @@ class LLMBrain:
         """
         tick = perception.get("tick", 0)
 
+        perception_text = build_perception_message(perception)
+
         system_prompt = build_system_prompt(
             name=agent.name,
             description=agent.description,
             goal=agent.goal,
-            memory_summary=self._memory.build_memory_prompt(tick),
+            memory_summary=self._memory.build_memory_prompt(tick, query=perception_text),
         )
-
-        perception_text = build_perception_message(perception)
 
         try:
             response = self._client.messages.create(

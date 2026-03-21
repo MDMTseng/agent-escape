@@ -88,6 +88,26 @@ class TestAgentMemory:
         retrieved = mem.retrieve(current_tick=20, top_k=5)
         assert len(retrieved) == 5
 
+    # --- Relevance Scoring ---
+
+    def test_relevance_boosts_matching_memories(self):
+        mem = AgentMemory()
+        mem.record(tick=5, content="Found brass key behind the painting", importance=4)
+        mem.record(tick=5, content="Bob said hello to Alice", importance=4)
+
+        # Query about painting — should rank painting memory higher
+        retrieved = mem.retrieve(current_tick=5, query="examine the old painting in workshop", top_k=2)
+        assert retrieved[0].content == "Found brass key behind the painting"
+
+    def test_relevance_with_no_query_is_neutral(self):
+        mem = AgentMemory()
+        mem.record(tick=5, content="Found key", importance=5)
+        mem.record(tick=5, content="Talked to Bob", importance=3)
+
+        # No query — falls back to recency × importance only
+        retrieved = mem.retrieve(current_tick=5, top_k=2)
+        assert retrieved[0].content == "Found key"  # higher importance wins
+
     # --- Reflections ---
 
     def test_reflections(self):
