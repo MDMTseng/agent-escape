@@ -563,18 +563,51 @@ DASHBOARD_HTML = """\
         }
         .save-entry button:hover { border-color: #58a6ff; }
         .save-entry button.del:hover { border-color: #f85149; color: #f85149; }
-        #story { flex: 1; overflow-y: auto; }
-        .narrative-block {
-            margin-bottom: 16px; padding: 12px; background: #161b22;
-            border-left: 3px solid #e3b341; border-radius: 0 6px 6px 0;
-            line-height: 1.7; font-size: 14px;
+        /* Card-based story viewer */
+        #story { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        #story-card-container {
+            flex: 1; display: flex; align-items: center; justify-content: center;
+            position: relative; overflow: hidden; padding: 10px;
         }
-        .narrative-block .chapter { color: #8b949e; font-size: 10px; font-family: monospace; margin-bottom: 6px; }
-        .narrative-block p { color: #e6edf3; }
-        .finished-narrative {
-            margin-top: 16px; padding: 16px; background: #0d2818;
-            border-left: 3px solid #3fb950; border-radius: 0 6px 6px 0;
-            font-size: 16px; color: #3fb950; line-height: 1.7;
+        .story-card {
+            background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+            padding: 24px; max-width: 100%; width: 100%;
+            line-height: 1.8; font-size: 15px; color: #e6edf3;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            min-height: 120px;
+        }
+        .story-card .chapter-num {
+            color: #e3b341; font-family: monospace; font-size: 11px;
+            margin-bottom: 10px; letter-spacing: 1px;
+        }
+        .story-card .card-events {
+            color: #8b949e; font-family: monospace; font-size: 10px;
+            margin-top: 12px; padding-top: 10px; border-top: 1px solid #21262d;
+        }
+        .story-card.finished { border-color: #3fb950; }
+        .story-card.finished .chapter-num { color: #3fb950; }
+        #story-nav {
+            display: flex; align-items: center; justify-content: center; gap: 12px;
+            padding: 10px; flex-shrink: 0;
+        }
+        #story-nav button {
+            font-family: monospace; font-size: 16px; width: 36px; height: 36px;
+            border: 1px solid #30363d; border-radius: 6px; cursor: pointer;
+            background: #21262d; color: #c9d1d9;
+        }
+        #story-nav button:hover:not(:disabled) { border-color: #58a6ff; }
+        #story-nav button:disabled { opacity: 0.3; cursor: default; }
+        #story-nav .page-info { color: #8b949e; font-family: monospace; font-size: 11px; min-width: 60px; text-align: center; }
+        #btn-copy-scene {
+            font-family: monospace; font-size: 11px; padding: 4px 10px;
+            border: 1px solid #e3b341; border-radius: 4px; cursor: pointer;
+            background: #2d2006; color: #e3b341;
+        }
+        #btn-copy-scene:hover { background: #3d3010; }
+        #copy-toast {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: #3fb950; color: #0d1117; padding: 8px 20px; border-radius: 6px;
+            font-family: monospace; font-size: 12px; display: none; z-index: 999;
         }
 
         /* Right: status panels + log */
@@ -703,7 +736,20 @@ DASHBOARD_HTML = """\
             <span id="token-display">Tokens: 0</span>
         </div>
         <div id="save-list" style="display:none; margin-bottom: 12px;"></div>
-        <div id="story"></div>
+        <div id="story">
+            <div id="story-card-container">
+                <div class="story-card" id="current-card">
+                    <div class="chapter-num">Waiting for first tick...</div>
+                </div>
+            </div>
+            <div id="story-nav">
+                <button id="btn-prev" onclick="prevCard()" disabled>&lt;</button>
+                <span class="page-info" id="page-info">0 / 0</span>
+                <button id="btn-next" onclick="nextCard()" disabled>&gt;</button>
+                <button id="btn-copy-scene" onclick="copyScene()">Copy Scene</button>
+            </div>
+        </div>
+        <div id="copy-toast">Copied to clipboard!</div>
     </div>
     <div id="right-panel">
         <div id="map-panel">
@@ -728,13 +774,103 @@ DASHBOARD_HTML = """\
         </div>
     </div>
     <script>
-        const storyDiv = document.getElementById('story');
         const eventsDiv = document.getElementById('events');
         const statusDiv = document.getElementById('status');
         const tokenDiv = document.getElementById('token-display');
         const sceneDiv = document.getElementById('scene-graph');
         const puzzleDiv = document.getElementById('puzzle-list');
         const agentDiv = document.getElementById('agent-list');
+        const currentCard = document.getElementById('current-card');
+        const pageInfo = document.getElementById('page-info');
+        const btnPrev = document.getElementById('btn-prev');
+        const btnNext = document.getElementById('btn-next');
+        const copyToast = document.getElementById('copy-toast');
+
+        // --- Story card system ---
+        const storyCards = [];  // [{tick, narrative, events, agents, rooms}]
+        let cardIndex = -1;
+        let autoFollow = true;  // auto-advance to latest card
+
+        function addCard(data) {
+            storyCards.push(data);
+            if (autoFollow) {
+                cardIndex = storyCards.length - 1;
+                renderCard();
+            } else {
+                updateNav();
+            }
+        }
+
+        function renderCard() {
+            if (cardIndex < 0 || cardIndex >= storyCards.length) return;
+            const c = storyCards[cardIndex];
+            const isFinished = c.finished;
+            let html = `<div class="chapter-num">CHAPTER ${c.tick + 1}</div>`;
+            html += `<div>${(c.narrative || 'No narration.').replace(/\\n/g, '<br>')}</div>`;
+            if (c.events && c.events.length) {
+                html += `<div class="card-events">${c.events.map(e => e.description).join(' | ')}</div>`;
+            }
+            currentCard.innerHTML = html;
+            currentCard.className = 'story-card' + (isFinished ? ' finished' : '');
+            updateNav();
+        }
+
+        function updateNav() {
+            const total = storyCards.length;
+            pageInfo.textContent = total > 0 ? `${cardIndex + 1} / ${total}` : '0 / 0';
+            btnPrev.disabled = cardIndex <= 0;
+            btnNext.disabled = cardIndex >= total - 1;
+        }
+
+        function prevCard() {
+            if (cardIndex > 0) { cardIndex--; autoFollow = false; renderCard(); }
+        }
+        function nextCard() {
+            if (cardIndex < storyCards.length - 1) {
+                cardIndex++;
+                if (cardIndex === storyCards.length - 1) autoFollow = true;
+                renderCard();
+            }
+        }
+
+        function copyScene() {
+            if (cardIndex < 0 || cardIndex >= storyCards.length) return;
+            const c = storyCards[cardIndex];
+            // Build a rich scene description for image generation
+            const parts = [];
+            parts.push('IMAGE GENERATION PROMPT:');
+            parts.push('Style: Dark atmospheric digital painting, escape room horror, dramatic lighting');
+            parts.push('');
+            parts.push('Scene: ' + (c.narrative || 'No narration'));
+            parts.push('');
+            if (c.agents) {
+                for (const a of Object.values(c.agents)) {
+                    const room = c.rooms && c.rooms[a.room_id] ? c.rooms[a.room_id].name : a.room_id;
+                    const inv = (a.inventory || []).map(i => i.name).join(', ') || 'nothing';
+                    parts.push(`Character: ${a.name} (${a.description}) in ${room}, carrying ${inv}`);
+                }
+            }
+            if (c.rooms) {
+                for (const r of Object.values(c.rooms)) {
+                    parts.push(`Location: ${r.name} - ${r.description}`);
+                }
+            }
+            if (c.events && c.events.length) {
+                parts.push('');
+                parts.push('Actions: ' + c.events.map(e => e.description).join('. '));
+            }
+            const text = parts.join('\\n');
+            navigator.clipboard.writeText(text).then(() => {
+                copyToast.style.display = 'block';
+                setTimeout(() => { copyToast.style.display = 'none'; }, 2000);
+            });
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') prevCard();
+            else if (e.key === 'ArrowRight') nextCard();
+        });
 
         // --- Log tab switching ---
         const serverLogDiv = document.getElementById('server-log');
@@ -895,7 +1031,11 @@ DASHBOARD_HTML = """\
                 statusDiv.textContent = `Game reset (${d.scenario}) — press Resume or Step`;
                 statusDiv.style.color = '#e3b341';
                 setButtonState(true);
-                storyDiv.innerHTML = '';
+                storyCards.length = 0;
+                cardIndex = -1;
+                autoFollow = true;
+                currentCard.innerHTML = '<div class="chapter-num">Waiting for first tick...</div>';
+                updateNav();
                 eventsDiv.innerHTML = '';
                 tokenDiv.textContent = 'Tokens: 0';
             });
@@ -1220,14 +1360,15 @@ DASHBOARD_HTML = """\
             }
 
             if (msg.type === 'tick') {
-                // Narrative
-                if (msg.narrative) {
-                    const block = document.createElement('div');
-                    block.className = 'narrative-block';
-                    block.innerHTML = `<div class="chapter">Chapter ${msg.tick + 1}</div><p>${msg.narrative.replace(/\\n/g, '<br>')}</p>`;
-                    storyDiv.appendChild(block);
-                    storyDiv.scrollTop = storyDiv.scrollHeight;
-                }
+                // Add story card
+                addCard({
+                    tick: msg.tick,
+                    narrative: msg.narrative || '',
+                    events: msg.events || [],
+                    agents: msg.world_state ? msg.world_state.agents : {},
+                    rooms: msg.world_state ? msg.world_state.rooms : {},
+                    finished: false,
+                });
                 // Event log
                 const group = document.createElement('div');
                 group.className = 'tick-group';
@@ -1245,10 +1386,14 @@ DASHBOARD_HTML = """\
                 statusDiv.textContent = `Paused at tick ${msg.tick}`;
                 statusDiv.style.color = '#e3b341';
             } else if (msg.type === 'finished') {
-                const block = document.createElement('div');
-                block.className = 'finished-narrative';
-                block.innerHTML = msg.narrative || msg.reason;
-                storyDiv.appendChild(block);
+                addCard({
+                    tick: msg.tick || storyCards.length,
+                    narrative: msg.narrative || msg.reason,
+                    events: [],
+                    agents: {},
+                    rooms: {},
+                    finished: true,
+                });
                 const div = document.createElement('div');
                 div.className = 'event state_change';
                 div.style.fontWeight = 'bold';
