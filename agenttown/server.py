@@ -173,6 +173,18 @@ async def lifespan(app: FastAPI):
                     logger.info(f"  [{aid} memory] {wm}")
         t = sim_token_usage
         logger.info(f"  TOKENS: {t['total_tokens']} total ({t['prompt_tokens']} in / {t['completion_tokens']} out)")
+
+        # Token profiler — breakdown by call type
+        for aid, brain in sim_brains.items():
+            if hasattr(brain, "profile"):
+                p = brain.profile
+                parts = []
+                for call_type in ("decide", "extract", "reflect"):
+                    d = p[call_type]
+                    if d["calls"] > 0:
+                        parts.append(f"{call_type}={d['input']}in/{d['output']}out({d['calls']}x)")
+                if parts:
+                    logger.info(f"  [{aid} profile] {' | '.join(parts)}")
         logger.info("")
 
         await broadcast({
@@ -184,6 +196,10 @@ async def lifespan(app: FastAPI):
             ],
             "narrative": narrative,
             "token_usage": dict(sim_token_usage),
+            "token_profile": {
+                aid: brain.profile for aid, brain in sim_brains.items()
+                if hasattr(brain, "profile")
+            },
             "world_state": sim_world.snapshot(),
         })
 
@@ -761,13 +777,29 @@ DASHBOARD_HTML = """\
             }).catch(() => {});
         }
 
-        function updateTokens(usage) {
+        function updateTokens(usage, profile) {
             if (!usage) return;
-            const t = usage.total_tokens || 0;
-            const p = usage.prompt_tokens || 0;
-            const c = usage.completion_tokens || 0;
             const fmt = n => n >= 1000 ? (n/1000).toFixed(1) + 'k' : n;
-            tokenDiv.textContent = `Tokens: ${fmt(t)} (${fmt(p)} in / ${fmt(c)} out)`;
+            const t = usage.total_tokens || 0;
+
+            // Build profile breakdown if available
+            let breakdown = '';
+            if (profile) {
+                const totals = {decide: {i:0,o:0}, extract: {i:0,o:0}, reflect: {i:0,o:0}};
+                for (const [aid, p] of Object.entries(profile)) {
+                    for (const ct of ['decide','extract','reflect']) {
+                        if (p[ct]) { totals[ct].i += p[ct].input; totals[ct].o += p[ct].output; }
+                    }
+                }
+                const parts = [];
+                for (const [ct, v] of Object.entries(totals)) {
+                    const sum = v.i + v.o;
+                    if (sum > 0) parts.push(`${ct}:${fmt(v.i)}`);
+                }
+                if (parts.length) breakdown = ' [' + parts.join(' ') + ']';
+            }
+
+            tokenDiv.textContent = `Tokens: ${fmt(t)}${breakdown}`;
         }
         const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
         const ws = new WebSocket(`${proto}//${location.host}/ws`);
@@ -1175,7 +1207,7 @@ DASHBOARD_HTML = """\
                 }
                 // Update token counter
                 if (msg.token_usage) {
-                    updateTokens(msg.token_usage);
+                    updateTokens(msg.token_usage, msg.token_profile);
                 }
                 // Sync pause state on snapshot (reconnect)
                 if (msg.type === 'snapshot' && msg.paused !== undefined) {

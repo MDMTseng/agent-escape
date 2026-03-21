@@ -87,16 +87,25 @@ class LLMBrain:
         )
         self._memory = AgentMemory()
         self.token_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        # Per-call profiling: tracks input/output tokens for each call type
+        self.profile: dict[str, dict[str, int]] = {
+            "decide": {"input": 0, "output": 0, "calls": 0},
+            "extract": {"input": 0, "output": 0, "calls": 0},
+            "reflect": {"input": 0, "output": 0, "calls": 0},
+        }
 
-    def _track_usage(self, response) -> None:
+    def _track_usage(self, response, call_type: str = "") -> None:
         """Accumulate token usage from an API response."""
         if hasattr(response, "usage") and response.usage:
-            self.token_usage["prompt_tokens"] += getattr(response.usage, "input_tokens", 0) or 0
-            self.token_usage["completion_tokens"] += getattr(response.usage, "output_tokens", 0) or 0
-            self.token_usage["total_tokens"] += (
-                (getattr(response.usage, "input_tokens", 0) or 0)
-                + (getattr(response.usage, "output_tokens", 0) or 0)
-            )
+            inp = getattr(response.usage, "input_tokens", 0) or 0
+            out = getattr(response.usage, "output_tokens", 0) or 0
+            self.token_usage["prompt_tokens"] += inp
+            self.token_usage["completion_tokens"] += out
+            self.token_usage["total_tokens"] += inp + out
+            if call_type and call_type in self.profile:
+                self.profile[call_type]["input"] += inp
+                self.profile[call_type]["output"] += out
+                self.profile[call_type]["calls"] += 1
 
     async def decide(self, agent: AgentState, perception: dict) -> Action:
         """Given the agent's perception, ask Claude to choose an action.
@@ -129,7 +138,7 @@ class LLMBrain:
             logger.error(f"Claude API error for {agent.name}: {e}")
             return Wait()
 
-        self._track_usage(response)
+        self._track_usage(response, "decide")
 
         # Extract action from tool use
         action = self._parse_response(response, agent)
@@ -160,7 +169,7 @@ class LLMBrain:
                 max_tokens=300,
                 messages=[{"role": "user", "content": prompt}],
             )
-            self._track_usage(response)
+            self._track_usage(response, "extract")
             text = response.content[0].text.strip() if response.content else ""
             parsed = _parse_json(text)
             if parsed:
@@ -192,7 +201,7 @@ class LLMBrain:
                 max_tokens=200,
                 messages=[{"role": "user", "content": prompt}],
             )
-            self._track_usage(response)
+            self._track_usage(response, "reflect")
             reflection = response.content[0].text.strip() if response.content else ""
             if reflection:
                 self._memory.add_reflection(tick, reflection)
