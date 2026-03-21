@@ -14,7 +14,7 @@ A virtual world where LLM-powered agents live, interact with each other, and sol
 - Python core (simulation, agent logic)
 - TypeScript frontend (planned, not yet implemented)
 - Pydantic for all data models
-- OpenAI-compatible LLM API (Featherless / any provider) for agent brains
+- Anthropic Claude API (Haiku 4.5) for agent brains and narrator
 - asyncio for tick loop
 - rich for CLI output
 

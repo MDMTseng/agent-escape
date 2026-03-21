@@ -1,4 +1,4 @@
-"""LLM-powered agent brain — uses OpenAI-compatible API (Featherless, etc.)
+"""LLM-powered agent brain — uses Anthropic Claude API with tool calling.
 
 Memory architecture (Generative Agents-inspired):
   1. Working Memory — key facts always in system prompt, updated by LLM extraction
@@ -13,7 +13,7 @@ import logging
 import os
 from typing import Any
 
-from openai import OpenAI
+import anthropic
 
 from agenttown.world.actions import Action, Wait, parse_action
 from agenttown.world.models import AgentState
@@ -23,7 +23,6 @@ from .prompts import AGENT_TOOLS, build_perception_message, build_system_prompt
 
 logger = logging.getLogger(__name__)
 
-# Lightweight prompt for fact extraction — runs after each action
 EXTRACT_PROMPT = """\
 You are a memory assistant. Given what just happened, extract key facts worth remembering.
 
@@ -41,7 +40,7 @@ Rules:
   "importance": integer 1-5 rating of how important this turn was (1=routine, 5=major discovery)
 - Keep facts short (under 15 words each)
 - Prioritize: codes, passwords, clue content, item locations, what others said, puzzle states
-- Drop facts that are no longer relevant (e.g. "key is in room" after picking it up)
+- Drop facts that are no longer relevant
 - If nothing important happened, return existing facts unchanged with importance 1
 """
 
@@ -61,45 +60,34 @@ Write 1-2 sentences summarizing what the agent has learned and what they should 
 Be specific about puzzle progress and unsolved mysteries.\
 """
 
-# Convert our tool definitions to OpenAI function format
-def _tools_to_openai_functions() -> list[dict]:
-    """Convert AGENT_TOOLS to OpenAI function calling format."""
-    functions = []
-    for tool in AGENT_TOOLS:
-        functions.append({
-            "type": "function",
-            "function": {
-                "name": tool["name"],
-                "description": tool["description"],
-                "parameters": tool["input_schema"],
-            },
-        })
-    return functions
-
-
-OPENAI_TOOLS = _tools_to_openai_functions()
+# Convert tool definitions to Anthropic format
+ANTHROPIC_TOOLS = [
+    {
+        "name": tool["name"],
+        "description": tool["description"],
+        "input_schema": tool["input_schema"],
+    }
+    for tool in AGENT_TOOLS
+]
 
 
 class LLMBrain:
-    """An agent brain powered by any OpenAI-compatible LLM API."""
+    """An agent brain powered by Claude API with native tool calling."""
 
     def __init__(
         self,
         model: str | None = None,
         max_tokens: int = 1024,
         api_key: str | None = None,
-        base_url: str | None = None,
     ) -> None:
-        self._model = model or os.environ.get("FEATHERLESS_MODEL", "Qwen/Qwen3-8B")
+        self._model = model or os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5")
         self._max_tokens = max_tokens
-        self._client = OpenAI(
-            api_key=api_key or os.environ.get("FEATHERLESS_API_KEY", ""),
-            base_url=base_url or os.environ.get("FEATHERLESS_BASE_URL", "https://api.featherless.ai/v1"),
+        self._client = anthropic.Anthropic(
+            api_key=api_key or os.environ.get("ANTHROPIC_API_KEY"),
         )
         self._memory = AgentMemory()
         self._message_history: dict[str, list[dict[str, Any]]] = {}
         self.token_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
-        self._consecutive_waits: dict[str, int] = {}  # agent_id -> count
 
     def _get_history(self, agent_id: str) -> list[dict[str, Any]]:
         if agent_id not in self._message_history:
@@ -109,18 +97,20 @@ class LLMBrain:
     def _track_usage(self, response) -> None:
         """Accumulate token usage from an API response."""
         if hasattr(response, "usage") and response.usage:
-            self.token_usage["prompt_tokens"] += getattr(response.usage, "prompt_tokens", 0) or 0
-            self.token_usage["completion_tokens"] += getattr(response.usage, "completion_tokens", 0) or 0
-            self.token_usage["total_tokens"] += getattr(response.usage, "total_tokens", 0) or 0
+            self.token_usage["prompt_tokens"] += getattr(response.usage, "input_tokens", 0) or 0
+            self.token_usage["completion_tokens"] += getattr(response.usage, "output_tokens", 0) or 0
+            self.token_usage["total_tokens"] += (
+                (getattr(response.usage, "input_tokens", 0) or 0)
+                + (getattr(response.usage, "output_tokens", 0) or 0)
+            )
 
     def _trim_history(self, agent_id: str, max_turns: int = 30) -> None:
-        """Keep message history from growing unbounded."""
         history = self._get_history(agent_id)
         if len(history) > max_turns * 2:
             self._message_history[agent_id] = history[-(max_turns * 2) :]
 
     async def decide(self, agent: AgentState, perception: dict) -> Action:
-        """Given the agent's perception, ask the LLM to choose an action."""
+        """Given the agent's perception, ask Claude to choose an action."""
         tick = perception.get("tick", 0)
 
         system_prompt = build_system_prompt(
@@ -131,68 +121,75 @@ class LLMBrain:
         )
 
         perception_text = build_perception_message(perception)
-
-        # Stuck detection — nudge if agent has been waiting
-        waits = self._consecutive_waits.get(agent.id, 0)
-        if waits >= 2:
-            nudge = (
-                f"\n\n**WARNING: You have waited {waits} turns in a row. "
-                "You MUST take a different action NOW. "
-                "Suggestions: examine an object, pick up an item, move to another room, "
-                "or talk to another agent. Do NOT wait again.**"
-            )
-            perception_text += nudge
-
         history = self._get_history(agent.id)
 
-        # Build messages — OpenAI format uses system + user/assistant alternation
-        messages = [{"role": "system", "content": system_prompt}]
-        messages.extend(history)
-        messages.append({"role": "user", "content": perception_text})
+        # If last message is user (tool_result from previous turn),
+        # merge the new perception into it to avoid consecutive user messages.
+        if history and history[-1]["role"] == "user":
+            last_content = history[-1]["content"]
+            if isinstance(last_content, list):
+                last_content.append({"type": "text", "text": perception_text})
+            else:
+                history[-1]["content"] = [
+                    {"type": "text", "text": last_content},
+                    {"type": "text", "text": perception_text},
+                ]
+        else:
+            history.append({"role": "user", "content": perception_text})
 
         try:
-            response = self._client.chat.completions.create(
+            response = self._client.messages.create(
                 model=self._model,
                 max_tokens=self._max_tokens,
-                messages=messages,
-                tools=OPENAI_TOOLS,
-                tool_choice="required",
+                system=system_prompt,
+                tools=ANTHROPIC_TOOLS,
+                tool_choice={"type": "any"},  # force exactly one tool call
+                messages=history,
             )
         except Exception as e:
-            logger.error(f"LLM API error for {agent.name}: {e}")
+            logger.error(f"Claude API error for {agent.name}: {e}")
             self._message_history[agent.id] = []
             return Wait()
 
         self._track_usage(response)
 
-        # Extract action from response
-        choice = response.choices[0]
-        action = self._parse_response(choice, agent, perception)
+        # Extract action from tool use
+        action = self._parse_response(response, agent)
 
-        # Track consecutive waits for stuck detection
-        if hasattr(action, "type") and action.type == "wait":
-            self._consecutive_waits[agent.id] = self._consecutive_waits.get(agent.id, 0) + 1
-        else:
-            self._consecutive_waits[agent.id] = 0
+        # Record assistant response in history
+        assistant_content = []
+        for block in response.content:
+            if block.type == "text":
+                assistant_content.append({"type": "text", "text": block.text})
+            elif block.type == "tool_use":
+                assistant_content.append({
+                    "type": "tool_use",
+                    "id": block.id,
+                    "name": block.name,
+                    "input": block.input,
+                })
+        history.append({"role": "assistant", "content": assistant_content})
 
-        # Update conversation history (simplified — just user + assistant text)
-        history.append({"role": "user", "content": perception_text})
-        if choice.message.content:
-            history.append({"role": "assistant", "content": choice.message.content})
-        elif choice.message.tool_calls:
-            # Store tool call as assistant message
-            tc = choice.message.tool_calls[0]
-            history.append({
-                "role": "assistant",
-                "content": f"Action: {tc.function.name}({tc.function.arguments})",
-            })
+        # Add tool_result for EVERY tool_use block
+        tool_results = []
+        for block in response.content:
+            if block.type == "tool_use":
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": "Action submitted. You will see the results next turn.",
+                })
+        if tool_results:
+            history.append({"role": "user", "content": tool_results})
 
         # --- Memory processing ---
         events_text = "\n".join(perception.get("recent_events", []))
-        action_text = f"{action.type}" if hasattr(action, "type") else "wait"
-        self._memory.record(tick=tick, content=events_text or perception_text[:200], category="observation")
-
-        self._extract_facts(agent, events_text, action_text, tick)
+        self._memory.record(
+            tick=tick,
+            content=events_text or perception_text[:200],
+            category="observation",
+        )
+        self._extract_facts(agent, events_text, str(action.type) if hasattr(action, "type") else "wait", tick)
 
         if self._memory.should_reflect():
             self._reflect(agent, tick)
@@ -201,20 +198,19 @@ class LLMBrain:
         return action
 
     def _extract_facts(self, agent: AgentState, events: str, action: str, tick: int) -> None:
-        """Ask the LLM to extract key facts from what just happened."""
         prompt = EXTRACT_PROMPT.format(
             working_memory=self._memory.working_memory_text(),
             events=events or "Nothing notable happened.",
             action=action,
         )
         try:
-            response = self._client.chat.completions.create(
+            response = self._client.messages.create(
                 model=self._model,
                 max_tokens=300,
                 messages=[{"role": "user", "content": prompt}],
             )
             self._track_usage(response)
-            text = response.choices[0].message.content or ""
+            text = response.content[0].text.strip() if response.content else ""
             parsed = _parse_json(text)
             if parsed:
                 facts = parsed.get("facts", [])
@@ -227,11 +223,9 @@ class LLMBrain:
             logger.debug(f"Fact extraction failed for {agent.name}: {e}")
 
     def _reflect(self, agent: AgentState, tick: int) -> None:
-        """Generate a reflection — high-level summary of recent progress."""
         recent = self._memory.recent(15)
         if not recent:
             return
-
         memories_text = "\n".join(
             f"[Tick {m.tick}] ({m.category}) {m.content}" for m in recent
         )
@@ -242,59 +236,35 @@ class LLMBrain:
             working_memory=self._memory.working_memory_text(),
         )
         try:
-            response = self._client.chat.completions.create(
+            response = self._client.messages.create(
                 model=self._model,
                 max_tokens=200,
                 messages=[{"role": "user", "content": prompt}],
             )
             self._track_usage(response)
-            reflection = (response.choices[0].message.content or "").strip()
+            reflection = response.content[0].text.strip() if response.content else ""
             if reflection:
                 self._memory.add_reflection(tick, reflection)
                 logger.info(f"{agent.name} reflects: {reflection}")
         except Exception as e:
             logger.debug(f"Reflection failed for {agent.name}: {e}")
 
-    def _parse_response(self, choice, agent: AgentState, perception: dict | None = None) -> Action:
-        """Extract an Action from the LLM response, with smart fallback."""
-        msg = choice.message
+    def _parse_response(self, response: anthropic.types.Message, agent: AgentState) -> Action:
+        """Extract an Action from Claude's response."""
+        for block in response.content:
+            if block.type == "tool_use":
+                tool_name = block.name
+                tool_input = block.input if isinstance(block.input, dict) else {}
+                action_data = {"type": tool_name, **tool_input}
+                logger.info(f"{agent.name} decides: {tool_name}({json.dumps(tool_input)})")
+                return parse_action(action_data)
 
-        # Check for tool calls (function calling)
-        if msg.tool_calls:
-            tc = msg.tool_calls[0]
-            tool_name = tc.function.name
-            try:
-                tool_input = json.loads(tc.function.arguments) if tc.function.arguments else {}
-            except json.JSONDecodeError:
-                tool_input = {}
-
-            action_data = {"type": tool_name, **tool_input}
-            logger.info(f"{agent.name} decides: {tool_name}({json.dumps(tool_input)})")
-            return parse_action(action_data)
-
-        # Fallback 1: try to parse action from text response
-        text = msg.content or ""
-        if text:
-            # Strip <think>...</think> tags from reasoning models
-            import re
-            cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
-            logger.info(f"{agent.name} text (no tool call): {cleaned[:150]}")
-
-            # Try to find JSON in the text
-            parsed = _parse_json(cleaned)
-            if parsed and "type" in parsed:
-                return parse_action(parsed)
-
-            # Try to extract action keywords from text
-            action = _extract_action_from_text(cleaned, perception)
-            if action:
-                logger.info(f"{agent.name} extracted from text: {action.type}")
-                return action
-
-        # Fallback 2: smart default based on perception
-        fallback = _smart_fallback(agent, perception)
-        logger.info(f"{agent.name} fallback: {fallback.type}")
-        return fallback
+        # Claude with tool_choice=any should always return a tool call,
+        # but fallback just in case
+        for block in response.content:
+            if block.type == "text":
+                logger.info(f"{agent.name} text (no tool): {block.text[:100]}")
+        return Wait()
 
     @property
     def memory(self) -> AgentMemory:
@@ -303,7 +273,6 @@ class LLMBrain:
     # --- Persistence ---
 
     def snapshot(self) -> dict:
-        """Serialize brain state for saving."""
         return {
             "model": self._model,
             "memory": self._memory.snapshot(),
@@ -312,92 +281,14 @@ class LLMBrain:
 
     @classmethod
     def from_snapshot(cls, data: dict) -> LLMBrain:
-        """Restore brain from a saved snapshot."""
         brain = cls(model=data.get("model"))
         brain._memory = AgentMemory.from_snapshot(data["memory"])
         brain._message_history = data.get("message_history", {})
         return brain
 
 
-# Keep backward compat alias
+# Backward compat alias
 ClaudeBrain = LLMBrain
-
-
-def _extract_action_from_text(text: str, perception: dict | None) -> Action | None:
-    """Try to extract an action from free-form LLM text."""
-    import re
-
-    # Pattern 1: "Action: tool_name({json})" — common Qwen3 output
-    m = re.search(r"(\w+)\s*\(\s*(\{.*?\})\s*\)", text)
-    if m:
-        tool_name = m.group(1).strip().lower()
-        try:
-            tool_input = json.loads(m.group(2))
-            action_data = {"type": tool_name, **tool_input}
-            return parse_action(action_data)
-        except json.JSONDecodeError:
-            pass
-
-    text_lower = text.lower()
-
-    # Pattern 2: "examine the old book" / "I'll examine the painting"
-    m = re.search(r"(?:examine|look at|inspect)\s+(?:the\s+)?([\"']?[\w\s]+[\"']?)", text_lower)
-    if m:
-        target = m.group(1).strip().strip("'\"")
-        return parse_action({"type": "examine", "target": target})
-
-    # "pick up the key" / "grab the note"
-    m = re.search(r"(?:pick up|grab|take)\s+(?:the\s+)?([\"']?[\w\s]+[\"']?)", text_lower)
-    if m:
-        target = m.group(1).strip().strip("'\"")
-        return parse_action({"type": "pick_up", "target": target})
-
-    # "move east" / "go north" / "head south"
-    m = re.search(r"(?:move|go|head|walk)\s+(?:to the\s+)?(\w+)", text_lower)
-    if m:
-        direction = m.group(1).strip()
-        if direction in ("east", "west", "north", "south"):
-            return parse_action({"type": "move", "direction": direction})
-
-    # "enter 1847" / "code is 1847"
-    m = re.search(r"(?:enter|input|code|type)\s+[\"']?(\d{3,})[\"']?", text_lower)
-    if m and perception:
-        code = m.group(1)
-        # Find a combination lock in entities
-        for e in perception.get("entities", []):
-            return parse_action({"type": "interact", "target": e["name"], "payload": code})
-
-    return None
-
-
-_fallback_index: dict[str, int] = {}  # agent_id -> rotating index
-
-def _smart_fallback(agent, perception: dict | None) -> Action:
-    """Pick a reasonable action when the LLM fails to respond properly.
-    Rotates through options to avoid repeating the same fallback."""
-    if not perception:
-        return parse_action({"type": "examine", "target": "room"})
-
-    # Build list of all possible actions
-    options: list[dict] = []
-
-    for e in perception.get("entities", []):
-        options.append({"type": "examine", "target": e["name"]})
-        options.append({"type": "pick_up", "target": e["name"]})
-
-    for ex in perception.get("exits", []):
-        options.append({"type": "move", "direction": ex["direction"]})
-
-    for o in perception.get("others", []):
-        options.append({"type": "talk", "message": "What have you found?", "to": o["name"]})
-
-    if not options:
-        return parse_action({"type": "examine", "target": "room"})
-
-    # Rotate through options
-    idx = _fallback_index.get(agent.id, 0) % len(options)
-    _fallback_index[agent.id] = idx + 1
-    return parse_action(options[idx])
 
 
 def _parse_json(text: str) -> dict | None:

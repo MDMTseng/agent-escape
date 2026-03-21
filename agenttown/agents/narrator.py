@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 
-from openai import OpenAI
+import anthropic
 
 from agenttown.world.events import Event
 from agenttown.world.models import WorldState
@@ -22,7 +22,7 @@ Write in third person, present tense. Keep each narration to 2-4 sentences.
 Style guidelines:
 - Use sensory details: sounds, smells, textures, light
 - Build tension and atmosphere — this is a mystery/horror setting
-- Give each agent a distinct voice in dialogue (Alice is careful and analytical, Bob is bold and impulsive)
+- Give each agent a distinct voice in dialogue
 - When agents discover clues, make it feel like a revelation
 - When puzzles are solved, convey the satisfaction and mechanical sounds
 - When things fail, convey frustration or danger
@@ -47,26 +47,21 @@ Write all narration in a single flowing passage.\
 
 
 class Narrator:
-    """Transforms raw game events into narrative prose using an LLM."""
+    """Transforms raw game events into narrative prose using Claude."""
 
     def __init__(
         self,
         model: str | None = None,
         max_tokens: int = 512,
         api_key: str | None = None,
-        base_url: str | None = None,
     ) -> None:
-        self._model = model or os.environ.get("FEATHERLESS_MODEL", "Qwen/Qwen3-8B")
+        self._model = model or os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5")
         self._max_tokens = max_tokens
-        self._client = OpenAI(
-            api_key=api_key or os.environ.get("FEATHERLESS_API_KEY", ""),
-            base_url=base_url or os.environ.get("FEATHERLESS_BASE_URL", "https://api.featherless.ai/v1"),
+        self._client = anthropic.Anthropic(
+            api_key=api_key or os.environ.get("ANTHROPIC_API_KEY"),
         )
 
-    def narrate(
-        self, events: list[Event], world_state: WorldState, tick: int
-    ) -> str:
-        """Convert a list of raw events into narrative prose."""
+    def narrate(self, events: list[Event], world_state: WorldState, tick: int) -> str:
         if not events:
             return ""
 
@@ -101,15 +96,13 @@ class Narrator:
         )
 
         try:
-            response = self._client.chat.completions.create(
+            response = self._client.messages.create(
                 model=self._model,
                 max_tokens=self._max_tokens,
-                messages=[
-                    {"role": "system", "content": NARRATOR_SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt},
-                ],
+                system=NARRATOR_SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": prompt}],
             )
-            return (response.choices[0].message.content or "").strip()
+            return response.content[0].text.strip() if response.content else ""
         except Exception as e:
             logger.error(f"Narrator error: {e}")
             return "\n".join(e.description for e in interesting)
