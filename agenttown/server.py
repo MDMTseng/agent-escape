@@ -505,6 +505,7 @@ DASHBOARD_HTML = """\
 <!DOCTYPE html>
 <html>
 <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
     <title>AgentTown — Ravenwood Manor</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -714,9 +715,41 @@ DASHBOARD_HTML = """\
         .event.wait { color: #484f58; }
 
         @media (max-width: 900px) {
-            body { flex-direction: column; }
-            #story-panel { border-right: none; border-bottom: 1px solid #21262d; max-height: 50vh; }
-            #right-panel { max-height: 50vh; }
+            body { flex-direction: column; height: auto; min-height: 100vh; }
+            #story-panel {
+                flex: none; border-right: none; padding: 12px;
+                border-bottom: 1px solid #21262d;
+            }
+            #story-panel h1 { font-size: 18px; }
+            .subtitle { font-size: 11px; margin-bottom: 6px; }
+            #controls {
+                flex-wrap: wrap; gap: 4px;
+            }
+            #controls button { font-size: 10px; padding: 3px 8px; }
+            #controls .sep { display: none; }
+            #token-display { font-size: 10px; padding: 2px 6px; margin-left: 0; margin-top: 4px; width: 100%; text-align: center; }
+            #save-list { font-size: 10px; }
+            #story-card-container { padding: 6px; }
+            .story-card { padding: 14px; font-size: 13px; line-height: 1.6; }
+            .story-card .chapter-num { font-size: 10px; }
+            .story-card .card-events { font-size: 9px; }
+            #story-nav { padding: 6px; gap: 8px; }
+            #story-nav button { width: 32px; height: 32px; font-size: 14px; }
+            #btn-copy-scene { font-size: 10px; padding: 3px 8px; }
+            #right-panel { flex: none; }
+            #map-panel { padding: 10px; }
+            #map-panel h2, #puzzle-panel h2, #agent-panel h2 { font-size: 11px; }
+            .room-card { font-size: 10px; padding: 6px; min-width: 80px; }
+            .room-card .room-name { font-size: 10px; }
+            .puzzle-row { font-size: 10px; padding: 4px 6px; }
+            .puzzle-status { font-size: 9px; }
+            .agent-card { font-size: 10px; padding: 6px; }
+            #log-panel { max-height: 40vh; }
+            .log-tabs { padding: 6px 10px 0; }
+            .log-tab { font-size: 10px; padding: 3px 10px; }
+            .log-content { padding: 8px 10px; font-size: 10px; }
+            .tick-group { font-size: 10px; }
+            .event { font-size: 10px; }
         }
     </style>
 </head>
