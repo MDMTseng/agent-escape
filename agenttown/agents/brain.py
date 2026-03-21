@@ -23,41 +23,9 @@ from .prompts import AGENT_TOOLS, build_perception_message, build_system_prompt
 
 logger = logging.getLogger(__name__)
 
-EXTRACT_PROMPT = """\
-You are a memory assistant. Given what just happened, extract key facts worth remembering.
-
-Current working memory:
-{working_memory}
-
-What just happened:
-{events}
-
-Action taken: {action}
-
-Rules:
-- Return a JSON object with two fields:
-  "facts": list of short key facts to remember (max 10 total, merge with existing)
-  "importance": integer 1-5 rating of how important this turn was (1=routine, 5=major discovery)
-- Keep facts short (under 15 words each)
-- Prioritize: codes, passwords, clue content, item locations, what others said, puzzle states
-- Drop facts that are no longer relevant
-- If nothing important happened, return existing facts unchanged with importance 1
-"""
-
 REFLECT_PROMPT = """\
-You are a reflection assistant. Review the agent's recent memories and produce a brief insight.
-
-Agent: {name}
-Goal: {goal}
-
-Recent memories:
-{memories}
-
-Current working memory:
-{working_memory}
-
-Write 1-2 sentences summarizing what the agent has learned and what they should focus on next. \
-Be specific about puzzle progress and unsolved mysteries.\
+Agent {name}, goal: {goal}. Memories: {memories}. Facts: {working_memory}.
+Write 1 sentence: what to do next.\
 """
 
 # Convert tool definitions to Anthropic format
@@ -158,47 +126,54 @@ class LLMBrain:
         return action
 
     def _extract_facts(self, agent: AgentState, events: str, action: str, tick: int) -> None:
-        prompt = EXTRACT_PROMPT.format(
-            working_memory=self._memory.working_memory_text(),
-            events=events or "Nothing notable happened.",
-            action=action,
-        )
-        try:
-            response = self._client.messages.create(
-                model=self._model,
-                max_tokens=300,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            self._track_usage(response, "extract")
-            text = response.content[0].text.strip() if response.content else ""
-            parsed = _parse_json(text)
-            if parsed:
-                facts = parsed.get("facts", [])
-                importance = parsed.get("importance", 3)
-                if facts:
-                    self._memory.update_working_memory(facts)
-                if self._memory._stream:
-                    self._memory._stream[-1].importance = min(max(importance, 1), 5)
-        except Exception as e:
-            logger.debug(f"Fact extraction failed for {agent.name}: {e}")
+        """Rule-based fact extraction — no LLM call. Extracts codes, quotes, key info."""
+        import re
+        facts = list(self._memory.get_working_memory())
+        importance = 2
+
+        # Extract quoted text (clues, inscriptions)
+        quotes = re.findall(r'"([^"]{5,80})"', events)
+        for q in quotes:
+            fact = q[:60]
+            if fact not in facts:
+                facts.append(fact)
+                importance = 4
+
+        # Extract numbers that look like codes (3+ digits)
+        codes = re.findall(r'\b(\d{3,})\b', events)
+        for code in codes:
+            fact = f"code: {code}"
+            if fact not in facts:
+                facts.append(fact)
+                importance = 5
+
+        # Track key events
+        if "unlock" in events.lower() or "revealed" in events.lower():
+            importance = 5
+        elif "picks up" in events.lower() or "examines" in events.lower():
+            importance = 3
+
+        # Cap at 10 facts, keep newest
+        self._memory.update_working_memory(facts[-10:])
+        if self._memory._stream:
+            self._memory._stream[-1].importance = importance
 
     def _reflect(self, agent: AgentState, tick: int) -> None:
-        recent = self._memory.recent(15)
+        """LLM reflection — compact prompt, runs every N ticks."""
+        recent = self._memory.recent(10)
         if not recent:
             return
-        memories_text = "\n".join(
-            f"[Tick {m.tick}] ({m.category}) {m.content}" for m in recent
-        )
+        memories_text = "; ".join(f"T{m.tick}:{m.content[:40]}" for m in recent)
         prompt = REFLECT_PROMPT.format(
             name=agent.name,
             goal=agent.goal,
             memories=memories_text,
-            working_memory=self._memory.working_memory_text(),
+            working_memory="; ".join(self._memory.get_working_memory()[:5]),
         )
         try:
             response = self._client.messages.create(
                 model=self._model,
-                max_tokens=200,
+                max_tokens=80,
                 messages=[{"role": "user", "content": prompt}],
             )
             self._track_usage(response, "reflect")

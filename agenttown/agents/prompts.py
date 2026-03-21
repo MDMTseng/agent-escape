@@ -1,55 +1,21 @@
-"""Prompt templates and tool definitions for Claude-powered agents."""
+"""Prompt templates and tool definitions — optimized for minimal token usage."""
 
 from __future__ import annotations
 
 SYSTEM_PROMPT = """\
-You are {name}, an agent in a virtual world called AgentTown.
+You are {name}. {description}
+Goal: {goal}
 
-## Who You Are
-{description}
+Rules: Pick ONE action per turn. Never wait. Examine objects to find clues. Pick up items. Move to unexplored rooms. Use items on puzzles. Talk to share info. Use interact for codes/passwords/levers. Use combine to merge items.
 
-## Your Goal
-{goal}
-
-## How the World Works
-- You exist in a room-based environment. Each turn you choose ONE action.
-- You can only interact with things in your current room or your inventory.
-- Other agents may be in the same room — you can talk to them to share info.
-- Some objects are hidden until you examine other objects.
-- Doors may be locked — find keys or solve puzzles to progress.
-
-## Your Memory
-{memory_summary}
-
-## CRITICAL RULES
-- NEVER use "wait". Always take a meaningful action.
-- If you have examined everything in the current room, MOVE to another room.
-- If you know a clue (code, password), go USE it immediately.
-- If there are items you haven't examined, EXAMINE them.
-- If there are items to pick up, PICK THEM UP.
-- Prioritize: examine unexamined objects > pick up items > move to new rooms > talk to share info.
-- Use "interact" to enter codes on combination locks, speak passwords, or pull levers.
-- Use "combine" to merge two inventory items into something new.
+{memory_summary}\
 """
 
 PERCEPTION_TEMPLATE = """\
-## Current Situation (Tick {tick})
-
-**Location**: {room_name}
-{room_description}
-
-**You see**: {entities}
-
-**Exits**: {exits}
-
-**Others here**: {others}
-
-**Your inventory**: {inventory}
-
-**What just happened**:
-{recent_events}
-
-You MUST choose an action NOW. Do NOT wait. What will you do?\
+Tick {tick} | {room_name}: {room_description}
+See: {entities} | Exits: {exits} | Others: {others} | Inventory: {inventory}
+Events: {recent_events}
+Act now.\
 """
 
 
@@ -66,27 +32,25 @@ def build_system_prompt(
 
 def build_perception_message(perception: dict) -> str:
     entities = ", ".join(
-        f"{e['name']} ({e['state']})" if e.get("state", "default") != "default"
+        f"{e['name']}({e['state']})" if e.get("state", "default") != "default"
         else e["name"]
         for e in perception.get("entities", [])
-    ) or "nothing notable"
+    ) or "nothing"
 
     exits = ", ".join(
-        f"{e['direction']} ({e['name']})"
+        f"{e['direction']}"
         for e in perception.get("exits", [])
-    ) or "no visible exits"
+    ) or "none"
 
     others = ", ".join(
         o["name"] for o in perception.get("others", [])
-    ) or "nobody"
+    ) or "none"
 
     inventory = ", ".join(
         i["name"] for i in perception.get("inventory", [])
     ) or "empty"
 
-    events = "\n".join(
-        f"- {e}" for e in perception.get("recent_events", [])
-    ) or "- Nothing happened recently."
+    events = "; ".join(perception.get("recent_events", [])) or "none"
 
     return PERCEPTION_TEMPLATE.format(
         tick=perception.get("tick", 0),
@@ -100,133 +64,77 @@ def build_perception_message(perception: dict) -> str:
     )
 
 
-# Tool definitions matching our Action types — sent to Claude as tools
+# Minimal tool definitions — short descriptions, no param descriptions
 AGENT_TOOLS = [
     {
         "name": "move",
-        "description": "Move through a door in the specified direction to enter another room.",
+        "description": "Move through a door: north/south/east/west",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "direction": {
-                    "type": "string",
-                    "description": "The direction to move (e.g. 'north', 'south', 'east', 'west')",
-                }
-            },
+            "properties": {"direction": {"type": "string"}},
             "required": ["direction"],
         },
     },
     {
         "name": "pick_up",
-        "description": "Pick up an item from the current room and add it to your inventory.",
+        "description": "Pick up an item from the room",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "target": {
-                    "type": "string",
-                    "description": "The name of the item to pick up",
-                }
-            },
+            "properties": {"target": {"type": "string"}},
             "required": ["target"],
         },
     },
     {
         "name": "drop",
-        "description": "Drop an item from your inventory into the current room.",
+        "description": "Drop an inventory item in the room",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "target": {
-                    "type": "string",
-                    "description": "The name of the item to drop",
-                }
-            },
+            "properties": {"target": {"type": "string"}},
             "required": ["target"],
         },
     },
     {
         "name": "use",
-        "description": "Use an item from your inventory on a target object or door in the room. For example, use a key on a locked door.",
+        "description": "Use an inventory item on a target (e.g. key on door)",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "item": {
-                    "type": "string",
-                    "description": "The name of the item from your inventory to use",
-                },
-                "target": {
-                    "type": "string",
-                    "description": "The name of the object or door to use the item on",
-                },
-            },
+            "properties": {"item": {"type": "string"}, "target": {"type": "string"}},
             "required": ["item", "target"],
         },
     },
     {
         "name": "examine",
-        "description": "Examine something closely to get more details. Use 'room' to look around the whole room, or specify an object/item name.",
+        "description": "Examine an object or 'room' for details",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "target": {
-                    "type": "string",
-                    "description": "What to examine: 'room' for surroundings, or the name of a specific object/item",
-                }
-            },
+            "properties": {"target": {"type": "string"}},
             "required": ["target"],
         },
     },
     {
         "name": "talk",
-        "description": "Say something out loud. Other agents in the room will hear you. Optionally direct your message to a specific agent.",
+        "description": "Say something. Use 'to' for a specific agent",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "description": "What to say",
-                },
-                "to": {
-                    "type": "string",
-                    "description": "Name of a specific agent to talk to (optional — omit to speak to everyone in the room)",
-                },
-            },
+            "properties": {"message": {"type": "string"}, "to": {"type": "string"}},
             "required": ["message"],
         },
     },
     {
         "name": "interact",
-        "description": "Interact with a puzzle or mechanism by providing input. Use this to: enter a combination code on a lock, speak a password to a magic door, or pull a lever. The payload is the input you provide (a code, a password, or 'pull').",
+        "description": "Enter a code, password, or pull a lever",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "target": {
-                    "type": "string",
-                    "description": "The name of the puzzle or mechanism to interact with",
-                },
-                "payload": {
-                    "type": "string",
-                    "description": "The input to provide: a combination code (e.g. '1847'), a password (e.g. 'open sesame'), or 'pull' for a lever",
-                },
-            },
+            "properties": {"target": {"type": "string"}, "payload": {"type": "string"}},
             "required": ["target", "payload"],
         },
     },
     {
         "name": "combine",
-        "description": "Combine two items from your inventory to create something new. Some items can be combined together to form a new useful item.",
+        "description": "Combine two inventory items into a new item",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "item_a": {
-                    "type": "string",
-                    "description": "Name of the first item from your inventory",
-                },
-                "item_b": {
-                    "type": "string",
-                    "description": "Name of the second item from your inventory",
-                },
-            },
+            "properties": {"item_a": {"type": "string"}, "item_b": {"type": "string"}},
             "required": ["item_a", "item_b"],
         },
     },

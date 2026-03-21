@@ -226,33 +226,26 @@ class AgentMemory:
     # --- Prompt Building ---
 
     def build_memory_prompt(self, current_tick: int, query: str = "") -> str:
-        """Build the full memory section for the system prompt.
-
-        Args:
-            current_tick: current world tick for recency scoring
-            query: current perception text for relevance scoring
-        """
-        sections = []
+        """Build compact memory section for system prompt."""
+        parts = []
 
         # Working memory
-        sections.append("### Key Facts (Working Memory)")
-        sections.append(self.working_memory_text())
+        wm = self.get_working_memory()
+        if wm:
+            parts.append("Facts: " + "; ".join(wm))
 
-        # Recent reflections
-        reflections = self.get_reflections(3)
-        if reflections:
-            sections.append("\n### Reflections")
-            for r in reflections:
-                sections.append(f"[Tick {r.tick}] {r.content}")
+        # Latest reflection
+        refs = self.get_reflections(1)
+        if refs:
+            parts.append("Plan: " + refs[-1].content)
 
-        # Retrieved memories — scored by recency × importance × relevance
-        retrieved = self.retrieve(current_tick, query=query, top_k=6)
+        # Top retrieved memories (compact)
+        retrieved = self.retrieve(current_tick, query=query, top_k=4)
         if retrieved:
-            sections.append("\n### Relevant Memories")
-            for m in retrieved:
-                sections.append(f"[Tick {m.tick}] ({m.category}) {m.content}")
+            mem_lines = [f"T{m.tick}:{m.content[:60]}" for m in retrieved]
+            parts.append("Memories: " + " | ".join(mem_lines))
 
-        return "\n".join(sections)
+        return "\n".join(parts) if parts else "No memories yet."
 
     # --- Legacy compat ---
 

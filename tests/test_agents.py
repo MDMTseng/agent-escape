@@ -139,14 +139,12 @@ class TestAgentMemory:
         prompt = mem.build_memory_prompt(current_tick=2)
         assert "code is 1847" in prompt
         assert "Found a note" in prompt
-        assert "Need to find the workshop" in prompt
-        assert "Working Memory" in prompt
-        assert "Reflections" in prompt
+        assert "workshop" in prompt
 
     def test_build_memory_prompt_empty(self):
         mem = AgentMemory()
         prompt = mem.build_memory_prompt(current_tick=0)
-        assert "No key facts" in prompt
+        assert "No memories" in prompt
 
 
 class TestPrompts:
@@ -177,7 +175,7 @@ class TestPrompts:
         msg = build_perception_message(perception)
         assert "Study" in msg
         assert "Note" in msg
-        assert "Door (locked)" in msg
+        assert "locked" in msg
         assert "Bob" in msg
         assert "Key" in msg
         assert "picked up" in msg
@@ -193,8 +191,8 @@ class TestPrompts:
             "recent_events": [],
         }
         msg = build_perception_message(perception)
-        assert "nothing notable" in msg
-        assert "nobody" in msg
+        assert "nothing" in msg
+        assert "none" in msg
         assert "empty" in msg
 
     def test_agent_tools_structure(self):
