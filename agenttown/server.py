@@ -882,19 +882,8 @@ DASHBOARD_HTML = """\
             btnStep.disabled = true;
         };
 
-        // Pause when user switches tabs or minimizes
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden && !isPaused) {
-                simPause();
-            }
-        });
-
-        // Pause when window loses focus
-        window.addEventListener('blur', () => {
-            if (!isPaused) {
-                simPause();
-            }
-        });
+        // Auto-pause only when WebSocket disconnects (tab/browser closed)
+        // No pause on tab switch or window blur
 
         // Puzzle definitions — which entities are puzzles and how to label them
         const PUZZLE_DEFS = {
