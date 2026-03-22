@@ -94,7 +94,9 @@ Rules:
 - One entity must have on_use.finish to end the game
 - Create 2 agents with complementary roles and detailed goals
 - Make descriptions atmospheric and fitting the theme
-- ONLY return the JSON, no other text
+- ONLY return valid JSON, no markdown, no explanation, no text before or after the JSON
+- Start your response with {{ and end with }}
+- Keep it simple: 3-4 rooms, 3-4 puzzles, 2 agents
 """
 
 
@@ -134,8 +136,7 @@ def _extract_json(text: str) -> dict:
 def generate_scenario(theme: str, logic: str = "") -> dict:
     """Use Claude to generate a scenario from user descriptions. Retries on JSON failure."""
     client = anthropic.Anthropic(api_key=get_api_key())
-    # Use the strongest model for map generation (complex JSON structure)
-    model = os.environ.get("ANTHROPIC_MAP_MODEL", "claude-sonnet-4-6")
+    model = os.environ.get("ANTHROPIC_MAP_MODEL", os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5"))
 
     prompt = GENERATE_PROMPT.format(
         theme=theme or "A mysterious abandoned mansion with dark secrets",
