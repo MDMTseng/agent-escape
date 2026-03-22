@@ -249,19 +249,22 @@ async def lifespan(app: FastAPI):
             })
 
     async def sim_loop():
-        """Tick loop with pause/resume/step support. Starts paused."""
+        """Tick loop with pause/resume/step support. Survives resets."""
         global sim_paused
-        sim_paused = True  # start paused — user must press Resume or Step
-        while not sim_world.finished and sim_world.tick < 200:
-            if sim_paused:
-                # Wait for a step signal or unpause
+        sim_paused = True  # start paused
+        while True:
+            # Wait while paused or finished
+            if sim_paused or sim_world.finished or sim_world.tick >= 200:
                 sim_step_event.clear()
-                await broadcast({"type": "paused", "tick": sim_world.tick})
+                if sim_world.finished:
+                    await broadcast({"type": "finished_idle", "tick": sim_world.tick})
+                else:
+                    await broadcast({"type": "paused", "tick": sim_world.tick})
                 await sim_step_event.wait()
-                if sim_paused:
-                    # Single step — run one tick then stay paused
+                # After wake-up, check if it's a step or resume
+                if sim_paused and not sim_world.finished and sim_world.tick < 200:
                     await run_one_tick()
-                    continue
+                continue
             await run_one_tick()
             if not sim_world.finished:
                 await asyncio.sleep(0.5)
@@ -441,6 +444,10 @@ async def reset_game():
         "paused": True,
         "world_state": sim_world.snapshot(),
     })
+
+    # Wake up sim_loop so it can start processing the new world
+    if sim_step_event:
+        sim_step_event.set()
 
     return {"status": "reset", "scenario": scenario}
 
