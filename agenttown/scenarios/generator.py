@@ -98,25 +98,11 @@ Rules:
 """
 
 
-def generate_scenario(theme: str, logic: str = "") -> dict:
-    """Use Claude to generate a scenario from user descriptions. Returns parsed JSON."""
-    client = anthropic.Anthropic(api_key=get_api_key())
-    model = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5")
+def _extract_json(text: str) -> dict:
+    """Extract JSON from LLM response, handling code fences and surrounding text."""
+    text = text.strip()
 
-    prompt = GENERATE_PROMPT.format(
-        theme=theme or "A mysterious abandoned mansion with dark secrets",
-        logic=logic or "Designer's choice — create an interesting puzzle chain",
-    )
-
-    response = client.messages.create(
-        model=model,
-        max_tokens=4000,
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    text = response.content[0].text.strip() if response.content else ""
-
-    # Extract JSON from response
+    # Try to find JSON in code fences
     if "```" in text:
         start = text.find("```")
         end = text.rfind("```")
@@ -126,12 +112,67 @@ def generate_scenario(theme: str, logic: str = "") -> dict:
                 inner = inner[4:]
             text = inner.strip()
 
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse generated JSON: {e}")
-        logger.error(f"Raw text: {text[:500]}")
-        raise ValueError(f"AI generated invalid JSON: {e}")
+    # Try to find JSON object in the text
+    brace_start = text.find("{")
+    if brace_start > 0:
+        text = text[brace_start:]
+
+    # Find the matching closing brace
+    depth = 0
+    for i, c in enumerate(text):
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                text = text[: i + 1]
+                break
+
+    return json.loads(text)
+
+
+def generate_scenario(theme: str, logic: str = "") -> dict:
+    """Use Claude to generate a scenario from user descriptions. Retries on JSON failure."""
+    client = anthropic.Anthropic(api_key=get_api_key())
+    model = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5")
+
+    prompt = GENERATE_PROMPT.format(
+        theme=theme or "A mysterious abandoned mansion with dark secrets",
+        logic=logic or "Designer's choice — create an interesting puzzle chain",
+    )
+
+    # Try up to 2 times
+    last_error = None
+    for attempt in range(2):
+        messages = [{"role": "user", "content": prompt}]
+
+        # On retry, include the error so AI can fix it
+        if attempt > 0 and last_error:
+            messages = [
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": last_raw},
+                {"role": "user", "content": f"Your JSON was invalid: {last_error}. Return ONLY valid JSON, no other text. Fix the issue and try again."},
+            ]
+
+        response = client.messages.create(
+            model=model,
+            max_tokens=4000,
+            messages=messages,
+        )
+
+        text = response.content[0].text.strip() if response.content else ""
+        last_raw = text
+
+        try:
+            return _extract_json(text)
+        except (json.JSONDecodeError, ValueError) as e:
+            last_error = str(e)
+            logger.warning(f"JSON parse attempt {attempt + 1} failed: {e}")
+            continue
+
+    logger.error(f"Failed to generate valid JSON after 2 attempts")
+    logger.error(f"Last raw text: {last_raw[:500]}")
+    raise ValueError(f"AI generated invalid JSON after 2 attempts: {last_error}")
 
 
 def build_from_json(data: dict) -> tuple[World, list[str]]:

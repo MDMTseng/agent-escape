@@ -572,52 +572,71 @@ async def generate_map(body: dict | None = None):
 
 @app.post("/api/auto-generate")
 async def auto_generate(body: dict | None = None):
-    """Auto-generate theme or logic text using AI."""
-    field = (body or {}).get("field", "theme")  # "theme", "logic", or "all"
+    """Auto-generate theme or logic text using AI. Uses existing input as context."""
+    field = (body or {}).get("field", "theme")
     existing_theme = (body or {}).get("theme", "")
+    existing_logic = (body or {}).get("logic", "")
 
     try:
         client = anthropic.Anthropic(api_key=get_api_key())
         model = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5")
 
         if field == "theme":
+            ctx = ""
+            if existing_theme:
+                ctx = f"The user has started writing a theme:\n\"{existing_theme}\"\n\nExpand and improve this into a complete theme. Keep their ideas but make it richer.\n\n"
+            else:
+                ctx = ""
             response = client.messages.create(
                 model=model, max_tokens=200,
                 messages=[{"role": "user", "content":
+                    f"{ctx}"
                     "Generate a creative escape room theme with a background story in 2-3 sentences. "
-                    "Be imaginative — could be sci-fi, horror, fantasy, historical, underwater, space, etc. "
-                    "Include WHO is trapped, WHERE they are, and WHY they need to escape. "
-                    "Return ONLY the theme text, nothing else."}],
+                    "Be imaginative — sci-fi, horror, fantasy, historical, underwater, space, etc. "
+                    "Include WHO is trapped, WHERE, and WHY they need to escape. "
+                    "Return ONLY the theme text, no markdown headers."}],
             )
             return {"text": response.content[0].text.strip()}
 
         elif field == "logic":
-            theme_ctx = f"Theme: {existing_theme}\n\n" if existing_theme else ""
+            ctx_parts = []
+            if existing_theme:
+                ctx_parts.append(f"Theme: {existing_theme}")
+            if existing_logic:
+                ctx_parts.append(f"The user has started writing map logic:\n\"{existing_logic}\"\n\nExpand and complete this into a full map design. Keep their ideas.")
+            ctx = "\n\n".join(ctx_parts) + "\n\n" if ctx_parts else ""
             response = client.messages.create(
-                model=model, max_tokens=300,
+                model=model, max_tokens=400,
                 messages=[{"role": "user", "content":
-                    f"{theme_ctx}"
-                    "Generate escape room map logic for this theme. Include:\n"
-                    "- 4-5 rooms with names and connections\n"
+                    f"{ctx}"
+                    "Generate escape room map logic. Include:\n"
+                    "- 4-5 rooms with names and connections (which direction each door is)\n"
                     "- 3-4 different puzzle types (combination lock, pressure plate, password, levers, item combine)\n"
-                    "- A puzzle chain showing how solving one leads to the next\n"
-                    "- What items are in which rooms\n"
-                    "Return ONLY the logic description as bullet points, nothing else."}],
+                    "- A puzzle chain: solving one reveals clue/item for the next\n"
+                    "- Specific items in each room\n"
+                    "- The codes/passwords and where their clues are hidden\n"
+                    "Return ONLY bullet points, no markdown headers."}],
             )
             return {"text": response.content[0].text.strip()}
 
         elif field == "all":
-            # Generate both at once
+            ctx_parts = []
+            if existing_theme:
+                ctx_parts.append(f"User's theme idea: \"{existing_theme}\"")
+            if existing_logic:
+                ctx_parts.append(f"User's logic idea: \"{existing_logic}\"")
+            ctx = "Build on the user's ideas:\n" + "\n".join(ctx_parts) + "\n\n" if ctx_parts else ""
+
             response = client.messages.create(
-                model=model, max_tokens=500,
+                model=model, max_tokens=600,
                 messages=[{"role": "user", "content":
+                    f"{ctx}"
                     "Generate a creative escape room concept. Return in this exact format:\n\n"
                     "THEME:\n[2-3 sentence theme with setting, characters, and reason to escape]\n\n"
-                    "LOGIC:\n[bullet point list of 4-5 rooms, their connections, and 3-4 puzzles with solutions]\n\n"
-                    "Be creative — sci-fi, fantasy, horror, historical, etc. Return ONLY this format."}],
+                    "LOGIC:\n[bullet point list of 4-5 rooms, connections, and 3-4 puzzles with specific codes/passwords]\n\n"
+                    "Be creative. Return ONLY this format, no extra text."}],
             )
             text = response.content[0].text.strip()
-            # Parse THEME: and LOGIC: sections
             theme_text = ""
             logic_text = ""
             if "THEME:" in text and "LOGIC:" in text:
@@ -1336,37 +1355,45 @@ DASHBOARD_HTML = """\
 
         function autoTheme() {
             const btn = document.getElementById('btn-auto-theme');
+            const existing = document.getElementById('creator-theme').value.trim();
             btn.disabled = true; btn.textContent = '...';
+            creatorStatus.textContent = existing ? 'Expanding your theme...' : 'Generating theme...';
+            creatorStatus.style.color = '#58a6ff';
             fetch('/api/auto-generate', {
                 method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({field: 'theme'}),
+                body: JSON.stringify({field: 'theme', theme: existing}),
             }).then(r => r.json()).then(d => {
                 btn.disabled = false; btn.textContent = 'Auto Generate';
-                if (d.text) document.getElementById('creator-theme').value = d.text;
-                else creatorStatus.textContent = d.error || 'Failed';
+                if (d.text) { document.getElementById('creator-theme').value = d.text; creatorStatus.textContent = 'Theme ready!'; creatorStatus.style.color = '#3fb950'; }
+                else { creatorStatus.textContent = d.error || 'Failed'; creatorStatus.style.color = '#f85149'; }
             }).catch(() => { btn.disabled = false; btn.textContent = 'Auto Generate'; });
         }
 
         function autoLogic() {
             const btn = document.getElementById('btn-auto-logic');
             const theme = document.getElementById('creator-theme').value.trim();
+            const existing = document.getElementById('creator-logic').value.trim();
             btn.disabled = true; btn.textContent = '...';
+            creatorStatus.textContent = existing ? 'Expanding your logic...' : 'Generating logic...';
+            creatorStatus.style.color = '#58a6ff';
             fetch('/api/auto-generate', {
                 method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({field: 'logic', theme}),
+                body: JSON.stringify({field: 'logic', theme, logic: existing}),
             }).then(r => r.json()).then(d => {
                 btn.disabled = false; btn.textContent = 'Auto Generate';
-                if (d.text) document.getElementById('creator-logic').value = d.text;
-                else creatorStatus.textContent = d.error || 'Failed';
+                if (d.text) { document.getElementById('creator-logic').value = d.text; creatorStatus.textContent = 'Logic ready!'; creatorStatus.style.color = '#3fb950'; }
+                else { creatorStatus.textContent = d.error || 'Failed'; creatorStatus.style.color = '#f85149'; }
             }).catch(() => { btn.disabled = false; btn.textContent = 'Auto Generate'; });
         }
 
         function autoAll() {
-            creatorStatus.textContent = 'Auto-generating theme & logic...';
+            const theme = document.getElementById('creator-theme').value.trim();
+            const logic = document.getElementById('creator-logic').value.trim();
+            creatorStatus.textContent = (theme || logic) ? 'Expanding your ideas...' : 'Auto-generating everything...';
             creatorStatus.style.color = '#58a6ff';
             fetch('/api/auto-generate', {
                 method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({field: 'all'}),
+                body: JSON.stringify({field: 'all', theme, logic}),
             }).then(r => r.json()).then(d => {
                 if (d.theme) document.getElementById('creator-theme').value = d.theme;
                 if (d.logic) document.getElementById('creator-logic').value = d.logic;
