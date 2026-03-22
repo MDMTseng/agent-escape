@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from .actions import Action
 from .events import Event, EventLog
-from .models import AgentState, Room, WorldState
+from .models import AgentState, EntityState, Item, Room, WorldState
 from .rules import execute_action
 
 
@@ -44,6 +44,9 @@ class World:
         recent_events = self.event_log.events_for_agent(agent.id, tick=self.state.tick - 1)
         event_descriptions = [e.description for e in recent_events]
 
+        # Generate action hints — tell agent what they CAN do
+        hints = self._generate_hints(agent, room)
+
         return {
             "tick": self.state.tick,
             "room": {
@@ -57,8 +60,52 @@ class World:
                 {"name": item.name, "description": item.describe()} for item in agent.inventory
             ],
             "recent_events": event_descriptions,
+            "hints": hints,
             "goal": agent.goal,
         }
+
+    def _generate_hints(self, agent: AgentState, room: Room) -> list[str]:
+        """Generate actionable hints based on current state."""
+        hints = []
+
+        # Check if any inventory item is a key for a door in this room
+        for direction, door_id in room.doors.items():
+            door = self.state.doors[door_id]
+            if door.locked and door.key_id:
+                key_item = agent.has_item_by_id(door.key_id)
+                if key_item:
+                    hints.append(f"You have {key_item.name} which unlocks {door.name} ({direction}). Use it!")
+
+        # Check for combination locks + known codes in inventory/entities
+        for entity in room.visible_entities():
+            pt = entity.properties.get("puzzle_type", "")
+            if pt == "combination_lock" and entity.state != EntityState.SOLVED:
+                hints.append(f"{entity.name} needs a code. Use interact to enter it.")
+            elif pt == "password_door" and entity.state != EntityState.SOLVED:
+                hints.append(f"{entity.name} responds to a spoken word. Try talking.")
+            elif pt == "lever" and entity.state != EntityState.ACTIVATED:
+                hints.append(f"{entity.name} can be pulled. Use interact.")
+            elif pt == "pressure_plate" and entity.state != EntityState.SOLVED:
+                hints.append(f"{entity.name} needs something heavy dropped on it.")
+
+        # Check for combinable items
+        for item in agent.inventory:
+            combine_with = item.properties.get("combine_with")
+            if combine_with:
+                partner = agent.has_item(combine_with)
+                if partner:
+                    hints.append(f"You can combine {item.name} with {partner.name}!")
+
+        # Check for usable items on room entities
+        for item in agent.inventory:
+            if item.usable_on:
+                for target_name in item.usable_on:
+                    matches = room.get_entities_by_name(target_name)
+                    visible = [e for e in matches if e.state != EntityState.HIDDEN]
+                    if visible:
+                        hints.append(f"You can use {item.name} on {visible[0].name}.")
+
+        return hints
 
     def process_action(self, action: Action, agent: AgentState) -> list[Event]:
         """Validate and execute an action, recording resulting events."""

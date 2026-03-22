@@ -101,6 +101,12 @@ class AgentState(BaseModel):
                 return item
         return None
 
+    def has_item_by_id(self, item_id: str) -> Item | None:
+        for item in self.inventory:
+            if item.id == item_id:
+                return item
+        return None
+
     def add_item(self, item: Item) -> None:
         self.inventory.append(item)
 

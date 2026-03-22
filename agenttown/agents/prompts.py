@@ -15,7 +15,7 @@ PERCEPTION_TEMPLATE = """\
 Tick {tick} | {room_name}: {room_description}
 See: {entities} | Exits: {exits} | Others: {others} | Inventory: {inventory}
 Events: {recent_events}
-Act now.\
+{hints}Act now.\
 """
 
 
@@ -52,6 +52,9 @@ def build_perception_message(perception: dict) -> str:
 
     events = "; ".join(perception.get("recent_events", [])) or "none"
 
+    hints_list = perception.get("hints", [])
+    hints = "HINTS: " + "; ".join(hints_list) + "\n" if hints_list else ""
+
     return PERCEPTION_TEMPLATE.format(
         tick=perception.get("tick", 0),
         room_name=perception["room"]["name"],
@@ -61,6 +64,7 @@ def build_perception_message(perception: dict) -> str:
         others=others,
         inventory=inventory,
         recent_events=events,
+        hints=hints,
     )
 
 
