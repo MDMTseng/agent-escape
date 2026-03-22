@@ -574,6 +574,77 @@ async def list_presets():
     return {"presets": {k: {"builder": v.builder, "goal": v.goal, "background": v.background[:80], "difficulty": v.difficulty} for k, v in PRESET_TEMPLATES.items()}}
 
 
+@app.post("/api/preview-architect")
+async def preview_architect(body: dict | None = None):
+    """Preview a generated map without loading it into the game."""
+    if not body:
+        return {"error": "Missing body"}
+
+    try:
+        from agenttown.scenarios.architect import (
+            StoryInput, reverse_generate, extract_escape_chains, PRESET_TEMPLATES, ENDING_CONFIG,
+        )
+
+        preset = body.get("preset")
+        if preset and preset in PRESET_TEMPLATES:
+            story = PRESET_TEMPLATES[preset]
+        else:
+            story = StoryInput(
+                builder=body.get("builder", "Unknown"),
+                goal=body.get("goal", "Unknown"),
+                background=body.get("background", "A mysterious place"),
+                difficulty=body.get("difficulty", 3),
+            )
+
+        nodes, edges, endings = reverse_generate(story)
+        chains = extract_escape_chains(nodes, edges)
+
+        # Build preview data
+        node_list = []
+        for n in nodes:
+            node_list.append({
+                "id": n.id, "type": n.type, "label": n.label,
+                "depth": n.depth, "is_goal": n.is_goal,
+                "is_entrance": n.is_entrance, "is_fork": n.is_fork,
+                "ending_type": n.ending_type, "path_color": n.path_color,
+                "x": n.x, "y": n.y,
+            })
+
+        edge_list = []
+        for e in edges:
+            edge_list.append({
+                "from": e.from_id, "to": e.to_id,
+                "ending_type": e.ending_type, "color": e.color,
+                "is_branch": e.is_branch,
+            })
+
+        ending_info = []
+        for ending in endings:
+            cfg = ENDING_CONFIG.get(ending.key, {})
+            ending_info.append({
+                "key": ending.key, "label": ending.label,
+                "color": ending.color, "icon": cfg.get("icon", ""),
+                "chain_length": len(chains.get(ending.key, [])),
+            })
+
+        return {
+            "status": "preview",
+            "story": {"builder": story.builder, "goal": story.goal, "background": story.background, "difficulty": story.difficulty},
+            "nodes": node_list,
+            "edges": edge_list,
+            "endings": ending_info,
+            "stats": {
+                "total_nodes": len(nodes),
+                "total_edges": len(edges),
+                "endings": len(endings),
+                "entrances": sum(1 for n in nodes if n.is_entrance),
+                "forks": sum(1 for n in nodes if n.is_fork),
+            },
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @app.post("/api/generate-architect")
 async def generate_architect(body: dict | None = None):
     """Generate a scenario using the Reverse Escape Room Architect."""
@@ -1130,34 +1201,65 @@ DASHBOARD_HTML = """\
         </div>
         <div id="copy-toast">Copied to clipboard!</div>
 
-        <!-- Map Creator Modal -->
-        <div id="creator-overlay" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); z-index:1000; overflow-y:auto; padding:20px;">
-            <div style="max-width:600px; margin:0 auto; background:#161b22; border:1px solid #30363d; border-radius:10px; padding:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-                    <h2 style="color:#e3b341; font-size:18px; font-family:monospace;">Map Creator</h2>
-                    <button onclick="toggleCreator()" style="background:none; border:1px solid #30363d; color:#8b949e; border-radius:4px; padding:4px 10px; cursor:pointer; font-family:monospace;">Close</button>
+        <!-- Map Creator Modal (Reverse Architect) -->
+        <div id="creator-overlay" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); z-index:1000; overflow-y:auto; padding:12px;">
+            <div style="max-width:600px; margin:0 auto; background:#161b22; border:1px solid #30363d; border-radius:10px; padding:16px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <h2 style="color:#e3b341; font-size:16px; font-family:monospace;">Escape Room Architect</h2>
+                    <button onclick="toggleCreator()" style="background:none; border:1px solid #30363d; color:#8b949e; border-radius:4px; padding:3px 8px; cursor:pointer; font-family:monospace; font-size:11px;">Close</button>
                 </div>
 
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                    <label style="color:#c9d1d9; font-family:monospace; font-size:12px;">Theme & Background Story</label>
-                    <button onclick="autoTheme()" id="btn-auto-theme" style="background:#21262d; border:1px solid #e3b341; color:#e3b341; border-radius:4px; padding:2px 8px; cursor:pointer; font-family:monospace; font-size:10px;">Auto Generate</button>
+                <!-- Presets -->
+                <div style="margin-bottom:12px;">
+                    <label style="color:#8b949e; font-family:monospace; font-size:10px; margin-bottom:4px; display:block;">Quick Presets</label>
+                    <div id="preset-buttons" style="display:flex; gap:4px; flex-wrap:wrap;"></div>
                 </div>
-                <textarea id="creator-theme" rows="4" placeholder="Example: An ancient Egyptian tomb with cursed treasures. Two archaeologists are trapped inside when the entrance collapses..." style="width:100%; background:#0d1117; color:#e6edf3; border:1px solid #30363d; border-radius:6px; padding:10px; font-family:Georgia,serif; font-size:13px; resize:vertical; margin-bottom:16px;"></textarea>
 
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                    <label style="color:#c9d1d9; font-family:monospace; font-size:12px;">Map Logic & Puzzles</label>
-                    <div style="display:flex; gap:4px;">
-                        <button onclick="autoLogic()" id="btn-auto-logic" style="background:#21262d; border:1px solid #e3b341; color:#e3b341; border-radius:4px; padding:2px 8px; cursor:pointer; font-family:monospace; font-size:10px;">Auto Generate</button>
-                        <button onclick="copyRules()" style="background:#21262d; border:1px solid #30363d; color:#8b949e; border-radius:4px; padding:2px 8px; cursor:pointer; font-family:monospace; font-size:10px;">Copy Rules</button>
+                <!-- Builder Inputs -->
+                <div style="display:flex; gap:8px; margin-bottom:8px;">
+                    <div style="flex:1;">
+                        <label style="color:#8b949e; font-family:monospace; font-size:10px;">Builder</label>
+                        <input id="arc-builder" placeholder="Mad Scientist, Pharaoh..." style="width:100%; background:#0d1117; color:#e6edf3; border:1px solid #30363d; border-radius:4px; padding:6px; font-family:monospace; font-size:13px;">
+                    </div>
+                    <div style="flex:1;">
+                        <label style="color:#8b949e; font-family:monospace; font-size:10px;">Protects</label>
+                        <input id="arc-goal" placeholder="Secret formula, treasure..." style="width:100%; background:#0d1117; color:#e6edf3; border:1px solid #30363d; border-radius:4px; padding:6px; font-family:monospace; font-size:13px;">
                     </div>
                 </div>
-                <textarea id="creator-logic" rows="6" placeholder="Optional: describe rooms, puzzles, connections...&#10;&#10;Example:&#10;- 4 rooms: Entrance → Chamber → Treasure → Exit&#10;- Combo lock in Chamber (code in hieroglyphics)&#10;- Pressure plate needs gold idol" style="width:100%; background:#0d1117; color:#e6edf3; border:1px solid #30363d; border-radius:6px; padding:10px; font-family:monospace; font-size:12px; resize:vertical; margin-bottom:16px;"></textarea>
 
-                <div id="creator-status" style="color:#8b949e; font-family:monospace; font-size:11px; margin-bottom:12px;"></div>
+                <div style="margin-bottom:8px;">
+                    <label style="color:#8b949e; font-family:monospace; font-size:10px;">Background</label>
+                    <textarea id="arc-background" rows="2" placeholder="Scene description..." style="width:100%; background:#0d1117; color:#e6edf3; border:1px solid #30363d; border-radius:4px; padding:6px; font-family:monospace; font-size:12px; resize:vertical;"></textarea>
+                </div>
 
-                <div style="display:flex; gap:8px;">
-                    <button onclick="autoAll()" style="flex:1; padding:10px; background:#21262d; border:1px solid #e3b341; border-radius:6px; color:#e3b341; font-family:monospace; font-size:13px; cursor:pointer; font-weight:bold;">Auto All & Generate</button>
-                    <button id="btn-generate" onclick="generateMap()" style="flex:1; padding:10px; background:#1f6feb; border:none; border-radius:6px; color:#fff; font-family:monospace; font-size:14px; cursor:pointer; font-weight:bold;">Generate Map</button>
+                <!-- Difficulty & Endings -->
+                <div style="display:flex; gap:12px; margin-bottom:12px; align-items:center;">
+                    <div>
+                        <label style="color:#8b949e; font-family:monospace; font-size:10px;">Difficulty</label>
+                        <select id="arc-difficulty" onchange="updateEndingPreview()" style="background:#0d1117; color:#e6edf3; border:1px solid #30363d; border-radius:4px; padding:4px 8px; font-family:monospace; font-size:13px;">
+                            <option value="2">2 - Simple</option>
+                            <option value="3" selected>3 - Medium</option>
+                            <option value="4">4 - Complex</option>
+                            <option value="5">5 - Epic</option>
+                        </select>
+                    </div>
+                    <div id="ending-preview" style="display:flex; gap:4px; flex-wrap:wrap;"></div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div style="display:flex; gap:6px; margin-bottom:10px;">
+                    <button onclick="previewMap()" id="btn-preview" style="flex:1; padding:8px; background:#21262d; border:1px solid #58a6ff; border-radius:6px; color:#58a6ff; font-family:monospace; font-size:12px; cursor:pointer; font-weight:bold;">Preview Map</button>
+                    <button onclick="previewMap()" id="btn-regenerate" style="flex:1; padding:8px; background:#21262d; border:1px solid #e3b341; border-radius:6px; color:#e3b341; font-family:monospace; font-size:12px; cursor:pointer; font-weight:bold; display:none;">Regenerate</button>
+                    <button onclick="playPreviewedMap()" id="btn-play-map" style="flex:1; padding:8px; background:#1f6feb; border:none; border-radius:6px; color:#fff; font-family:monospace; font-size:12px; cursor:pointer; font-weight:bold; display:none;">Play This Map</button>
+                </div>
+
+                <div id="creator-status" style="color:#8b949e; font-family:monospace; font-size:11px; margin-bottom:8px;"></div>
+
+                <!-- Preview Graph -->
+                <div id="preview-container" style="display:none;">
+                    <div id="preview-stats" style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap;"></div>
+                    <div id="preview-graph" style="background:#0d1117; border:1px solid #30363d; border-radius:6px; padding:8px; overflow:hidden;"></div>
+                    <div id="preview-endings" style="margin-top:8px;"></div>
                 </div>
             </div>
         </div>
@@ -1452,139 +1554,180 @@ DASHBOARD_HTML = """\
             });
         }
 
-        // --- Map Creator ---
+        // --- Map Creator (Reverse Architect) ---
         const creatorOverlay = document.getElementById('creator-overlay');
         const creatorStatus = document.getElementById('creator-status');
-        const btnGenerate = document.getElementById('btn-generate');
+        let lastPreviewData = null;
+
+        const ENDING_BADGES = {
+            good: {icon:'\\u{1F3C6}', label:'Good', color:'#22c55e'},
+            bad: {icon:'\\u{1F480}', label:'Bad', color:'#ef4444'},
+            secret: {icon:'\\u{1F31F}', label:'Secret', color:'#f59e0b'},
+            true_: {icon:'\\u{1F52E}', label:'True', color:'#a855f7'},
+        };
 
         function toggleCreator() {
-            creatorOverlay.style.display = creatorOverlay.style.display === 'none' ? 'block' : 'none';
+            const o = creatorOverlay;
+            o.style.display = o.style.display === 'none' ? 'block' : 'none';
+            if (o.style.display === 'block') loadPresets();
         }
 
-        function autoTheme() {
-            const btn = document.getElementById('btn-auto-theme');
-            const existing = document.getElementById('creator-theme').value.trim();
-            btn.disabled = true; btn.textContent = '...';
-            creatorStatus.textContent = existing ? 'Expanding your theme...' : 'Generating theme...';
-            creatorStatus.style.color = '#58a6ff';
-            fetch('/api/auto-generate', {
-                method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({field: 'theme', theme: existing}),
-            }).then(r => r.json()).then(d => {
-                btn.disabled = false; btn.textContent = 'Auto Generate';
-                if (d.text) { document.getElementById('creator-theme').value = d.text; creatorStatus.textContent = 'Theme ready!'; creatorStatus.style.color = '#3fb950'; }
-                else { creatorStatus.textContent = d.error || 'Failed'; creatorStatus.style.color = '#f85149'; }
-            }).catch(() => { btn.disabled = false; btn.textContent = 'Auto Generate'; });
+        function loadPresets() {
+            fetch('/api/presets').then(r=>r.json()).then(d => {
+                const div = document.getElementById('preset-buttons');
+                div.innerHTML = Object.entries(d.presets).map(([k,v]) =>
+                    `<button onclick="selectPreset('${k}')" style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;border-radius:4px;padding:3px 8px;cursor:pointer;font-family:monospace;font-size:10px;">${v.builder.split(' ').pop()} (${v.difficulty})</button>`
+                ).join('');
+            });
+            updateEndingPreview();
         }
 
-        function autoLogic() {
-            const btn = document.getElementById('btn-auto-logic');
-            const theme = document.getElementById('creator-theme').value.trim();
-            const existing = document.getElementById('creator-logic').value.trim();
-            btn.disabled = true; btn.textContent = '...';
-            creatorStatus.textContent = existing ? 'Expanding your logic...' : 'Generating logic...';
-            creatorStatus.style.color = '#58a6ff';
-            fetch('/api/auto-generate', {
-                method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({field: 'logic', theme, logic: existing}),
-            }).then(r => r.json()).then(d => {
-                btn.disabled = false; btn.textContent = 'Auto Generate';
-                if (d.text) { document.getElementById('creator-logic').value = d.text; creatorStatus.textContent = 'Logic ready!'; creatorStatus.style.color = '#3fb950'; }
-                else { creatorStatus.textContent = d.error || 'Failed'; creatorStatus.style.color = '#f85149'; }
-            }).catch(() => { btn.disabled = false; btn.textContent = 'Auto Generate'; });
+        function selectPreset(name) {
+            fetch('/api/presets').then(r=>r.json()).then(d => {
+                const p = d.presets[name];
+                if (!p) return;
+                document.getElementById('arc-builder').value = p.builder;
+                document.getElementById('arc-goal').value = p.goal;
+                document.getElementById('arc-background').value = p.background;
+                document.getElementById('arc-difficulty').value = p.difficulty;
+                updateEndingPreview();
+                creatorStatus.textContent = `Loaded preset: ${name}`;
+                creatorStatus.style.color = '#3fb950';
+            });
         }
 
-        function autoAll() {
-            const theme = document.getElementById('creator-theme').value.trim();
-            const logic = document.getElementById('creator-logic').value.trim();
-            creatorStatus.textContent = (theme || logic) ? 'Expanding your ideas...' : 'Auto-generating everything...';
+        function updateEndingPreview() {
+            const diff = parseInt(document.getElementById('arc-difficulty').value);
+            const endings = ['good','bad'];
+            if (diff >= 3) endings.push('secret');
+            if (diff >= 4) endings.push('true_');
+            const div = document.getElementById('ending-preview');
+            div.innerHTML = endings.map(e => {
+                const b = ENDING_BADGES[e];
+                return `<span style="background:${b.color}22;color:${b.color};border:1px solid ${b.color}44;border-radius:3px;padding:1px 6px;font-size:10px;font-family:monospace;">${b.icon} ${b.label}</span>`;
+            }).join('');
+        }
+
+        function getStoryInput() {
+            return {
+                builder: document.getElementById('arc-builder').value.trim() || 'Mystery Builder',
+                goal: document.getElementById('arc-goal').value.trim() || 'Hidden Treasure',
+                background: document.getElementById('arc-background').value.trim() || 'A mysterious place',
+                difficulty: parseInt(document.getElementById('arc-difficulty').value),
+            };
+        }
+
+        function previewMap() {
+            const story = getStoryInput();
+            creatorStatus.textContent = 'Generating preview...';
             creatorStatus.style.color = '#58a6ff';
-            fetch('/api/auto-generate', {
-                method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({field: 'all', theme, logic}),
-            }).then(r => r.json()).then(d => {
-                if (d.theme) document.getElementById('creator-theme').value = d.theme;
-                if (d.logic) document.getElementById('creator-logic').value = d.logic;
-                if (d.theme || d.logic) {
-                    creatorStatus.textContent = 'Auto-generated! Click Generate Map to create.';
-                    creatorStatus.style.color = '#3fb950';
-                } else {
-                    creatorStatus.textContent = d.error || 'Failed';
+
+            fetch('/api/preview-architect', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify(story),
+            }).then(r=>r.json()).then(d => {
+                if (d.error) {
+                    creatorStatus.textContent = 'Error: ' + d.error;
                     creatorStatus.style.color = '#f85149';
+                    return;
                 }
+                lastPreviewData = d;
+                showPreview(d);
+                creatorStatus.textContent = `Preview: ${d.stats.total_nodes} puzzles, ${d.stats.endings} endings, ${d.stats.forks} forks`;
+                creatorStatus.style.color = '#3fb950';
+                document.getElementById('btn-preview').style.display = 'none';
+                document.getElementById('btn-regenerate').style.display = 'block';
+                document.getElementById('btn-play-map').style.display = 'block';
             }).catch(e => {
                 creatorStatus.textContent = 'Error: ' + e;
                 creatorStatus.style.color = '#f85149';
             });
         }
 
-        function copyRules() {
-            fetch('/api/map-rules').then(r => r.json()).then(d => {
-                const logicBox = document.getElementById('creator-logic');
-                logicBox.value = d.rules + '\\n\\n' + logicBox.value;
-                creatorStatus.textContent = 'Rules reference pasted above your text';
-                creatorStatus.style.color = '#3fb950';
-            });
+        function showPreview(data) {
+            const container = document.getElementById('preview-container');
+            container.style.display = 'block';
+
+            // Stats
+            const s = data.stats;
+            document.getElementById('preview-stats').innerHTML =
+                `<span style="color:#58a6ff;font-family:monospace;font-size:11px;">${s.total_nodes} nodes</span>` +
+                `<span style="color:#3fb950;font-family:monospace;font-size:11px;">${s.total_edges} edges</span>` +
+                `<span style="color:#e3b341;font-family:monospace;font-size:11px;">${s.endings} endings</span>` +
+                `<span style="color:#d2a8ff;font-family:monospace;font-size:11px;">${s.forks} forks</span>` +
+                `<span style="color:#8b949e;font-family:monospace;font-size:11px;">${s.entrances} entrances</span>`;
+
+            // Endings
+            document.getElementById('preview-endings').innerHTML = data.endings.map(e => {
+                const b = ENDING_BADGES[e.key] || {icon:'?',color:'#8b949e'};
+                return `<div style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;font-family:monospace;font-size:11px;">` +
+                    `<span style="color:${b.color}">${b.icon} ${e.label}</span>` +
+                    `<span style="color:#8b949e">(${e.chain_length} steps)</span></div>`;
+            }).join('');
+
+            // SVG Graph
+            renderPreviewGraph(data.nodes, data.edges);
         }
 
-        function generateMap() {
-            const theme = document.getElementById('creator-theme').value.trim();
-            if (!theme) {
-                creatorStatus.textContent = 'Please enter a theme/story first';
-                creatorStatus.style.color = '#f85149';
-                return;
+        function renderPreviewGraph(nodes, edges) {
+            if (!nodes.length) return;
+            const xs = nodes.map(n=>n.x), ys = nodes.map(n=>n.y);
+            const minX = Math.min(...xs)-40, maxX = Math.max(...xs)+40;
+            const minY = Math.min(...ys)-40, maxY = Math.max(...ys)+40;
+            const w = maxX-minX, h = maxY-minY;
+
+            let svg = `<svg viewBox="${minX} ${minY} ${w} ${h}" style="width:100%;height:auto;max-height:250px;">`;
+
+            // Edges
+            for (const e of edges) {
+                const from = nodes.find(n=>n.id===e.from);
+                const to = nodes.find(n=>n.id===e.to);
+                if (!from || !to) continue;
+                const color = e.color || '#30363d';
+                const dash = e.is_branch ? '6,3' : '4,3';
+                const sw = e.is_branch ? 2.5 : 1.5;
+                svg += `<line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" stroke="${color}" stroke-width="${sw}" stroke-dasharray="${dash}" opacity="0.6"/>`;
             }
-            const logic = document.getElementById('creator-logic').value.trim();
 
-            btnGenerate.disabled = true;
-            btnGenerate.textContent = 'Generating...';
-            creatorStatus.textContent = 'Step 1/3: AI is designing your map...';
+            // Nodes
+            const typeIcons = {lock:'\\u{1F512}',cipher:'\\u{1F522}',hidden:'\\u{1F50D}',mechanism:'\\u{2699}',riddle:'\\u{1F4AC}',trap:'\\u{26A0}',key:'\\u{1F511}'};
+            for (const n of nodes) {
+                const r = n.is_goal ? 18 : n.is_fork ? 14 : n.is_entrance ? 12 : 10;
+                const fill = n.path_color || '#30363d';
+                const stroke = n.is_goal ? '#fff' : n.is_entrance ? '#3fb950' : 'none';
+                svg += `<circle cx="${n.x}" cy="${n.y}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="${stroke!=='none'?2:0}" opacity="0.8"/>`;
+                const icon = n.is_goal ? (ENDING_BADGES[n.ending_type]||{}).icon||'\\u{2B50}' : n.is_fork ? '\\u{1F500}' : typeIcons[n.type] || '\\u{2022}';
+                svg += `<text x="${n.x}" y="${n.y+4}" text-anchor="middle" font-size="${r*0.9}" fill="#fff">${icon}</text>`;
+                if (n.is_entrance) svg += `<text x="${n.x}" y="${n.y-r-4}" text-anchor="middle" font-size="8" fill="#3fb950">START</text>`;
+            }
+            svg += '</svg>';
+            document.getElementById('preview-graph').innerHTML = svg;
+        }
+
+        function playPreviewedMap() {
+            if (!lastPreviewData) return;
+            const story = lastPreviewData.story;
+            creatorStatus.textContent = 'Building playable world...';
             creatorStatus.style.color = '#58a6ff';
-            // Update status from server processing messages
-            const origHandler = ws.onmessage;
-            const genHandler = (e) => {
-                const msg = JSON.parse(e.data);
-                if (msg.type === 'processing' && msg.step) {
-                    creatorStatus.textContent = msg.message;
-                }
-                origHandler(e);
-            };
-            ws.onmessage = genHandler;
 
-            fetch('/api/generate-map', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({theme, logic}),
-            }).then(r => r.json()).then(d => {
-                ws.onmessage = origHandler;  // restore
-                btnGenerate.disabled = false;
-                btnGenerate.textContent = 'Generate Map';
+            fetch('/api/generate-architect', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify(story),
+            }).then(r=>r.json()).then(d => {
                 if (d.error) {
                     creatorStatus.textContent = 'Error: ' + d.error;
                     creatorStatus.style.color = '#f85149';
-                } else {
-                    creatorStatus.textContent = `Created "${d.title}" — ${d.rooms} rooms, ${d.entities} entities, ${d.agents} agents`;
-                    creatorStatus.style.color = '#3fb950';
-                    // Clear story cards
-                    storyCards.length = 0;
-                    cardIndex = -1;
-                    autoFollow = true;
-                    currentCard.innerHTML = '<div class="chapter-num">New map loaded — press Resume to play!</div>';
-                    updateNav();
-                    eventsDiv.innerHTML = '';
-                    tokenDiv.textContent = 'Tokens: 0';
-                    setButtonState(true);
-                    statusDiv.textContent = 'New map ready — press Resume or Step';
-                    statusDiv.style.color = '#e3b341';
-                    // Close modal after a moment
-                    setTimeout(() => { creatorOverlay.style.display = 'none'; }, 1500);
+                    return;
                 }
-            }).catch(e => {
-                ws.onmessage = origHandler;
-                btnGenerate.disabled = false;
-                btnGenerate.textContent = 'Generate Map';
-                creatorStatus.textContent = 'Network error: ' + e;
-                creatorStatus.style.color = '#f85149';
+                creatorStatus.textContent = `Loaded! ${d.rooms}R ${d.doors}D ${d.endings} endings — press Resume`;
+                creatorStatus.style.color = '#3fb950';
+                storyCards.length = 0; cardIndex = -1; autoFollow = true;
+                currentCard.innerHTML = '<div class="chapter-num">Map loaded — press Resume to play!</div>';
+                updateNav(); eventsDiv.innerHTML = ''; tokenDiv.textContent = 'Tokens: 0';
+                setButtonState(true);
+                statusDiv.textContent = 'New map ready — press Resume or Step';
+                statusDiv.style.color = '#e3b341';
+                setTimeout(() => { creatorOverlay.style.display = 'none'; }, 1500);
             });
         }
 
