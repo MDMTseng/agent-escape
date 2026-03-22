@@ -213,3 +213,253 @@ def build_from_json(data: dict) -> tuple[World, list[str]]:
 
     world = World(state=ws)
     return world, agent_ids
+
+
+# ---------------------------------------------------------------------------
+# Puzzle chain validation & escape path extraction
+# ---------------------------------------------------------------------------
+
+def validate_and_extract_chain(data: dict) -> dict:
+    """Validate a scenario is solvable and extract the escape chain.
+
+    Returns:
+        {
+            "valid": bool,
+            "errors": [str],
+            "warnings": [str],
+            "escape_chain": [
+                {"step": 1, "action": "examine", "target": "Note", "room": "Study",
+                 "description": "Read the note to find code 1847", "status": "pending"}
+            ]
+        }
+    """
+    errors = []
+    warnings = []
+    chain = []
+
+    rooms = {r["id"]: r for r in data.get("rooms", [])}
+    entities = {e["id"]: e for e in data.get("entities", [])}
+    doors = {d["id"]: d for d in data.get("doors", [])}
+    agents = data.get("agents", [])
+
+    if not rooms:
+        errors.append("No rooms defined")
+    if not agents:
+        warnings.append("No agents defined — defaults will be used")
+
+    # Check all rooms referenced by entities exist
+    for e in data.get("entities", []):
+        if e.get("room") and e["room"] not in rooms:
+            errors.append(f"Entity '{e['name']}' references missing room '{e['room']}'")
+
+    # Check all rooms referenced by doors exist
+    for d in data.get("doors", []):
+        if d["room_a"] not in rooms:
+            errors.append(f"Door '{d['name']}' references missing room '{d['room_a']}'")
+        if d["room_b"] not in rooms:
+            errors.append(f"Door '{d['name']}' references missing room '{d['room_b']}'")
+
+    # Check key_ids reference existing entities
+    for d in data.get("doors", []):
+        if d.get("key_id") and d["key_id"] not in entities:
+            errors.append(f"Door '{d['name']}' needs key '{d['key_id']}' which doesn't exist")
+
+    # Check agent start rooms exist
+    for a in agents:
+        if a["room_id"] not in rooms:
+            errors.append(f"Agent '{a['name']}' starts in missing room '{a['room_id']}'")
+
+    # Find the finish entity
+    finish_entity = None
+    for e in data.get("entities", []):
+        props = e.get("properties", {})
+        for key in ("on_use", "on_solve", "on_examine"):
+            if isinstance(props.get(key), dict) and "finish" in props[key]:
+                finish_entity = e
+                break
+    if not finish_entity:
+        errors.append("No entity with a 'finish' action — game can never end")
+
+    # --- Build escape chain by tracing puzzle dependencies ---
+    step = 0
+
+    # Find all locked doors and what unlocks them
+    locked_doors = [d for d in data.get("doors", []) if d.get("locked")]
+
+    # Step through: find clues → solve puzzles → unlock doors → reach exit
+    # 1. Items that need to be examined (have examine_text with clues)
+    for e in data.get("entities", []):
+        props = e.get("properties", {})
+        if props.get("examine_text") and e.get("state") != "hidden":
+            room_name = rooms.get(e.get("room", ""), {}).get("name", "?")
+            step += 1
+            chain.append({
+                "step": step,
+                "action": "examine",
+                "target": e["name"],
+                "entity_id": e["id"],
+                "room": room_name,
+                "room_id": e.get("room", ""),
+                "description": f"Examine {e['name']} for clues",
+                "status": "pending",
+                "check_type": "examine",
+            })
+
+    # 2. Hidden items that need to be revealed (via on_examine.reveal)
+    for e in data.get("entities", []):
+        props = e.get("properties", {})
+        on_examine = props.get("on_examine", {})
+        if on_examine.get("reveal"):
+            for reveal_id in on_examine["reveal"]:
+                revealed = entities.get(reveal_id)
+                if revealed:
+                    room_name = rooms.get(e.get("room", ""), {}).get("name", "?")
+                    step += 1
+                    chain.append({
+                        "step": step,
+                        "action": "reveal",
+                        "target": revealed["name"],
+                        "entity_id": reveal_id,
+                        "room": room_name,
+                        "room_id": e.get("room", ""),
+                        "description": f"Find {revealed['name']} (hidden behind {e['name']})",
+                        "status": "pending",
+                        "check_type": "reveal",
+                    })
+
+    # 3. Puzzles to solve
+    for e in data.get("entities", []):
+        props = e.get("properties", {})
+        pt = props.get("puzzle_type", "")
+        if pt and pt not in ("lever",):  # skip individual levers, only track controllers
+            room_name = rooms.get(e.get("room", ""), {}).get("name", "?")
+            desc_map = {
+                "combination_lock": f"Enter code on {e['name']}",
+                "pressure_plate": f"Activate {e['name']} with heavy item",
+                "password_door": f"Speak password to {e['name']}",
+                "sequential": f"Pull levers in correct order",
+            }
+            step += 1
+            chain.append({
+                "step": step,
+                "action": "solve",
+                "target": e["name"],
+                "entity_id": e["id"],
+                "room": room_name,
+                "room_id": e.get("room", ""),
+                "description": desc_map.get(pt, f"Solve {e['name']}"),
+                "status": "pending",
+                "check_type": "solve",
+            })
+
+    # 4. Locked doors to unlock
+    for d in locked_doors:
+        room_a_name = rooms.get(d["room_a"], {}).get("name", "?")
+        room_b_name = rooms.get(d["room_b"], {}).get("name", "?")
+        step += 1
+        chain.append({
+            "step": step,
+            "action": "unlock",
+            "target": d["name"],
+            "entity_id": d["id"],
+            "room": f"{room_a_name} → {room_b_name}",
+            "room_id": d["room_a"],
+            "description": f"Unlock {d['name']} ({room_a_name} → {room_b_name})",
+            "status": "pending",
+            "check_type": "door",
+        })
+
+    # 5. Final escape
+    if finish_entity:
+        room_name = rooms.get(finish_entity.get("room", ""), {}).get("name", "?")
+        step += 1
+        chain.append({
+            "step": step,
+            "action": "escape",
+            "target": finish_entity["name"],
+            "entity_id": finish_entity["id"],
+            "room": room_name,
+            "room_id": finish_entity.get("room", ""),
+            "description": f"Use {finish_entity['name']} to escape!",
+            "status": "pending",
+            "check_type": "finish",
+        })
+
+    # Check reachability — is there a path from start to finish room?
+    if agents and finish_entity:
+        start_room = agents[0].get("room_id")
+        finish_room = finish_entity.get("room")
+        if start_room and finish_room:
+            reachable = _find_reachable_rooms(start_room, doors, include_locked=True)
+            if finish_room not in reachable:
+                errors.append(f"Exit room '{finish_room}' is not reachable from start '{start_room}' even with all doors unlocked")
+
+    return {
+        "valid": len(errors) == 0,
+        "errors": errors,
+        "warnings": warnings,
+        "escape_chain": chain,
+    }
+
+
+def _find_reachable_rooms(start: str, doors: list[dict], include_locked: bool = False) -> set[str]:
+    """BFS to find all reachable rooms."""
+    visited = {start}
+    queue = [start]
+    while queue:
+        current = queue.pop(0)
+        for d in doors:
+            if not include_locked and d.get("locked"):
+                continue
+            if d["room_a"] == current and d["room_b"] not in visited:
+                visited.add(d["room_b"])
+                queue.append(d["room_b"])
+            elif d["room_b"] == current and d["room_a"] not in visited:
+                visited.add(d["room_a"])
+                queue.append(d["room_a"])
+    return visited
+
+
+def update_chain_status(chain: list[dict], world_state: dict) -> list[dict]:
+    """Update escape chain step statuses from live world state."""
+    rooms = world_state.get("rooms", {})
+    doors = world_state.get("doors", {})
+    finished = world_state.get("finished", False)
+
+    for step in chain:
+        eid = step.get("entity_id", "")
+        check = step.get("check_type", "")
+
+        if finished and check == "finish":
+            step["status"] = "complete"
+            continue
+
+        if check == "door":
+            door = doors.get(eid, {})
+            if door and not door.get("locked", True):
+                step["status"] = "complete"
+            continue
+
+        if check == "reveal":
+            # Check if entity is no longer hidden
+            for room in rooms.values():
+                entity = room.get("entities", {}).get(eid)
+                if entity and entity.get("state") != "hidden":
+                    step["status"] = "complete"
+                    break
+            continue
+
+        if check == "solve":
+            for room in rooms.values():
+                entity = room.get("entities", {}).get(eid)
+                if entity and entity.get("state") == "solved":
+                    step["status"] = "complete"
+                    break
+            continue
+
+        if check == "examine":
+            # Can't easily track if examined — mark as complete if agent has been in that room
+            # For now just leave as pending unless we track it differently
+            pass
+
+    return chain

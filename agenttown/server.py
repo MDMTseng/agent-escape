@@ -46,6 +46,7 @@ sim_brains: dict = {}  # agent_id -> brain, module-level so save/load can access
 sim_scenario: str = ""
 sim_store: Any = None  # GameStore instance
 sim_token_usage: dict = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+sim_escape_chain: list = []  # escape chain steps for progress tracking
 
 
 async def broadcast(message: dict) -> None:
@@ -89,6 +90,9 @@ async def lifespan(app: FastAPI):
             logger.info("Loaded scenario: memory_test")
         else:
             sim_world, agent_ids = build_escape_room()
+            from agenttown.scenarios.escape_room_chain import DEFAULT_ESCAPE_CHAIN
+            import copy
+            sim_escape_chain = copy.deepcopy(DEFAULT_ESCAPE_CHAIN)
             logger.info("Loaded scenario: escape_room")
 
         if use_claude:
@@ -231,6 +235,7 @@ async def lifespan(app: FastAPI):
                 if hasattr(brain, "profile")
             },
             "world_state": sim_world.snapshot(),
+            "escape_chain": _get_updated_chain(),
         })
 
         sim_world.advance_tick()
@@ -273,6 +278,14 @@ async def lifespan(app: FastAPI):
     yield
     if sim_task and not sim_task.done():
         sim_task.cancel()
+
+
+def _get_updated_chain() -> list[dict]:
+    """Update and return escape chain with current world status."""
+    if not sim_escape_chain or not sim_world:
+        return []
+    from agenttown.scenarios.generator import update_chain_status
+    return update_chain_status(sim_escape_chain, sim_world.snapshot())
 
 
 def _update_token_usage() -> None:
@@ -488,6 +501,20 @@ async def generate_map(body: dict | None = None):
         # Generate scenario JSON using Claude
         scenario_data = await asyncio.to_thread(generate_scenario, theme, logic)
 
+        # Validate and extract escape chain
+        from agenttown.scenarios.generator import validate_and_extract_chain
+        validation = validate_and_extract_chain(scenario_data)
+
+        if not validation["valid"]:
+            return {
+                "error": "Generated map has issues: " + "; ".join(validation["errors"]),
+                "warnings": validation["warnings"],
+            }
+
+        # Store escape chain globally
+        global sim_escape_chain
+        sim_escape_chain = validation["escape_chain"]
+
         # Build world from generated data
         sim_world, agent_ids = build_from_json(scenario_data)
         sim_scenario = "custom"
@@ -510,12 +537,17 @@ async def generate_map(body: dict | None = None):
         logger.info(f"  Rooms: {len(scenario_data.get('rooms', []))}")
         logger.info(f"  Entities: {len(scenario_data.get('entities', []))}")
         logger.info(f"  Doors: {len(scenario_data.get('doors', []))}")
+        logger.info(f"  Escape chain: {len(sim_escape_chain)} steps")
+        if validation["warnings"]:
+            for w in validation["warnings"]:
+                logger.warning(f"  Warning: {w}")
 
         await broadcast({
             "type": "snapshot",
             "tick": sim_world.tick,
             "paused": True,
             "world_state": sim_world.snapshot(),
+            "escape_chain": sim_escape_chain,
         })
 
         if sim_step_event:
@@ -527,6 +559,8 @@ async def generate_map(body: dict | None = None):
             "rooms": len(scenario_data.get("rooms", [])),
             "entities": len(scenario_data.get("entities", [])),
             "agents": len(scenario_data.get("agents", [])),
+            "chain_steps": len(sim_escape_chain),
+            "warnings": validation["warnings"],
         }
 
     except Exception as e:
@@ -1300,14 +1334,8 @@ DASHBOARD_HTML = """\
             setTimeout(() => { location.reload(); }, 5000);
         };
 
-        // Puzzle definitions — which entities are puzzles and how to label them
-        const PUZZLE_DEFS = {
-            'brass_key':   { icon: '\\u{1F511}', name: 'Key + Lock (Steel Door)', checkDoor: 'door_workshop_vault' },
-            'puzzle_box':  { icon: '\\u{1F4E6}', name: 'Combination Lock (Puzzle Box)', checkState: true },
-            'pressure_plate': { icon: '\\u{2B07}', name: 'Pressure Plate (Hidden Panel)', checkDoor: 'door_workshop_sanctum' },
-            'archway':     { icon: '\\u{2728}', name: 'Password Door (Archway)', checkDoor: 'door_sanctum_hallway' },
-            'lever_controller': { icon: '\\u{1F579}', name: 'Sequential Levers (Gate)', checkDoor: 'door_vault_hallway_secret' },
-        };
+        // Escape chain — dynamically set from server
+        let escapeChain = [];
 
         // Puzzle annotations for rooms
         const ROOM_PUZZLES = {
@@ -1474,87 +1502,32 @@ DASHBOARD_HTML = """\
             return positions;
         }
 
-        function updatePuzzles(ws_data) {
-            if (!ws_data) return;
-            const rooms = ws_data.rooms || {};
-            const doors = ws_data.doors || {};
+        function updatePuzzles(ws_data, chain) {
+            // Use escape chain if available
+            if (chain && chain.length > 0) {
+                escapeChain = chain;
+            }
+            if (escapeChain.length === 0) {
+                puzzleDiv.innerHTML = '<div style="color:#8b949e">No escape chain (use Create to generate one)</div>';
+                return;
+            }
+
+            const icons = {examine:'\\u{1F50D}', reveal:'\\u{2728}', solve:'\\u{1F9E9}', unlock:'\\u{1F513}', escape:'\\u{1F6AA}'};
             let html = '';
+            const completed = escapeChain.filter(s => s.status === 'complete').length;
+            const total = escapeChain.length;
+            html += `<div style="color:#8b949e;font-size:10px;margin-bottom:6px;">${completed}/${total} steps complete</div>`;
 
-            for (const [eid, def] of Object.entries(PUZZLE_DEFS)) {
-                let status = 'locked';
-                let statusText = 'UNSOLVED';
-
-                // Find entity across all rooms
-                for (const room of Object.values(rooms)) {
-                    const entity = (room.entities || {})[eid];
-                    if (!entity) continue;
-
-                    if (entity.state === 'solved') {
-                        status = 'solved';
-                        statusText = 'SOLVED';
-                    } else if (entity.state === 'activated') {
-                        status = 'partial';
-                        statusText = 'IN PROGRESS';
-                    }
-
-                    // Check lever progress
-                    if (eid === 'lever_controller' && entity.properties) {
-                        const progress = entity.properties.progress || [];
-                        const sequence = entity.properties.sequence || [];
-                        if (progress.length > 0 && entity.state !== 'solved') {
-                            status = 'partial';
-                            statusText = `${progress.length}/${sequence.length} LEVERS`;
-                        }
-                    }
-                    break;
-                }
-
-                // Also check via door state
-                if (def.checkDoor && doors[def.checkDoor]) {
-                    if (!doors[def.checkDoor].locked) {
-                        status = 'solved';
-                        statusText = 'SOLVED';
-                    }
-                }
-
-                // Check if brass_key was picked up (not in room anymore)
-                if (eid === 'brass_key') {
-                    let found = false;
-                    for (const room of Object.values(rooms)) {
-                        if ((room.entities || {})[eid]) { found = true; break; }
-                    }
-                    if (!found && doors['door_workshop_vault'] && !doors['door_workshop_vault'].locked) {
-                        status = 'solved';
-                        statusText = 'SOLVED';
-                    } else if (!found) {
-                        status = 'partial';
-                        statusText = 'KEY FOUND';
-                    }
-                }
-
+            for (const step of escapeChain) {
+                const icon = icons[step.action] || '\\u{2022}';
+                const status = step.status === 'complete' ? 'solved' : 'locked';
+                const statusText = step.status === 'complete' ? 'DONE' : 'PENDING';
                 html += `<div class="puzzle-row">
-                    <span class="puzzle-icon">${def.icon}</span>
-                    <span class="puzzle-name">${def.name}</span>
+                    <span class="puzzle-icon">${icon}</span>
+                    <span class="puzzle-name" style="font-size:10px">${step.step}. ${step.description}</span>
                     <span class="puzzle-status ${status}">${statusText}</span>
                 </div>`;
             }
-
-            // Torch combination check
-            let torchStatus = 'locked', torchText = 'UNSOLVED';
-            for (const a of Object.values(ws_data.agents || {})) {
-                for (const item of (a.inventory || [])) {
-                    if (item.name === 'Makeshift Torch') { torchStatus = 'solved'; torchText = 'CRAFTED'; }
-                    if (item.name === 'Cloth Rag' || item.name === 'Wooden Stick') {
-                        if (torchStatus !== 'solved') { torchStatus = 'partial'; torchText = 'PARTS FOUND'; }
-                    }
-                }
-            }
-            html += `<div class="puzzle-row">
-                <span class="puzzle-icon">\\u{1F525}</span>
-                <span class="puzzle-name">Item Combine (Torch)</span>
-                <span class="puzzle-status ${torchStatus}">${torchText}</span>
-            </div>`;
-
             puzzleDiv.innerHTML = html;
         }
 
@@ -1585,7 +1558,7 @@ DASHBOARD_HTML = """\
                 // Update status panels
                 if (msg.world_state) {
                     updateMap(msg.world_state);
-                    updatePuzzles(msg.world_state);
+                    updatePuzzles(msg.world_state, msg.escape_chain);
                     updateAgents(msg.world_state);
                 }
                 // Update token counter
