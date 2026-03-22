@@ -491,58 +491,36 @@ async def generate_map(body: dict | None = None):
     sim_paused = True
 
     try:
-        from agenttown.scenarios.generator import generate_scenario, build_from_json
+        from agenttown.scenarios.builder import generate_puzzles, build_map
+        import time as _time
 
+        # Step 1: AI generates themed puzzles
         await broadcast({
-            "type": "processing",
-            "tick": 0,
-            "step": "generating",
-            "message": "Step 1/3: AI is designing your map...",
+            "type": "processing", "tick": 0, "step": "generating",
+            "message": "Step 1/2: AI is designing puzzles...",
         })
 
-        # Generate scenario JSON using Claude (with timeout)
-        import time as _time
         t0 = _time.time()
         try:
-            scenario_data = await asyncio.wait_for(
-                asyncio.to_thread(generate_scenario, theme, logic),
+            puzzles = await asyncio.wait_for(
+                asyncio.to_thread(generate_puzzles, theme, logic, 4),
                 timeout=60,
             )
         except asyncio.TimeoutError:
-            return {"error": "Map generation timed out after 60s. Try a simpler theme."}
+            return {"error": "Puzzle generation timed out. Try a simpler theme."}
         gen_time = _time.time() - t0
-        logger.info(f"  Map JSON generated in {gen_time:.1f}s")
+        logger.info(f"  Puzzles generated in {gen_time:.1f}s")
 
+        # Step 2: Code arranges puzzles into solvable map
         await broadcast({
-            "type": "processing",
-            "tick": 0,
-            "step": "validating",
-            "message": f"Step 2/3: Validating puzzle chain... ({gen_time:.0f}s)",
+            "type": "processing", "tick": 0, "step": "building",
+            "message": f"Step 2/2: Building rooms & connections... ({gen_time:.0f}s)",
         })
 
-        # Validate and extract escape chain
-        from agenttown.scenarios.generator import validate_and_extract_chain
-        validation = validate_and_extract_chain(scenario_data)
+        sim_world, agent_ids, escape_chain = build_map(theme, puzzles)
 
-        if not validation["valid"]:
-            return {
-                "error": "Generated map has issues: " + "; ".join(validation["errors"]),
-                "warnings": validation["warnings"],
-            }
-
-        # Store escape chain globally
         global sim_escape_chain
-        sim_escape_chain = validation["escape_chain"]
-
-        await broadcast({
-            "type": "processing",
-            "tick": 0,
-            "step": "building",
-            "message": "Step 3/3: Building world & agents...",
-        })
-
-        # Build world from generated data
-        sim_world, agent_ids = build_from_json(scenario_data)
+        sim_escape_chain = escape_chain
         sim_scenario = "custom"
 
         # Create fresh brains
@@ -558,15 +536,10 @@ async def generate_map(body: dict | None = None):
         sim_token_usage.update({"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
         _log_buffer.clear()
 
-        title = scenario_data.get("title", "Custom Scenario")
-        logger.info(f"Generated scenario: {title}")
-        logger.info(f"  Rooms: {len(scenario_data.get('rooms', []))}")
-        logger.info(f"  Entities: {len(scenario_data.get('entities', []))}")
-        logger.info(f"  Doors: {len(scenario_data.get('doors', []))}")
-        logger.info(f"  Escape chain: {len(sim_escape_chain)} steps")
-        if validation["warnings"]:
-            for w in validation["warnings"]:
-                logger.warning(f"  Warning: {w}")
+        title = f"Custom: {theme[:40]}"
+        n_rooms = len(sim_world.state.rooms)
+        n_entities = sum(len(r.entities) for r in sim_world.state.rooms.values())
+        logger.info(f"Built scenario: {n_rooms} rooms, {n_entities} entities, {len(escape_chain)} chain steps")
 
         await broadcast({
             "type": "snapshot",
@@ -582,11 +555,11 @@ async def generate_map(body: dict | None = None):
         return {
             "status": "generated",
             "title": title,
-            "rooms": len(scenario_data.get("rooms", [])),
-            "entities": len(scenario_data.get("entities", [])),
-            "agents": len(scenario_data.get("agents", [])),
-            "chain_steps": len(sim_escape_chain),
-            "warnings": validation["warnings"],
+            "rooms": n_rooms,
+            "entities": n_entities,
+            "agents": len(agent_ids),
+            "chain_steps": len(escape_chain),
+            "warnings": [],
         }
 
     except Exception as e:
