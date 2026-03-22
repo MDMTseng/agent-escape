@@ -567,6 +567,117 @@ async def generate_map(body: dict | None = None):
         return {"error": str(e)}
 
 
+@app.get("/api/presets")
+async def list_presets():
+    """List available preset story templates."""
+    from agenttown.scenarios.architect import PRESET_TEMPLATES
+    return {"presets": {k: {"builder": v.builder, "goal": v.goal, "background": v.background[:80], "difficulty": v.difficulty} for k, v in PRESET_TEMPLATES.items()}}
+
+
+@app.post("/api/generate-architect")
+async def generate_architect(body: dict | None = None):
+    """Generate a scenario using the Reverse Escape Room Architect."""
+    global sim_world, sim_brains, sim_paused, sim_token_usage, sim_scenario, sim_escape_chain
+
+    if not body:
+        return {"error": "Missing request body"}
+
+    sim_paused = True
+
+    try:
+        from agenttown.scenarios.architect import StoryInput, build_from_story, build_from_preset, PRESET_TEMPLATES
+        import time as _time
+
+        preset = body.get("preset")
+        if preset and preset in PRESET_TEMPLATES:
+            await broadcast({
+                "type": "processing", "tick": 0, "step": "generating",
+                "message": f"Building preset: {preset}...",
+            })
+            t0 = _time.time()
+            sim_world, agent_ids, chains = build_from_preset(preset)
+        else:
+            story = StoryInput(
+                builder=body.get("builder", "Unknown Builder"),
+                goal=body.get("goal", "Unknown Treasure"),
+                background=body.get("background", "A mysterious place"),
+                difficulty=body.get("difficulty", 3),
+            )
+
+            await broadcast({
+                "type": "processing", "tick": 0, "step": "generating",
+                "message": f"Step 1/2: Building puzzle graph (depth {story.difficulty})...",
+            })
+            t0 = _time.time()
+            sim_world, agent_ids, chains = build_from_story(story)
+
+        gen_time = _time.time() - t0
+
+        # Flatten chains for the escape chain UI
+        all_steps = []
+        step_num = 0
+        for ending, steps in chains.items():
+            for s in steps:
+                step_num += 1
+                all_steps.append({
+                    "step": step_num,
+                    "action": s.get("type", "solve"),
+                    "target": s.get("label", "?"),
+                    "entity_id": s.get("node_id", ""),
+                    "room": s.get("label", ""),
+                    "room_id": s.get("node_id", ""),
+                    "description": f"[{ending}] {s.get('description', s.get('label', '?'))}",
+                    "status": "pending",
+                    "check_type": "solve" if not s.get("is_goal") else "finish",
+                    "ending_type": ending,
+                })
+        sim_escape_chain = all_steps
+        sim_scenario = "architect"
+
+        # Create brains
+        use_claude = os.environ.get("AGENTTOWN_CLAUDE", "").lower() in ("1", "true", "yes")
+        if use_claude:
+            from agenttown.agents.brain import LLMBrain
+            sim_brains.clear()
+            sim_brains.update({aid: LLMBrain() for aid in agent_ids})
+        else:
+            sim_brains.clear()
+            sim_brains.update({aid: RandomBrain() for aid in agent_ids})
+
+        sim_token_usage.update({"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+        _log_buffer.clear()
+
+        n_rooms = len(sim_world.state.rooms)
+        n_doors = len(sim_world.state.doors)
+        n_endings = len(chains)
+        logger.info(f"Architect built: {n_rooms}R {n_doors}D {n_endings} endings, {len(all_steps)} chain steps in {gen_time:.1f}s")
+
+        await broadcast({
+            "type": "snapshot",
+            "tick": sim_world.tick,
+            "paused": True,
+            "world_state": sim_world.snapshot(),
+            "escape_chain": sim_escape_chain,
+        })
+
+        if sim_step_event:
+            sim_step_event.set()
+
+        return {
+            "status": "generated",
+            "title": f"{body.get('builder', preset or 'Custom')}",
+            "rooms": n_rooms,
+            "doors": n_doors,
+            "endings": n_endings,
+            "chain_steps": len(all_steps),
+            "gen_time": round(gen_time, 1),
+        }
+
+    except Exception as e:
+        logger.error(f"Architect failed: {e}")
+        return {"error": str(e)}
+
+
 @app.post("/api/auto-generate")
 async def auto_generate(body: dict | None = None):
     """Auto-generate theme or logic text using AI. Uses existing input as context."""
