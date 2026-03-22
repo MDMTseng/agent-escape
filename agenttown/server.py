@@ -1893,55 +1893,85 @@ DASHBOARD_HTML = """\
         }
 
         function autoLayout(roomIds, rooms, doors) {
-            // Use door connections to build a graph, then do a BFS layout
+            // Force-directed layout: repulsion between all nodes, attraction along edges
+            const pos = {};
+            const n = roomIds.length;
+            if (n === 0) return pos;
+
+            // Build adjacency
             const adj = {};
-            const dirOffset = {
-                east: [160, 0], west: [-160, 0],
-                south: [0, 120], north: [0, -120],
-            };
-            for (const rid of roomIds) adj[rid] = [];
+            for (const rid of roomIds) adj[rid] = new Set();
             for (const door of Object.values(doors)) {
-                const room = rooms[door.room_a];
-                if (!room) continue;
-                // Find direction
-                for (const [dir, did] of Object.entries(room.doors || {})) {
-                    if (did === door.id) {
-                        adj[door.room_a].push({ to: door.room_b, dir });
-                        const rev = {east:'west',west:'east',north:'south',south:'north'}[dir] || dir;
-                        adj[door.room_b].push({ to: door.room_a, dir: rev });
-                        break;
+                if (adj[door.room_a] && adj[door.room_b]) {
+                    adj[door.room_a].add(door.room_b);
+                    adj[door.room_b].add(door.room_a);
+                }
+            }
+
+            // Initialize positions in a circle
+            const cx = n * 40, cy = n * 30;
+            const radius = Math.max(80, n * 25);
+            for (let i = 0; i < n; i++) {
+                const angle = (2 * Math.PI * i) / n;
+                pos[roomIds[i]] = { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) };
+            }
+
+            // Force simulation (50 iterations)
+            const repulsion = 8000;
+            const attraction = 0.02;
+            const idealDist = 160;
+
+            for (let iter = 0; iter < 50; iter++) {
+                const forces = {};
+                for (const rid of roomIds) forces[rid] = { fx: 0, fy: 0 };
+
+                // Repulsion: every pair pushes apart
+                for (let i = 0; i < n; i++) {
+                    for (let j = i + 1; j < n; j++) {
+                        const a = roomIds[i], b = roomIds[j];
+                        let dx = pos[a].x - pos[b].x;
+                        let dy = pos[a].y - pos[b].y;
+                        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                        const force = repulsion / (dist * dist);
+                        const fx = (dx / dist) * force;
+                        const fy = (dy / dist) * force;
+                        forces[a].fx += fx; forces[a].fy += fy;
+                        forces[b].fx -= fx; forces[b].fy -= fy;
                     }
                 }
-            }
 
-            const positions = {};
-            const visited = new Set();
-            const queue = [{ id: roomIds[0], x: 0, y: 0 }];
-            positions[roomIds[0]] = { x: 0, y: 0 };
-            visited.add(roomIds[0]);
+                // Attraction: connected nodes pull together toward ideal distance
+                for (const rid of roomIds) {
+                    for (const neighbor of adj[rid]) {
+                        let dx = pos[neighbor].x - pos[rid].x;
+                        let dy = pos[neighbor].y - pos[rid].y;
+                        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                        const force = attraction * (dist - idealDist);
+                        forces[rid].fx += (dx / dist) * force;
+                        forces[rid].fy += (dy / dist) * force;
+                    }
+                }
 
-            while (queue.length > 0) {
-                const cur = queue.shift();
-                for (const edge of (adj[cur.id] || [])) {
-                    if (visited.has(edge.to)) continue;
-                    visited.add(edge.to);
-                    const off = dirOffset[edge.dir] || [160, 0];
-                    const nx = cur.x + off[0], ny = cur.y + off[1];
-                    positions[edge.to] = { x: nx, y: ny };
-                    queue.push({ id: edge.to, x: nx, y: ny });
+                // Apply forces with damping
+                const damping = 0.85 - iter * 0.01;
+                for (const rid of roomIds) {
+                    pos[rid].x += forces[rid].fx * damping;
+                    pos[rid].y += forces[rid].fy * damping;
                 }
             }
 
-            // Place any unvisited rooms (disconnected)
-            let ox = 0;
+            // Normalize: shift so minimum is at (0, 0)
+            let minX = Infinity, minY = Infinity;
             for (const rid of roomIds) {
-                if (!positions[rid]) {
-                    positions[rid] = { x: ox, y: 200 };
-                    ox += 160;
-                }
+                if (pos[rid].x < minX) minX = pos[rid].x;
+                if (pos[rid].y < minY) minY = pos[rid].y;
+            }
+            for (const rid of roomIds) {
+                pos[rid].x -= minX;
+                pos[rid].y -= minY;
             }
 
-            return positions;
+            return pos;
         }
 
         function updatePuzzles(ws_data, chain) {
