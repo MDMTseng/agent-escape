@@ -216,15 +216,27 @@ def generate_scenario(theme: str, logic: str = "") -> dict:
         logic=logic or "Designer's choice — create an interesting puzzle chain",
     )
 
+    logger.info(f"Generating map with {model}, theme length={len(theme)}, logic length={len(logic)}")
+
     response = client.messages.create(
         model=model,
-        max_tokens=2000,
+        max_tokens=8000,
         messages=[{"role": "user", "content": prompt}],
         output_config={"format": SCENARIO_SCHEMA},
     )
 
+    # Check if response was truncated
+    if response.stop_reason == "max_tokens":
+        logger.warning("Map generation hit max_tokens — response truncated")
+        raise ValueError("Generated map was too large and got truncated. Try a simpler theme.")
+
     text = response.content[0].text if response.content else "{}"
-    return json.loads(text)
+    usage = response.usage
+    logger.info(f"Map generated: {len(text)} chars, {usage.input_tokens}in/{usage.output_tokens}out tokens, stop={response.stop_reason}")
+
+    data = json.loads(text)
+    logger.info(f"Parsed: title='{data.get('title')}', {len(data.get('rooms',[]))}R {len(data.get('entities',[]))}E {len(data.get('doors',[]))}D {len(data.get('agents',[]))}A")
+    return data
 
 
 def build_from_json(data: dict) -> tuple[World, list[str]]:
@@ -237,12 +249,14 @@ def build_from_json(data: dict) -> tuple[World, list[str]]:
         ws.add_room(room)
 
     # Create entities and items
+    valid_states = {s.value for s in EntityState}
     for e in data.get("entities", []):
         room_id = e.get("room")
         if room_id not in ws.rooms:
             continue
 
-        state = EntityState(e.get("state", "default"))
+        raw_state = e.get("state", "default")
+        state = EntityState(raw_state) if raw_state in valid_states else EntityState.DEFAULT
         props = _get_entity_props(e)
 
         if e.get("type") == "item":
@@ -266,8 +280,14 @@ def build_from_json(data: dict) -> tuple[World, list[str]]:
 
         ws.rooms[room_id].add_entity(entity)
 
-    # Create doors
+    # Create doors (skip invalid ones)
     for d in data.get("doors", []):
+        if not d.get("room_a") or not d.get("room_b"):
+            logger.warning(f"Skipping door '{d.get('name')}' — missing room_a or room_b")
+            continue
+        if d["room_a"] not in ws.rooms or d["room_b"] not in ws.rooms:
+            logger.warning(f"Skipping door '{d.get('name')}' — references missing room")
+            continue
         door = Door(
             id=d["id"],
             name=d["name"],
