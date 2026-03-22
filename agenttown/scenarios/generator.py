@@ -86,19 +86,12 @@ Return a single JSON object with this exact structure:
 ```
 
 Rules:
-- Create 3-6 rooms with interesting connections
-- Include at least 3 different puzzle types
-- Hide clues in item descriptions and examine_text
-- Make puzzles interconnected (solving one reveals info for another)
-- Include at least one item that can be picked up and used
-- One entity must have on_use.finish to end the game
-- Create 2 agents with complementary roles and detailed goals
-- Make descriptions atmospheric and fitting the theme
-- ONLY return valid JSON, no markdown, no explanation, no text before or after the JSON
-- Start your response with {{ and end with }}
-- Keep it SMALL: exactly 3 rooms, 3 puzzles, 2 agents
-- Keep JSON compact — short descriptions (1 sentence each)
-- Total JSON should be under 2000 characters
+- Exactly 3 rooms, 2-3 puzzles, 2 agents
+- IMPORTANT: door key_id MUST match an existing item entity id. If a door is locked by a puzzle (not a key), set key_id to "" and use on_solve.unlock_door in a puzzle entity instead
+- One entity MUST have properties_json containing on_use.finish to end the game
+- Use puzzle types: combination_lock, pressure_plate, password_door
+- Keep descriptions short (1 sentence)
+- properties_json is a JSON STRING with escaped quotes
 """
 
 
@@ -282,7 +275,7 @@ def build_from_json(data: dict) -> tuple[World, list[str]]:
             room_a=d["room_a"],
             room_b=d["room_b"],
             locked=d.get("locked", False),
-            key_id=d.get("key_id"),
+            key_id=d.get("key_id") or None,  # empty string → None
             state=EntityState.LOCKED if d.get("locked") else EntityState.OPEN,
         )
         dir_a = d.get("direction_a", "east")
@@ -370,10 +363,11 @@ def validate_and_extract_chain(data: dict) -> dict:
         if d["room_b"] not in rooms:
             errors.append(f"Door '{d['name']}' references missing room '{d['room_b']}'")
 
-    # Check key_ids reference existing entities
+    # Auto-fix: remove invalid key_ids (LLM sometimes references non-existent keys)
     for d in data.get("doors", []):
         if d.get("key_id") and d["key_id"] not in entities:
-            errors.append(f"Door '{d['name']}' needs key '{d['key_id']}' which doesn't exist")
+            warnings.append(f"Door '{d['name']}' had invalid key_id '{d['key_id']}' — removed (door left locked, solvable via puzzles)")
+            d["key_id"] = None
 
     # Check agent start rooms exist
     for a in agents:
