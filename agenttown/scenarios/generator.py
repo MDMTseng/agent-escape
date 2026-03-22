@@ -96,7 +96,9 @@ Rules:
 - Make descriptions atmospheric and fitting the theme
 - ONLY return valid JSON, no markdown, no explanation, no text before or after the JSON
 - Start your response with {{ and end with }}
-- Keep it simple: 3-4 rooms, 3-4 puzzles, 2 agents
+- Keep it SMALL: exactly 3 rooms, 3 puzzles, 2 agents
+- Keep JSON compact — short descriptions (1 sentence each)
+- Total JSON should be under 2000 characters
 """
 
 
@@ -158,7 +160,7 @@ def generate_scenario(theme: str, logic: str = "") -> dict:
 
         response = client.messages.create(
             model=model,
-            max_tokens=4000,
+            max_tokens=2000,
             messages=messages,
         )
 

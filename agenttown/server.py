@@ -497,11 +497,28 @@ async def generate_map(body: dict | None = None):
             "type": "processing",
             "tick": 0,
             "step": "generating",
-            "message": "Generating map with AI... This may take 10-20 seconds.",
+            "message": "Step 1/3: AI is designing your map...",
         })
 
-        # Generate scenario JSON using Claude
-        scenario_data = await asyncio.to_thread(generate_scenario, theme, logic)
+        # Generate scenario JSON using Claude (with timeout)
+        import time as _time
+        t0 = _time.time()
+        try:
+            scenario_data = await asyncio.wait_for(
+                asyncio.to_thread(generate_scenario, theme, logic),
+                timeout=60,
+            )
+        except asyncio.TimeoutError:
+            return {"error": "Map generation timed out after 60s. Try a simpler theme."}
+        gen_time = _time.time() - t0
+        logger.info(f"  Map JSON generated in {gen_time:.1f}s")
+
+        await broadcast({
+            "type": "processing",
+            "tick": 0,
+            "step": "validating",
+            "message": f"Step 2/3: Validating puzzle chain... ({gen_time:.0f}s)",
+        })
 
         # Validate and extract escape chain
         from agenttown.scenarios.generator import validate_and_extract_chain
@@ -516,6 +533,13 @@ async def generate_map(body: dict | None = None):
         # Store escape chain globally
         global sim_escape_chain
         sim_escape_chain = validation["escape_chain"]
+
+        await broadcast({
+            "type": "processing",
+            "tick": 0,
+            "step": "building",
+            "message": "Step 3/3: Building world & agents...",
+        })
 
         # Build world from generated data
         sim_world, agent_ids = build_from_json(scenario_data)
@@ -1430,14 +1454,25 @@ DASHBOARD_HTML = """\
 
             btnGenerate.disabled = true;
             btnGenerate.textContent = 'Generating...';
-            creatorStatus.textContent = 'AI is creating your map... (10-20 seconds)';
+            creatorStatus.textContent = 'Step 1/3: AI is designing your map...';
             creatorStatus.style.color = '#58a6ff';
+            // Update status from server processing messages
+            const origHandler = ws.onmessage;
+            const genHandler = (e) => {
+                const msg = JSON.parse(e.data);
+                if (msg.type === 'processing' && msg.step) {
+                    creatorStatus.textContent = msg.message;
+                }
+                origHandler(e);
+            };
+            ws.onmessage = genHandler;
 
             fetch('/api/generate-map', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({theme, logic}),
             }).then(r => r.json()).then(d => {
+                ws.onmessage = origHandler;  // restore
                 btnGenerate.disabled = false;
                 btnGenerate.textContent = 'Generate Map';
                 if (d.error) {
@@ -1461,6 +1496,7 @@ DASHBOARD_HTML = """\
                     setTimeout(() => { creatorOverlay.style.display = 'none'; }, 1500);
                 }
             }).catch(e => {
+                ws.onmessage = origHandler;
                 btnGenerate.disabled = false;
                 btnGenerate.textContent = 'Generate Map';
                 creatorStatus.textContent = 'Network error: ' + e;
