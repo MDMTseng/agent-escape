@@ -452,6 +452,88 @@ async def reset_game():
     return {"status": "reset", "scenario": scenario}
 
 
+@app.get("/api/map-rules")
+async def get_map_rules():
+    """Return the map creation rules reference."""
+    from agenttown.scenarios.generator import MAP_RULES_REFERENCE
+    return {"rules": MAP_RULES_REFERENCE}
+
+
+@app.post("/api/generate-map")
+async def generate_map(body: dict | None = None):
+    """Generate a new scenario from user description using AI."""
+    global sim_world, sim_brains, sim_paused, sim_token_usage, sim_scenario
+
+    if not body:
+        return {"error": "Missing request body"}
+
+    theme = body.get("theme", "")
+    logic = body.get("logic", "")
+
+    if not theme:
+        return {"error": "Theme is required"}
+
+    sim_paused = True
+
+    try:
+        from agenttown.scenarios.generator import generate_scenario, build_from_json
+
+        await broadcast({
+            "type": "processing",
+            "tick": 0,
+            "step": "generating",
+            "message": "Generating map with AI... This may take 10-20 seconds.",
+        })
+
+        # Generate scenario JSON using Claude
+        scenario_data = await asyncio.to_thread(generate_scenario, theme, logic)
+
+        # Build world from generated data
+        sim_world, agent_ids = build_from_json(scenario_data)
+        sim_scenario = "custom"
+
+        # Create fresh brains
+        use_claude = os.environ.get("AGENTTOWN_CLAUDE", "").lower() in ("1", "true", "yes")
+        if use_claude:
+            from agenttown.agents.brain import LLMBrain
+            sim_brains.clear()
+            sim_brains.update({aid: LLMBrain() for aid in agent_ids})
+        else:
+            sim_brains.clear()
+            sim_brains.update({aid: RandomBrain() for aid in agent_ids})
+
+        sim_token_usage.update({"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+        _log_buffer.clear()
+
+        title = scenario_data.get("title", "Custom Scenario")
+        logger.info(f"Generated scenario: {title}")
+        logger.info(f"  Rooms: {len(scenario_data.get('rooms', []))}")
+        logger.info(f"  Entities: {len(scenario_data.get('entities', []))}")
+        logger.info(f"  Doors: {len(scenario_data.get('doors', []))}")
+
+        await broadcast({
+            "type": "snapshot",
+            "tick": sim_world.tick,
+            "paused": True,
+            "world_state": sim_world.snapshot(),
+        })
+
+        if sim_step_event:
+            sim_step_event.set()
+
+        return {
+            "status": "generated",
+            "title": title,
+            "rooms": len(scenario_data.get("rooms", [])),
+            "entities": len(scenario_data.get("entities", [])),
+            "agents": len(scenario_data.get("agents", [])),
+        }
+
+    except Exception as e:
+        logger.error(f"Map generation failed: {e}")
+        return {"error": str(e)}
+
+
 @app.get("/api/log")
 async def get_log(n: int = 50):
     """Return recent log lines. View from mobile: /api/log?n=100"""
@@ -803,6 +885,7 @@ DASHBOARD_HTML = """\
             <button id="btn-save" onclick="simSave()">Save</button>
             <button id="btn-load" onclick="toggleSaveList()">Load</button>
             <button id="btn-reset" onclick="simReset()" style="color:#f85149">Reset</button>
+            <button id="btn-create" onclick="toggleCreator()" style="color:#e3b341">Create</button>
             <span id="status">Connecting...</span>
             <span id="token-display">Tokens: 0</span>
         </div>
@@ -821,6 +904,29 @@ DASHBOARD_HTML = """\
             </div>
         </div>
         <div id="copy-toast">Copied to clipboard!</div>
+
+        <!-- Map Creator Modal -->
+        <div id="creator-overlay" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); z-index:1000; overflow-y:auto; padding:20px;">
+            <div style="max-width:600px; margin:0 auto; background:#161b22; border:1px solid #30363d; border-radius:10px; padding:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                    <h2 style="color:#e3b341; font-size:18px; font-family:monospace;">Map Creator</h2>
+                    <button onclick="toggleCreator()" style="background:none; border:1px solid #30363d; color:#8b949e; border-radius:4px; padding:4px 10px; cursor:pointer; font-family:monospace;">Close</button>
+                </div>
+
+                <label style="color:#c9d1d9; font-family:monospace; font-size:12px; display:block; margin-bottom:6px;">Theme & Background Story</label>
+                <textarea id="creator-theme" rows="4" placeholder="Example: An ancient Egyptian tomb with cursed treasures. Two archaeologists are trapped inside when the entrance collapses. They must solve riddles left by the pharaoh to find the hidden exit..." style="width:100%; background:#0d1117; color:#e6edf3; border:1px solid #30363d; border-radius:6px; padding:10px; font-family:Georgia,serif; font-size:13px; resize:vertical; margin-bottom:16px;"></textarea>
+
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <label style="color:#c9d1d9; font-family:monospace; font-size:12px;">Map Logic & Puzzles (optional)</label>
+                    <button onclick="copyRules()" style="background:#21262d; border:1px solid #30363d; color:#8b949e; border-radius:4px; padding:2px 8px; cursor:pointer; font-family:monospace; font-size:10px;">Copy Rules Reference</button>
+                </div>
+                <textarea id="creator-logic" rows="6" placeholder="Optional: describe room layout, puzzle chain, specific mechanisms...&#10;&#10;Example:&#10;- 4 rooms: Entrance Hall → Burial Chamber → Treasure Room → Secret Exit&#10;- Burial Chamber has a combination lock (code hidden in hieroglyphics in Entrance)&#10;- Treasure Room has a pressure plate that needs a gold idol&#10;- Secret Exit opens when you say the pharaoh's name" style="width:100%; background:#0d1117; color:#e6edf3; border:1px solid #30363d; border-radius:6px; padding:10px; font-family:monospace; font-size:12px; resize:vertical; margin-bottom:16px;"></textarea>
+
+                <div id="creator-status" style="color:#8b949e; font-family:monospace; font-size:11px; margin-bottom:12px;"></div>
+
+                <button id="btn-generate" onclick="generateMap()" style="width:100%; padding:10px; background:#1f6feb; border:none; border-radius:6px; color:#fff; font-family:monospace; font-size:14px; cursor:pointer; font-weight:bold;">Generate Map</button>
+            </div>
+        </div>
     </div>
     <div id="right-panel">
         <div id="map-panel">
@@ -1109,6 +1215,73 @@ DASHBOARD_HTML = """\
                 updateNav();
                 eventsDiv.innerHTML = '';
                 tokenDiv.textContent = 'Tokens: 0';
+            });
+        }
+
+        // --- Map Creator ---
+        const creatorOverlay = document.getElementById('creator-overlay');
+        const creatorStatus = document.getElementById('creator-status');
+        const btnGenerate = document.getElementById('btn-generate');
+
+        function toggleCreator() {
+            creatorOverlay.style.display = creatorOverlay.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function copyRules() {
+            fetch('/api/map-rules').then(r => r.json()).then(d => {
+                const logicBox = document.getElementById('creator-logic');
+                logicBox.value = d.rules + '\\n\\n' + logicBox.value;
+                creatorStatus.textContent = 'Rules reference pasted above your text';
+                creatorStatus.style.color = '#3fb950';
+            });
+        }
+
+        function generateMap() {
+            const theme = document.getElementById('creator-theme').value.trim();
+            if (!theme) {
+                creatorStatus.textContent = 'Please enter a theme/story first';
+                creatorStatus.style.color = '#f85149';
+                return;
+            }
+            const logic = document.getElementById('creator-logic').value.trim();
+
+            btnGenerate.disabled = true;
+            btnGenerate.textContent = 'Generating...';
+            creatorStatus.textContent = 'AI is creating your map... (10-20 seconds)';
+            creatorStatus.style.color = '#58a6ff';
+
+            fetch('/api/generate-map', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({theme, logic}),
+            }).then(r => r.json()).then(d => {
+                btnGenerate.disabled = false;
+                btnGenerate.textContent = 'Generate Map';
+                if (d.error) {
+                    creatorStatus.textContent = 'Error: ' + d.error;
+                    creatorStatus.style.color = '#f85149';
+                } else {
+                    creatorStatus.textContent = `Created "${d.title}" — ${d.rooms} rooms, ${d.entities} entities, ${d.agents} agents`;
+                    creatorStatus.style.color = '#3fb950';
+                    // Clear story cards
+                    storyCards.length = 0;
+                    cardIndex = -1;
+                    autoFollow = true;
+                    currentCard.innerHTML = '<div class="chapter-num">New map loaded — press Resume to play!</div>';
+                    updateNav();
+                    eventsDiv.innerHTML = '';
+                    tokenDiv.textContent = 'Tokens: 0';
+                    setButtonState(true);
+                    statusDiv.textContent = 'New map ready — press Resume or Step';
+                    statusDiv.style.color = '#e3b341';
+                    // Close modal after a moment
+                    setTimeout(() => { creatorOverlay.style.display = 'none'; }, 1500);
+                }
+            }).catch(e => {
+                btnGenerate.disabled = false;
+                btnGenerate.textContent = 'Generate Map';
+                creatorStatus.textContent = 'Network error: ' + e;
+                creatorStatus.style.color = '#f85149';
             });
         }
 
