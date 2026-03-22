@@ -135,8 +135,89 @@ def _extract_json(text: str) -> dict:
     return json.loads(text)
 
 
+SCENARIO_SCHEMA = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "escape_room",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "rooms": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string"},
+                            "name": {"type": "string"},
+                            "description": {"type": "string"},
+                        },
+                        "required": ["id", "name", "description"],
+                        "additionalProperties": False,
+                    },
+                },
+                "doors": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string"},
+                            "name": {"type": "string"},
+                            "description": {"type": "string"},
+                            "room_a": {"type": "string"},
+                            "room_b": {"type": "string"},
+                            "direction_a": {"type": "string"},
+                            "direction_b": {"type": "string"},
+                            "locked": {"type": "boolean"},
+                            "key_id": {"type": ["string", "null"]},
+                        },
+                        "required": ["id", "name", "room_a", "room_b", "direction_a", "direction_b", "locked"],
+                        "additionalProperties": False,
+                    },
+                },
+                "entities": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string"},
+                            "room": {"type": "string"},
+                            "type": {"type": "string"},
+                            "name": {"type": "string"},
+                            "description": {"type": "string"},
+                            "state": {"type": "string"},
+                            "portable": {"type": "boolean"},
+                            "properties": {"type": "object"},
+                        },
+                        "required": ["id", "room", "type", "name", "description"],
+                        "additionalProperties": False,
+                    },
+                },
+                "agents": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string"},
+                            "name": {"type": "string"},
+                            "description": {"type": "string"},
+                            "room_id": {"type": "string"},
+                            "goal": {"type": "string"},
+                        },
+                        "required": ["id", "name", "room_id", "goal"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            "required": ["title", "rooms", "doors", "entities", "agents"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+
 def generate_scenario(theme: str, logic: str = "") -> dict:
-    """Use Claude to generate a scenario from user descriptions. Retries on JSON failure."""
+    """Use Claude to generate a scenario with guaranteed valid JSON via structured outputs."""
     client = anthropic.Anthropic(api_key=get_api_key())
     model = os.environ.get("ANTHROPIC_MAP_MODEL", os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5"))
 
@@ -145,38 +226,15 @@ def generate_scenario(theme: str, logic: str = "") -> dict:
         logic=logic or "Designer's choice — create an interesting puzzle chain",
     )
 
-    # Try up to 2 times
-    last_error = None
-    for attempt in range(2):
-        messages = [{"role": "user", "content": prompt}]
+    response = client.messages.create(
+        model=model,
+        max_tokens=2000,
+        messages=[{"role": "user", "content": prompt}],
+        output_config={"format": SCENARIO_SCHEMA},
+    )
 
-        # On retry, include the error so AI can fix it
-        if attempt > 0 and last_error:
-            messages = [
-                {"role": "user", "content": prompt},
-                {"role": "assistant", "content": last_raw},
-                {"role": "user", "content": f"Your JSON was invalid: {last_error}. Return ONLY valid JSON, no other text. Fix the issue and try again."},
-            ]
-
-        response = client.messages.create(
-            model=model,
-            max_tokens=2000,
-            messages=messages,
-        )
-
-        text = response.content[0].text.strip() if response.content else ""
-        last_raw = text
-
-        try:
-            return _extract_json(text)
-        except (json.JSONDecodeError, ValueError) as e:
-            last_error = str(e)
-            logger.warning(f"JSON parse attempt {attempt + 1} failed: {e}")
-            continue
-
-    logger.error(f"Failed to generate valid JSON after 2 attempts")
-    logger.error(f"Last raw text: {last_raw[:500]}")
-    raise ValueError(f"AI generated invalid JSON after 2 attempts: {last_error}")
+    text = response.content[0].text if response.content else "{}"
+    return json.loads(text)
 
 
 def build_from_json(data: dict) -> tuple[World, list[str]]:
