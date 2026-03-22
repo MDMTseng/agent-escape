@@ -15,6 +15,7 @@ from typing import Any
 
 import anthropic
 
+from agenttown.auth import get_api_key
 from agenttown.world.actions import Action, Wait, parse_action
 from agenttown.world.models import AgentState
 
@@ -50,9 +51,8 @@ class LLMBrain:
     ) -> None:
         self._model = model or os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5")
         self._max_tokens = max_tokens
-        self._client = anthropic.Anthropic(
-            api_key=api_key or os.environ.get("ANTHROPIC_API_KEY"),
-        )
+        self._api_key_override = api_key
+        self._client = anthropic.Anthropic(api_key=api_key or get_api_key())
         self._memory = AgentMemory()
         self.token_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
         # Per-call profiling: tracks input/output tokens for each call type
@@ -61,6 +61,15 @@ class LLMBrain:
             "extract": {"input": 0, "output": 0, "calls": 0},
             "reflect": {"input": 0, "output": 0, "calls": 0},
         }
+
+    def _refresh_client(self) -> None:
+        """Re-create the API client with a fresh token from credentials file."""
+        from agenttown.auth import _cached_at
+        import agenttown.auth as _auth_mod
+        _auth_mod._cached_at = 0  # force re-read
+        fresh_key = get_api_key()
+        self._client = anthropic.Anthropic(api_key=fresh_key)
+        logger.info("API client refreshed with new token")
 
     def _track_usage(self, response, call_type: str = "") -> None:
         """Accumulate token usage from an API response."""
@@ -102,6 +111,22 @@ class LLMBrain:
                 tool_choice={"type": "any"},
                 messages=[{"role": "user", "content": perception_text}],
             )
+        except anthropic.AuthenticationError:
+            # Token expired — refresh and retry once
+            logger.warning(f"Auth failed for {agent.name}, refreshing token...")
+            self._refresh_client()
+            try:
+                response = self._client.messages.create(
+                    model=self._model,
+                    max_tokens=self._max_tokens,
+                    system=system_prompt,
+                    tools=ANTHROPIC_TOOLS,
+                    tool_choice={"type": "any"},
+                    messages=[{"role": "user", "content": perception_text}],
+                )
+            except Exception as e2:
+                logger.error(f"Retry failed for {agent.name}: {e2}")
+                return Wait()
         except Exception as e:
             logger.error(f"Claude API error for {agent.name}: {e}")
             return Wait()

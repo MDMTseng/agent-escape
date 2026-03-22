@@ -7,6 +7,7 @@ import os
 
 import anthropic
 
+from agenttown.auth import get_api_key
 from agenttown.world.events import Event
 from agenttown.world.models import WorldState
 
@@ -57,9 +58,7 @@ class Narrator:
     ) -> None:
         self._model = model or os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5")
         self._max_tokens = max_tokens
-        self._client = anthropic.Anthropic(
-            api_key=api_key or os.environ.get("ANTHROPIC_API_KEY"),
-        )
+        self._client = anthropic.Anthropic(api_key=api_key or get_api_key())
 
     def narrate(self, events: list[Event], world_state: WorldState, tick: int) -> str:
         if not events:
@@ -103,6 +102,22 @@ class Narrator:
                 messages=[{"role": "user", "content": prompt}],
             )
             return response.content[0].text.strip() if response.content else ""
+        except anthropic.AuthenticationError:
+            logger.warning("Narrator auth failed, refreshing token...")
+            import agenttown.auth as _auth_mod
+            _auth_mod._cached_at = 0
+            self._client = anthropic.Anthropic(api_key=get_api_key())
+            try:
+                response = self._client.messages.create(
+                    model=self._model,
+                    max_tokens=self._max_tokens,
+                    system=NARRATOR_SYSTEM_PROMPT,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                return response.content[0].text.strip() if response.content else ""
+            except Exception:
+                pass
+            return "\n".join(ev.description for ev in interesting)
         except Exception as e:
             logger.error(f"Narrator error: {e}")
-            return "\n".join(e.description for e in interesting)
+            return "\n".join(ev.description for ev in interesting)
