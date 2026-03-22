@@ -10,8 +10,8 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Cache token for 5 minutes before re-reading file
-_TOKEN_CACHE_SECS = 300
+# Cache token briefly — CLI may refresh it at any time
+_TOKEN_CACHE_SECS = 30
 _cached_token: str | None = None
 _cached_at: float = 0
 
