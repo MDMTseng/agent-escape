@@ -579,7 +579,8 @@ async def auto_generate(body: dict | None = None):
 
     try:
         client = anthropic.Anthropic(api_key=get_api_key())
-        model = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5")
+        # Use strong model for creative map generation
+        model = os.environ.get("ANTHROPIC_MAP_MODEL", "claude-sonnet-4-6")
 
         if field == "theme":
             ctx = ""
