@@ -177,18 +177,17 @@ async def lifespan(app: FastAPI):
                     "wait": ".."}.get(e.event_type, "  ")
             logger.info(f"  {icon} {e.description}")
 
+        # Run narrator in background thread to not block next tick
         narrative = ""
         if narrator and tick_events:
-            await broadcast({
-                "type": "processing",
-                "tick": tick,
-                "step": "narrating",
-                "message": f"Tick {tick}: Writing narrative...",
-            })
-            t1 = _time.time()
-            narrative = narrator.narrate(tick_events, sim_world.state, sim_world.tick)
-            narrate_time = _time.time() - t1
-            logger.info(f"  Narration took {narrate_time:.1f}s")
+            interesting = [e for e in tick_events if e.event_type != "wait"]
+            if interesting:
+                try:
+                    narrative = await asyncio.to_thread(
+                        narrator.narrate, tick_events, sim_world.state, sim_world.tick
+                    )
+                except Exception as e:
+                    logger.debug(f"Narrator failed: {e}")
 
         total_time = _time.time() - t0
         logger.info(f"  Total tick time: {total_time:.1f}s")
@@ -265,7 +264,7 @@ async def lifespan(app: FastAPI):
                     continue
             await run_one_tick()
             if not sim_world.finished:
-                await asyncio.sleep(1.0)
+                await asyncio.sleep(0.5)
 
     sim_task = asyncio.create_task(sim_loop())
     yield

@@ -467,24 +467,32 @@ def build_escape_room() -> tuple[World, list[str]]:
     alice = AgentState(
         id="alice",
         name="Alice",
-        description="A curious and methodical explorer who reads everything carefully.",
+        description="Explorer and puzzle solver. Focuses on reading clues and entering codes.",
         room_id="start",
         goal=(
-            "Escape Ravenwood Manor! Explore rooms, find clues, solve puzzles, "
-            "and cooperate with Bob. Examine everything — clues are hidden in "
-            "books, paintings, and inscriptions. Some items can be combined."
+            "Escape Ravenwood Manor! You are the CLUE READER. "
+            "STEP 1: Examine Note and Book in Study, pick up Wooden Stick, move east. "
+            "STEP 2: In Workshop, examine Painting (reveals key), solve Puzzle Box (code from book), pick up items. "
+            "STEP 3: Use Brass Key on Steel Door to reach Vault. "
+            "STEP 4: In Vault, read scroll for lever order, pull levers (Red→Green→Blue). "
+            "STEP 5: Reach Hallway, use any item on Iron Door to escape. "
+            "Act fast — do multiple actions per turn. Share clues with Bob."
         ),
     )
 
     bob = AgentState(
         id="bob",
         name="Bob",
-        description="A bold and intuitive problem solver who likes to experiment.",
+        description="Action-taker. Focuses on using items, pulling levers, and solving physical puzzles.",
         room_id="start",
         goal=(
-            "Escape Ravenwood Manor! Explore rooms, find clues, solve puzzles, "
-            "and cooperate with Alice. Try interacting with mechanisms, pulling "
-            "levers, and combining items. Share what you discover."
+            "Escape Ravenwood Manor! You are the ACTION TAKER. "
+            "STEP 1: In Study, pick up items and move east quickly. "
+            "STEP 2: In Workshop, pick up Stone Bust, combine Stick+Cloth into Torch. "
+            "STEP 3: After Alice opens Steel Door, go to Vault. Drop Stone Bust on Floor Plate. "
+            "STEP 4: Go south to Sanctum, use Torch on Brazier, say LUMINA aloud. "
+            "STEP 5: Reach Hallway through any path, use any item on Iron Door to escape. "
+            "Act fast — do multiple actions per turn. Coordinate with Alice."
         ),
     )
 

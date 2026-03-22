@@ -105,6 +105,14 @@ class World:
                     if visible:
                         hints.append(f"You can use {item.name} on {visible[0].name}.")
 
+        # If no specific hints, suggest moving to an unexplored room
+        if not hints:
+            for direction, door_id in room.doors.items():
+                door = self.state.doors[door_id]
+                if not door.locked:
+                    hints.append(f"Move {direction} to explore {door.name}.")
+                    break
+
         return hints
 
     def process_action(self, action: Action, agent: AgentState) -> list[Event]:
