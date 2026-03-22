@@ -29,6 +29,16 @@ if [ -f "$PROJECT_DIR/.env" ]; then
     done < "$PROJECT_DIR/.env"
 fi
 
+# Auto-read fresh OAuth token from Claude CLI credentials (overrides .env)
+CREDS_FILE="$HOME/.claude/.credentials.json"
+if [ -f "$CREDS_FILE" ]; then
+    FRESH_TOKEN=$(python -c "import json; print(json.load(open('$(cygpath -w "$CREDS_FILE")'))['claudeAiOauth']['accessToken'])" 2>/dev/null)
+    if [ -n "$FRESH_TOKEN" ]; then
+        export ANTHROPIC_API_KEY="$FRESH_TOKEN"
+        echo "Using fresh OAuth token from Claude CLI"
+    fi
+fi
+
 start_server() {
     echo "Starting AgentTown server on port $PORT..."
     cd "$PROJECT_DIR"
