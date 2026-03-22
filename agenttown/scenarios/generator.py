@@ -74,10 +74,10 @@ Return a single JSON object with this exact structure:
     {{"id": "door2", "name": "Locked Door", "description": "...", "room_a": "room2", "room_b": "room3", "direction_a": "south", "direction_b": "north", "locked": true, "key_id": "silver_key"}}
   ],
   "entities": [
-    {{"id": "painting", "room": "room1", "type": "entity", "name": "Old Painting", "description": "...", "properties": {{"examine_text": "...", "on_examine": {{"reveal": ["hidden_key"], "message": "Found something!"}}}}}},
-    {{"id": "hidden_key", "room": "room1", "type": "item", "name": "Silver Key", "description": "...", "state": "hidden", "portable": true}},
-    {{"id": "lockbox", "room": "room2", "type": "entity", "name": "Lock Box", "description": "...", "properties": {{"puzzle_type": "combination_lock", "combination": "4521", "examine_text": "A 4-digit lock.", "on_solve": {{"set_state": "solved", "reveal": ["prize"], "message": "It opens!"}}}}}},
-    {{"id": "exit_door", "room": "room3", "type": "entity", "name": "Exit", "description": "The way out!", "properties": {{"on_use": {{"finish": "You escaped!", "message": "Freedom!"}}}}}}
+    {{"id": "painting", "room": "room1", "type": "entity", "name": "Old Painting", "description": "A dusty painting", "properties_json": "{{\\"examine_text\\": \\"Look behind it\\", \\"on_examine\\": {{\\"reveal\\": [\\"hidden_key\\"], \\"message\\": \\"Found a key!\\"}}}}" }},
+    {{"id": "hidden_key", "room": "room1", "type": "item", "name": "Silver Key", "description": "A shiny key", "state": "hidden", "portable": true, "properties_json": "{{}}" }},
+    {{"id": "lockbox", "room": "room2", "type": "entity", "name": "Lock Box", "description": "A locked box", "properties_json": "{{\\"puzzle_type\\": \\"combination_lock\\", \\"combination\\": \\"4521\\", \\"examine_text\\": \\"A 4-digit lock\\", \\"on_solve\\": {{\\"set_state\\": \\"solved\\", \\"reveal\\": [\\"prize\\"], \\"message\\": \\"Opens!\\"}}}}" }},
+    {{"id": "exit_door", "room": "room3", "type": "entity", "name": "Exit Door", "description": "The way out", "properties_json": "{{\\"on_use\\": {{\\"finish\\": \\"You escaped!\\", \\"message\\": \\"Freedom!\\"}}}}" }}
   ],
   "agents": [
     {{"id": "agent1", "name": "Agent Name", "description": "Role description", "room_id": "room1", "goal": "Detailed step-by-step escape plan"}}
@@ -137,9 +137,7 @@ def _extract_json(text: str) -> dict:
 
 SCENARIO_SCHEMA = {
     "type": "json_schema",
-    "json_schema": {
-        "name": "escape_room",
-        "schema": {
+    "schema": {
             "type": "object",
             "properties": {
                 "title": {"type": "string"},
@@ -169,7 +167,7 @@ SCENARIO_SCHEMA = {
                             "direction_a": {"type": "string"},
                             "direction_b": {"type": "string"},
                             "locked": {"type": "boolean"},
-                            "key_id": {"type": ["string", "null"]},
+                            "key_id": {"type": "string"},
                         },
                         "required": ["id", "name", "room_a", "room_b", "direction_a", "direction_b", "locked"],
                         "additionalProperties": False,
@@ -187,7 +185,7 @@ SCENARIO_SCHEMA = {
                             "description": {"type": "string"},
                             "state": {"type": "string"},
                             "portable": {"type": "boolean"},
-                            "properties": {"type": "object"},
+                            "properties_json": {"type": "string"},
                         },
                         "required": ["id", "room", "type", "name", "description"],
                         "additionalProperties": False,
@@ -212,7 +210,6 @@ SCENARIO_SCHEMA = {
             "required": ["title", "rooms", "doors", "entities", "agents"],
             "additionalProperties": False,
         },
-    },
 }
 
 
@@ -253,7 +250,7 @@ def build_from_json(data: dict) -> tuple[World, list[str]]:
             continue
 
         state = EntityState(e.get("state", "default"))
-        props = e.get("properties", {})
+        props = _get_entity_props(e)
 
         if e.get("type") == "item":
             entity = Item(
@@ -322,6 +319,17 @@ def build_from_json(data: dict) -> tuple[World, list[str]]:
 # Puzzle chain validation & escape path extraction
 # ---------------------------------------------------------------------------
 
+def _get_entity_props(e: dict) -> dict:
+    """Get entity properties from either 'properties' dict or 'properties_json' string."""
+    props = e.get("properties", {})
+    if not props and e.get("properties_json"):
+        try:
+            props = json.loads(e["properties_json"])
+        except (json.JSONDecodeError, TypeError):
+            props = {}
+    return props
+
+
 def validate_and_extract_chain(data: dict) -> dict:
     """Validate a scenario is solvable and extract the escape chain.
 
@@ -375,7 +383,7 @@ def validate_and_extract_chain(data: dict) -> dict:
     # Find the finish entity
     finish_entity = None
     for e in data.get("entities", []):
-        props = e.get("properties", {})
+        props = _get_entity_props(e)
         for key in ("on_use", "on_solve", "on_examine"):
             if isinstance(props.get(key), dict) and "finish" in props[key]:
                 finish_entity = e
@@ -392,7 +400,7 @@ def validate_and_extract_chain(data: dict) -> dict:
     # Step through: find clues → solve puzzles → unlock doors → reach exit
     # 1. Items that need to be examined (have examine_text with clues)
     for e in data.get("entities", []):
-        props = e.get("properties", {})
+        props = _get_entity_props(e)
         if props.get("examine_text") and e.get("state") != "hidden":
             room_name = rooms.get(e.get("room", ""), {}).get("name", "?")
             step += 1
@@ -410,7 +418,7 @@ def validate_and_extract_chain(data: dict) -> dict:
 
     # 2. Hidden items that need to be revealed (via on_examine.reveal)
     for e in data.get("entities", []):
-        props = e.get("properties", {})
+        props = _get_entity_props(e)
         on_examine = props.get("on_examine", {})
         if on_examine.get("reveal"):
             for reveal_id in on_examine["reveal"]:
@@ -432,7 +440,7 @@ def validate_and_extract_chain(data: dict) -> dict:
 
     # 3. Puzzles to solve
     for e in data.get("entities", []):
-        props = e.get("properties", {})
+        props = _get_entity_props(e)
         pt = props.get("puzzle_type", "")
         if pt and pt not in ("lever",):  # skip individual levers, only track controllers
             room_name = rooms.get(e.get("room", ""), {}).get("name", "?")
@@ -493,7 +501,7 @@ def validate_and_extract_chain(data: dict) -> dict:
         start_room = agents[0].get("room_id")
         finish_room = finish_entity.get("room")
         if start_room and finish_room:
-            reachable = _find_reachable_rooms(start_room, doors, include_locked=True)
+            reachable = _find_reachable_rooms(start_room, data.get("doors", []), include_locked=True)
             if finish_room not in reachable:
                 errors.append(f"Exit room '{finish_room}' is not reachable from start '{start_room}' even with all doors unlocked")
 
