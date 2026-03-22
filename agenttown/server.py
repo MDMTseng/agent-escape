@@ -112,6 +112,8 @@ async def lifespan(app: FastAPI):
 
     async def run_one_tick():
         """Execute a single simulation tick."""
+        import time as _time
+
         tick = sim_world.tick
         agents = list(sim_world.state.agents.values())
         perceptions = {a.id: sim_world.perceive(a) for a in agents}
@@ -121,15 +123,29 @@ async def lifespan(app: FastAPI):
         logger.info(f"{'='*60}")
 
         # Log agent positions before decisions
+        agent_locs = {}
         for a in agents:
             room = sim_world.state.rooms.get(a.room_id)
             room_name = room.name if room else a.room_id
             inv = [i.name for i in a.inventory]
+            agent_locs[a.name] = room_name
             logger.info(f"  {a.name}: {room_name} | inv={inv}")
 
+        # Broadcast "processing" so UI shows thinking status
+        await broadcast({
+            "type": "processing",
+            "tick": tick,
+            "step": "deciding",
+            "message": f"Tick {tick}: Agents thinking...",
+            "agents": {a.name: agent_locs.get(a.name, "") for a in agents},
+        })
+
+        t0 = _time.time()
         decisions = await asyncio.gather(*[
             sim_brains[a.id].decide(a, perceptions[a.id]) for a in agents
         ])
+        decide_time = _time.time() - t0
+        logger.info(f"  Decisions took {decide_time:.1f}s")
 
         # Log decisions
         for agent, action in zip(agents, decisions):
@@ -160,7 +176,19 @@ async def lifespan(app: FastAPI):
 
         narrative = ""
         if narrator and tick_events:
+            await broadcast({
+                "type": "processing",
+                "tick": tick,
+                "step": "narrating",
+                "message": f"Tick {tick}: Writing narrative...",
+            })
+            t1 = _time.time()
             narrative = narrator.narrate(tick_events, sim_world.state, sim_world.tick)
+            narrate_time = _time.time() - t1
+            logger.info(f"  Narration took {narrate_time:.1f}s")
+
+        total_time = _time.time() - t0
+        logger.info(f"  Total tick time: {total_time:.1f}s")
 
         # Aggregate token usage from all brains
         _update_token_usage()
@@ -284,7 +312,8 @@ async def websocket_endpoint(ws: WebSocket):
             await ws.receive_text()
     except WebSocketDisconnect:
         connected_clients.discard(ws)
-        _auto_pause_if_no_clients()
+        # Don't auto-pause on disconnect — mobile browsers drop WebSocket
+        # frequently. The game keeps running; user can reconnect anytime.
 
 
 @app.get("/")
@@ -1080,15 +1109,14 @@ DASHBOARD_HTML = """\
             setButtonState(true);
         };
         ws.onclose = () => {
-            statusDiv.textContent = 'Disconnected';
+            statusDiv.textContent = 'Disconnected — game still running. Refresh to reconnect.';
             statusDiv.style.color = '#f85149';
             btnPause.disabled = true;
             btnResume.disabled = true;
             btnStep.disabled = true;
+            // Auto-reconnect after 3s
+            setTimeout(() => { location.reload(); }, 5000);
         };
-
-        // Auto-pause only when WebSocket disconnects (tab/browser closed)
-        // No pause on tab switch or window blur
 
         // Puzzle definitions — which entities are puzzles and how to label them
         const PUZZLE_DEFS = {
@@ -1414,6 +1442,9 @@ DASHBOARD_HTML = """\
                 });
                 eventsDiv.appendChild(group);
                 eventsDiv.scrollTop = eventsDiv.scrollHeight;
+            } else if (msg.type === 'processing') {
+                statusDiv.textContent = msg.message || 'Processing...';
+                statusDiv.style.color = '#58a6ff';
             } else if (msg.type === 'paused') {
                 setButtonState(true);
                 statusDiv.textContent = `Paused at tick ${msg.tick}`;
