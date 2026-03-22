@@ -582,7 +582,7 @@ async def preview_architect(body: dict | None = None):
 
     try:
         from agenttown.scenarios.architect import (
-            StoryInput, reverse_generate, extract_escape_chains, PRESET_TEMPLATES, ENDING_CONFIG,
+            StoryInput, reverse_generate, extract_escape_chains, PRESET_TEMPLATES,
         )
 
         preset = body.get("preset")
@@ -618,13 +618,14 @@ async def preview_architect(body: dict | None = None):
                 "is_branch": e.is_branch,
             })
 
+        ending_labels = {"good": "Good Ending", "bad": "Bad Ending", "secret": "Secret Ending", "true_": "True Ending"}
         ending_info = []
         for ending in endings:
-            cfg = ENDING_CONFIG.get(ending.key, {})
             ending_info.append({
-                "key": ending.key, "label": ending.label,
-                "color": ending.color, "icon": cfg.get("icon", ""),
-                "chain_length": len(chains.get(ending.key, [])),
+                "key": ending.ending_type,
+                "label": ending_labels.get(ending.ending_type, ending.ending_type),
+                "color": ending.color,
+                "chain_length": len(chains.get(ending.ending_type, [])),
             })
 
         return {

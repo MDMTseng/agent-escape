@@ -101,6 +101,8 @@ class PuzzleNode:
     is_fork: bool = False
     ending_type: str = ""    # good, bad, secret, true_
     path_color: str = ""
+    x: float = 0.0          # SVG X coordinate
+    y: float = 0.0          # SVG Y coordinate
 
 
 @dataclass
@@ -387,7 +389,58 @@ def reverse_generate(
     fork_count = sum(1 for n in nodes if n.is_fork)
     logger.info(f"Architect: {fork_count} fork points inserted")
 
+    # Phase 5: Calculate layout coordinates
+    _layout_nodes(nodes, edges)
+
     return nodes, edges, endings
+
+
+def _layout_nodes(nodes: list[PuzzleNode], edges: list[PuzzleEdge]) -> None:
+    """Assign x/y coordinates for SVG rendering. Right-to-left layout (goals on right)."""
+    if not nodes:
+        return
+
+    W = 800  # canvas width
+    max_depth = max(n.depth for n in nodes)
+
+    # Group nodes by ending_type for Y spacing
+    ending_groups: dict[str, list[PuzzleNode]] = {}
+    for n in nodes:
+        key = n.ending_type or "_fork"
+        ending_groups.setdefault(key, []).append(n)
+
+    # Assign Y base per ending route
+    y_base = 100
+    ending_y: dict[str, float] = {}
+    for key in ending_groups:
+        ending_y[key] = y_base
+        y_base += 140
+
+    # Assign coordinates
+    depth_counters: dict[int, int] = {}
+    for n in nodes:
+        # X: goals on right, entrances on left
+        n.x = W - 40 - n.depth * 120
+
+        # Y: base from ending route + offset within depth
+        base_y = ending_y.get(n.ending_type or "_fork", 200)
+        depth_key = n.depth
+        count = depth_counters.get(depth_key, 0)
+        depth_counters[depth_key] = count + 1
+        n.y = base_y + (count % 3) * 30 - 30
+
+    # Fork nodes: position between their connected nodes
+    for n in nodes:
+        if n.is_fork:
+            connected = []
+            for e in edges:
+                if e.from_id == n.id:
+                    target = next((nd for nd in nodes if nd.id == e.to_id), None)
+                    if target:
+                        connected.append(target)
+            if connected:
+                n.x = min(c.x for c in connected) - 60
+                n.y = sum(c.y for c in connected) / len(connected)
 
 
 # ---------------------------------------------------------------------------
