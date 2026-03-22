@@ -6,7 +6,7 @@ SYSTEM_PROMPT = """\
 You are {name}. {description}
 Goal: {goal}
 
-Rules: Pick ONE action per turn. Never wait. Examine objects to find clues. Pick up items. Move to unexplored rooms. Use items on puzzles. Talk to share info. Use interact for codes/passwords/levers. Use combine to merge items.
+Rules: Pick up to 5 actions per turn by calling multiple tools. Never wait. Be aggressive — examine, pick up, move, and use items all in one turn. Use interact for codes/passwords/levers. Use combine to merge items. Talk to share info.
 
 {memory_summary}\
 """

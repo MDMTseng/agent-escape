@@ -141,31 +141,34 @@ async def lifespan(app: FastAPI):
         })
 
         t0 = _time.time()
-        decisions = await asyncio.gather(*[
+        # Each agent returns a list of up to 5 actions
+        all_action_lists = await asyncio.gather(*[
             sim_brains[a.id].decide(a, perceptions[a.id]) for a in agents
         ])
         decide_time = _time.time() - t0
         logger.info(f"  Decisions took {decide_time:.1f}s")
 
-        # Log decisions
-        for agent, action in zip(agents, decisions):
-            action_str = f"{action.type}"
-            if hasattr(action, "direction"):
-                action_str += f"({action.direction})"
-            elif hasattr(action, "target"):
-                action_str += f"({action.target})"
-            elif hasattr(action, "message"):
-                action_str += f"(\"{action.message[:50]}\")"
-            elif hasattr(action, "item_a"):
-                action_str += f"({action.item_a} + {action.item_b})"
-            elif hasattr(action, "payload"):
-                action_str += f"({action.target}: {action.payload})"
-            logger.info(f"  {agent.name} -> {action_str}")
-
+        # Log and execute all actions for each agent sequentially
         tick_events: list[Event] = []
-        for agent, action in zip(agents, decisions):
-            events = sim_world.process_action(action, agent)
-            tick_events.extend(events)
+        for agent, action_list in zip(agents, all_action_lists):
+            action_count = len(action_list)
+            for i, action in enumerate(action_list):
+                action_str = f"{action.type}"
+                if hasattr(action, "direction"):
+                    action_str += f"({action.direction})"
+                elif hasattr(action, "target"):
+                    action_str += f"({action.target})"
+                elif hasattr(action, "message"):
+                    action_str += f"(\"{action.message[:50]}\")"
+                elif hasattr(action, "item_a"):
+                    action_str += f"({action.item_a} + {action.item_b})"
+                elif hasattr(action, "payload"):
+                    action_str += f"({action.target}: {action.payload})"
+                step = f"[{i+1}/{action_count}]" if action_count > 1 else ""
+                logger.info(f"  {agent.name} {step}-> {action_str}")
+
+                events = sim_world.process_action(action, agent)
+                tick_events.extend(events)
 
         # Log events
         for e in tick_events:

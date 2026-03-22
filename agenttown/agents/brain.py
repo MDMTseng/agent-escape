@@ -84,12 +84,10 @@ class LLMBrain:
                 self.profile[call_type]["output"] += out
                 self.profile[call_type]["calls"] += 1
 
-    async def decide(self, agent: AgentState, perception: dict) -> Action:
-        """Given the agent's perception, ask Claude to choose an action.
+    async def decide(self, agent: AgentState, perception: dict) -> list[Action]:
+        """Given the agent's perception, ask Claude to choose up to 5 actions.
 
-        Stateless per call — no message history. All context comes from:
-        - System prompt (personality, goal, memory, reflections)
-        - Single user message (current perception)
+        Returns a list of actions to execute sequentially this tick.
         """
         tick = perception.get("tick", 0)
 
@@ -102,39 +100,33 @@ class LLMBrain:
             memory_summary=self._memory.build_memory_prompt(tick, query=perception_text),
         )
 
-        try:
-            response = self._client.messages.create(
+        def _call_api():
+            return self._client.messages.create(
                 model=self._model,
                 max_tokens=self._max_tokens,
                 system=system_prompt,
                 tools=ANTHROPIC_TOOLS,
-                tool_choice={"type": "any"},
                 messages=[{"role": "user", "content": perception_text}],
             )
+
+        try:
+            response = _call_api()
         except anthropic.AuthenticationError:
-            # Token expired — refresh and retry once
             logger.warning(f"Auth failed for {agent.name}, refreshing token...")
             self._refresh_client()
             try:
-                response = self._client.messages.create(
-                    model=self._model,
-                    max_tokens=self._max_tokens,
-                    system=system_prompt,
-                    tools=ANTHROPIC_TOOLS,
-                    tool_choice={"type": "any"},
-                    messages=[{"role": "user", "content": perception_text}],
-                )
+                response = _call_api()
             except Exception as e2:
                 logger.error(f"Retry failed for {agent.name}: {e2}")
-                return Wait()
+                return [Wait()]
         except Exception as e:
             logger.error(f"Claude API error for {agent.name}: {e}")
-            return Wait()
+            return [Wait()]
 
         self._track_usage(response, "decide")
 
-        # Extract action from tool use
-        action = self._parse_response(response, agent)
+        # Extract ALL tool calls (up to 5 actions per tick)
+        actions = self._parse_all_actions(response, agent)
 
         # --- Memory processing ---
         events_text = "\n".join(perception.get("recent_events", []))
@@ -143,12 +135,13 @@ class LLMBrain:
             content=events_text or perception_text[:200],
             category="observation",
         )
-        self._extract_facts(agent, events_text, str(action.type) if hasattr(action, "type") else "wait", tick)
+        action_names = ", ".join(a.type for a in actions if hasattr(a, "type"))
+        self._extract_facts(agent, events_text, action_names, tick)
 
         if self._memory.should_reflect():
             self._reflect(agent, tick)
 
-        return action
+        return actions
 
     def _extract_facts(self, agent: AgentState, events: str, action: str, tick: int) -> None:
         """Rule-based fact extraction — no LLM call. Extracts codes, quotes, key info."""
@@ -209,22 +202,28 @@ class LLMBrain:
         except Exception as e:
             logger.debug(f"Reflection failed for {agent.name}: {e}")
 
-    def _parse_response(self, response: anthropic.types.Message, agent: AgentState) -> Action:
-        """Extract an Action from Claude's response."""
+    def _parse_all_actions(self, response: anthropic.types.Message, agent: AgentState, max_actions: int = 5) -> list[Action]:
+        """Extract up to max_actions from Claude's response."""
+        actions = []
         for block in response.content:
-            if block.type == "tool_use":
+            if block.type == "tool_use" and len(actions) < max_actions:
                 tool_name = block.name
                 tool_input = block.input if isinstance(block.input, dict) else {}
                 action_data = {"type": tool_name, **tool_input}
                 logger.info(f"{agent.name} decides: {tool_name}({json.dumps(tool_input)})")
-                return parse_action(action_data)
+                actions.append(parse_action(action_data))
 
-        # Claude with tool_choice=any should always return a tool call,
-        # but fallback just in case
-        for block in response.content:
-            if block.type == "text":
-                logger.info(f"{agent.name} text (no tool): {block.text[:100]}")
-        return Wait()
+        if not actions:
+            for block in response.content:
+                if block.type == "text":
+                    logger.info(f"{agent.name} text (no tool): {block.text[:100]}")
+            actions.append(Wait())
+
+        return actions
+
+    def _parse_response(self, response: anthropic.types.Message, agent: AgentState) -> Action:
+        """Extract a single Action (backward compat)."""
+        return self._parse_all_actions(response, agent, max_actions=1)[0]
 
     @property
     def memory(self) -> AgentMemory:
