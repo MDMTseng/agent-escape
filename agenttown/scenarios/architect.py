@@ -178,73 +178,103 @@ def _build_reverse_chains(
     endings: list[EndingSpec],
     rng: random.Random,
 ) -> tuple[list[PuzzleNode], list[PuzzleEdge]]:
-    """For each ending, build a chain from goal (depth 0) backwards."""
+    """Build a shared-trunk graph with fork-based branching to multiple endings.
+
+    Structure:
+      Entrance → shared puzzles → FORK → ending A path → 🏆
+                                    └→ ending B path → 💀
+                                    (deeper fork for secret/true)
+    """
     nodes: list[PuzzleNode] = []
     edges: list[PuzzleEdge] = []
-    node_counter = 0
+    nc = 0  # node counter
 
+    def _make_node(puzzle_type: str, depth: int, ending_type: str, color: str,
+                   is_goal: bool = False, is_fork: bool = False, label_override: str = "") -> PuzzleNode:
+        nonlocal nc
+        nc += 1
+        if label_override:
+            label = label_override
+        else:
+            labels = PUZZLE_LABELS.get(puzzle_type, ["Puzzle"])
+            label = rng.choice(labels)
+        return PuzzleNode(
+            id=f"n{nc}",
+            type=puzzle_type, label=label, desc="",
+            depth=depth, is_goal=is_goal, is_fork=is_fork,
+            ending_type=ending_type, path_color=color,
+        )
+
+    def _pick_type(exclude_trap: bool = True) -> str:
+        types = [t for t in PUZZLE_TYPES if not (exclude_trap and t == "trap")]
+        return rng.choice(types)
+
+    max_depth = max(e.chain_depth for e in endings)
+
+    # --- Step 1: Create ending goal nodes (depth 0, rightmost) ---
+    goal_nodes: dict[str, PuzzleNode] = {}
     for ending in endings:
-        goal_id = f"{ending.ending_type}_goal"
-        goal_label = (
-            f"{ending.ending_type.rstrip('_').title()} Ending"
-            if ending.ending_type != "good"
-            else "Victory"
-        )
-        goal_node = PuzzleNode(
-            id=goal_id,
-            type="riddle",
-            label=goal_label,
-            desc=ending.description,
-            depth=0,
-            is_goal=True,
-            ending_type=ending.ending_type,
-            path_color=ending.color,
-        )
-        nodes.append(goal_node)
+        label = {"good": "Victory", "bad": "Defeat", "secret": "Hidden Truth", "true_": "True Revelation"}.get(ending.ending_type, "Ending")
+        goal = _make_node("riddle", 0, ending.ending_type, ending.color, is_goal=True, label_override=label)
+        goal_nodes[ending.ending_type] = goal
+        nodes.append(goal)
 
-        current_frontier = [goal_id]
+    # --- Step 2: Build ending-specific tails (depth 1 to ~2, unique per ending) ---
+    # Each ending gets 1-2 unique puzzle nodes before the fork
+    ending_tails: dict[str, str] = {}  # ending_type → deepest tail node id
+    for ending in endings:
+        tail_length = min(2, ending.chain_depth - 1) if ending.chain_depth > 2 else 1
+        prev_id = goal_nodes[ending.ending_type].id
+        for d in range(1, tail_length + 1):
+            pt = "trap" if ending.ending_type == "bad" and d == 1 else _pick_type()
+            node = _make_node(pt, d, ending.ending_type, ending.color)
+            nodes.append(node)
+            edges.append(PuzzleEdge(from_id=node.id, to_id=prev_id, ending_type=ending.ending_type, color=ending.color))
+            prev_id = node.id
+        ending_tails[ending.ending_type] = prev_id
 
-        for depth in range(1, ending.chain_depth + 1):
-            next_frontier: list[str] = []
+    # --- Step 3: Create fork points connecting ending tails to shared trunk ---
+    # Primary fork: connects good and bad
+    fork_depth = 3
+    primary_fork = _make_node("riddle", fork_depth, "", "#8b949e", is_fork=True, label_override="Crossroads")
+    nodes.append(primary_fork)
+    # Connect fork → good tail and fork → bad tail
+    edges.append(PuzzleEdge(from_id=primary_fork.id, to_id=ending_tails["good"], ending_type="good", color=goal_nodes["good"].path_color, is_branch=True))
+    edges.append(PuzzleEdge(from_id=primary_fork.id, to_id=ending_tails["bad"], ending_type="bad", color=goal_nodes["bad"].path_color, is_branch=True))
 
-            for parent_id in current_frontier:
-                num_predecessors = 2 if rng.random() < 0.35 else 1
+    # Secondary fork for secret/true (if they exist)
+    shared_trunk_start = primary_fork.id
+    if "secret" in ending_tails:
+        fork2_depth = fork_depth + 1
+        fork2 = _make_node("riddle", fork2_depth, "", "#8b949e", is_fork=True, label_override="Hidden Path")
+        nodes.append(fork2)
+        # fork2 connects to primary fork (main path) and secret tail (hidden path)
+        edges.append(PuzzleEdge(from_id=fork2.id, to_id=primary_fork.id, ending_type="good", color="#8b949e"))
+        edges.append(PuzzleEdge(from_id=fork2.id, to_id=ending_tails["secret"], ending_type="secret", color=goal_nodes["secret"].path_color, is_branch=True))
+        shared_trunk_start = fork2.id
 
-                for _ in range(num_predecessors):
-                    node_counter += 1
-                    puzzle_type = rng.choice(list(PUZZLE_TYPES))
+    if "true_" in ending_tails:
+        fork3_depth = fork_depth + 2
+        fork3 = _make_node("riddle", fork3_depth, "", "#8b949e", is_fork=True, label_override="Deepest Secret")
+        nodes.append(fork3)
+        prev_trunk = shared_trunk_start
+        edges.append(PuzzleEdge(from_id=fork3.id, to_id=prev_trunk, ending_type="good", color="#8b949e"))
+        edges.append(PuzzleEdge(from_id=fork3.id, to_id=ending_tails["true_"], ending_type="true_", color=goal_nodes["true_"].path_color, is_branch=True))
+        shared_trunk_start = fork3.id
 
-                    if puzzle_type == "trap" and ending.ending_type != "bad":
-                        puzzle_type = rng.choice(
-                            [t for t in PUZZLE_TYPES if t != "trap"]
-                        )
+    # --- Step 4: Build shared trunk (from last fork back to entrance) ---
+    trunk_depth = max_depth
+    prev_id = shared_trunk_start
+    current_depth = max(n.depth for n in nodes) + 1
 
-                    label_options = PUZZLE_LABELS[puzzle_type]
-                    label = rng.choice(label_options)
-
-                    node_id = f"{ending.ending_type}_d{depth}_n{node_counter}"
-                    node = PuzzleNode(
-                        id=node_id,
-                        type=puzzle_type,
-                        label=f"{label} ({ending.ending_type.rstrip('_')})",
-                        desc="",
-                        depth=depth,
-                        ending_type=ending.ending_type,
-                        path_color=ending.color,
-                    )
-                    nodes.append(node)
-                    next_frontier.append(node_id)
-
-                    edge = PuzzleEdge(
-                        from_id=node_id,
-                        to_id=parent_id,
-                        ending_type=ending.ending_type,
-                        color=ending.color,
-                        is_branch=(num_predecessors > 1),
-                    )
-                    edges.append(edge)
-
-            current_frontier = next_frontier
+    trunk_length = max(2, trunk_depth - current_depth + 2)
+    for i in range(trunk_length):
+        d = current_depth + i
+        pt = _pick_type()
+        node = _make_node(pt, d, "shared", "#58a6ff")
+        nodes.append(node)
+        edges.append(PuzzleEdge(from_id=node.id, to_id=prev_id, ending_type="shared", color="#58a6ff"))
+        prev_id = node.id
 
     return nodes, edges
 
@@ -272,21 +302,26 @@ def _insert_forks(
     edges: list[PuzzleEdge],
     rng: random.Random,
 ) -> None:
-    """Find mid-depth nodes from different ending routes and connect them via forks.
+    """Forks are now built inline in _build_reverse_chains. This is a no-op."""
+    # Forks are already created during chain building
+    pass
 
-    A fork node is a riddle that connects exactly 2 nodes from different ending types.
-    """
+
+def _LEGACY_insert_forks(
+    nodes: list[PuzzleNode],
+    edges: list[PuzzleEdge],
+    rng: random.Random,
+) -> None:
+    """Legacy fork insertion — kept for reference."""
     if len({n.ending_type for n in nodes if not n.is_goal}) < 2:
-        return  # Need at least 2 ending routes to create forks
+        return
 
-    # Group non-goal, non-entrance nodes by depth
     by_depth: dict[int, list[PuzzleNode]] = {}
     for node in nodes:
         if node.is_goal or node.is_entrance:
             continue
         by_depth.setdefault(node.depth, []).append(node)
 
-    # Find the mid-depth range
     all_depths = sorted(by_depth.keys())
     if len(all_depths) < 2:
         return
@@ -306,7 +341,6 @@ def _insert_forks(
         if len(candidates) < 2:
             continue
 
-        # Find two candidates from different ending types
         ending_groups: dict[str, list[PuzzleNode]] = {}
         for c in candidates:
             ending_groups.setdefault(c.ending_type, []).append(c)
@@ -315,7 +349,6 @@ def _insert_forks(
         if len(ending_types) < 2:
             continue
 
-        # Pick one node from each of two different ending types
         et_a, et_b = rng.sample(ending_types, 2)
         node_a = rng.choice(ending_groups[et_a])
         node_b = rng.choice(ending_groups[et_b])
