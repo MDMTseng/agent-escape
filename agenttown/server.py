@@ -12,6 +12,8 @@ from typing import Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 
+import anthropic
+from agenttown.auth import get_api_key
 from agenttown.main import RandomBrain, run_simulation
 from agenttown.scenarios.escape_room import build_escape_room
 from agenttown.world.events import Event
@@ -568,6 +570,68 @@ async def generate_map(body: dict | None = None):
         return {"error": str(e)}
 
 
+@app.post("/api/auto-generate")
+async def auto_generate(body: dict | None = None):
+    """Auto-generate theme or logic text using AI."""
+    field = (body or {}).get("field", "theme")  # "theme", "logic", or "all"
+    existing_theme = (body or {}).get("theme", "")
+
+    try:
+        client = anthropic.Anthropic(api_key=get_api_key())
+        model = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5")
+
+        if field == "theme":
+            response = client.messages.create(
+                model=model, max_tokens=200,
+                messages=[{"role": "user", "content":
+                    "Generate a creative escape room theme with a background story in 2-3 sentences. "
+                    "Be imaginative — could be sci-fi, horror, fantasy, historical, underwater, space, etc. "
+                    "Include WHO is trapped, WHERE they are, and WHY they need to escape. "
+                    "Return ONLY the theme text, nothing else."}],
+            )
+            return {"text": response.content[0].text.strip()}
+
+        elif field == "logic":
+            theme_ctx = f"Theme: {existing_theme}\n\n" if existing_theme else ""
+            response = client.messages.create(
+                model=model, max_tokens=300,
+                messages=[{"role": "user", "content":
+                    f"{theme_ctx}"
+                    "Generate escape room map logic for this theme. Include:\n"
+                    "- 4-5 rooms with names and connections\n"
+                    "- 3-4 different puzzle types (combination lock, pressure plate, password, levers, item combine)\n"
+                    "- A puzzle chain showing how solving one leads to the next\n"
+                    "- What items are in which rooms\n"
+                    "Return ONLY the logic description as bullet points, nothing else."}],
+            )
+            return {"text": response.content[0].text.strip()}
+
+        elif field == "all":
+            # Generate both at once
+            response = client.messages.create(
+                model=model, max_tokens=500,
+                messages=[{"role": "user", "content":
+                    "Generate a creative escape room concept. Return in this exact format:\n\n"
+                    "THEME:\n[2-3 sentence theme with setting, characters, and reason to escape]\n\n"
+                    "LOGIC:\n[bullet point list of 4-5 rooms, their connections, and 3-4 puzzles with solutions]\n\n"
+                    "Be creative — sci-fi, fantasy, horror, historical, etc. Return ONLY this format."}],
+            )
+            text = response.content[0].text.strip()
+            # Parse THEME: and LOGIC: sections
+            theme_text = ""
+            logic_text = ""
+            if "THEME:" in text and "LOGIC:" in text:
+                parts = text.split("LOGIC:")
+                theme_text = parts[0].replace("THEME:", "").strip()
+                logic_text = parts[1].strip()
+            else:
+                theme_text = text
+            return {"theme": theme_text, "logic": logic_text}
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @app.get("/api/log")
 async def get_log(n: int = 50):
     """Return recent log lines. View from mobile: /api/log?n=100"""
@@ -947,18 +1011,27 @@ DASHBOARD_HTML = """\
                     <button onclick="toggleCreator()" style="background:none; border:1px solid #30363d; color:#8b949e; border-radius:4px; padding:4px 10px; cursor:pointer; font-family:monospace;">Close</button>
                 </div>
 
-                <label style="color:#c9d1d9; font-family:monospace; font-size:12px; display:block; margin-bottom:6px;">Theme & Background Story</label>
-                <textarea id="creator-theme" rows="4" placeholder="Example: An ancient Egyptian tomb with cursed treasures. Two archaeologists are trapped inside when the entrance collapses. They must solve riddles left by the pharaoh to find the hidden exit..." style="width:100%; background:#0d1117; color:#e6edf3; border:1px solid #30363d; border-radius:6px; padding:10px; font-family:Georgia,serif; font-size:13px; resize:vertical; margin-bottom:16px;"></textarea>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <label style="color:#c9d1d9; font-family:monospace; font-size:12px;">Theme & Background Story</label>
+                    <button onclick="autoTheme()" id="btn-auto-theme" style="background:#21262d; border:1px solid #e3b341; color:#e3b341; border-radius:4px; padding:2px 8px; cursor:pointer; font-family:monospace; font-size:10px;">Auto Generate</button>
+                </div>
+                <textarea id="creator-theme" rows="4" placeholder="Example: An ancient Egyptian tomb with cursed treasures. Two archaeologists are trapped inside when the entrance collapses..." style="width:100%; background:#0d1117; color:#e6edf3; border:1px solid #30363d; border-radius:6px; padding:10px; font-family:Georgia,serif; font-size:13px; resize:vertical; margin-bottom:16px;"></textarea>
 
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                    <label style="color:#c9d1d9; font-family:monospace; font-size:12px;">Map Logic & Puzzles (optional)</label>
-                    <button onclick="copyRules()" style="background:#21262d; border:1px solid #30363d; color:#8b949e; border-radius:4px; padding:2px 8px; cursor:pointer; font-family:monospace; font-size:10px;">Copy Rules Reference</button>
+                    <label style="color:#c9d1d9; font-family:monospace; font-size:12px;">Map Logic & Puzzles</label>
+                    <div style="display:flex; gap:4px;">
+                        <button onclick="autoLogic()" id="btn-auto-logic" style="background:#21262d; border:1px solid #e3b341; color:#e3b341; border-radius:4px; padding:2px 8px; cursor:pointer; font-family:monospace; font-size:10px;">Auto Generate</button>
+                        <button onclick="copyRules()" style="background:#21262d; border:1px solid #30363d; color:#8b949e; border-radius:4px; padding:2px 8px; cursor:pointer; font-family:monospace; font-size:10px;">Copy Rules</button>
+                    </div>
                 </div>
-                <textarea id="creator-logic" rows="6" placeholder="Optional: describe room layout, puzzle chain, specific mechanisms...&#10;&#10;Example:&#10;- 4 rooms: Entrance Hall → Burial Chamber → Treasure Room → Secret Exit&#10;- Burial Chamber has a combination lock (code hidden in hieroglyphics in Entrance)&#10;- Treasure Room has a pressure plate that needs a gold idol&#10;- Secret Exit opens when you say the pharaoh's name" style="width:100%; background:#0d1117; color:#e6edf3; border:1px solid #30363d; border-radius:6px; padding:10px; font-family:monospace; font-size:12px; resize:vertical; margin-bottom:16px;"></textarea>
+                <textarea id="creator-logic" rows="6" placeholder="Optional: describe rooms, puzzles, connections...&#10;&#10;Example:&#10;- 4 rooms: Entrance → Chamber → Treasure → Exit&#10;- Combo lock in Chamber (code in hieroglyphics)&#10;- Pressure plate needs gold idol" style="width:100%; background:#0d1117; color:#e6edf3; border:1px solid #30363d; border-radius:6px; padding:10px; font-family:monospace; font-size:12px; resize:vertical; margin-bottom:16px;"></textarea>
 
                 <div id="creator-status" style="color:#8b949e; font-family:monospace; font-size:11px; margin-bottom:12px;"></div>
 
-                <button id="btn-generate" onclick="generateMap()" style="width:100%; padding:10px; background:#1f6feb; border:none; border-radius:6px; color:#fff; font-family:monospace; font-size:14px; cursor:pointer; font-weight:bold;">Generate Map</button>
+                <div style="display:flex; gap:8px;">
+                    <button onclick="autoAll()" style="flex:1; padding:10px; background:#21262d; border:1px solid #e3b341; border-radius:6px; color:#e3b341; font-family:monospace; font-size:13px; cursor:pointer; font-weight:bold;">Auto All & Generate</button>
+                    <button id="btn-generate" onclick="generateMap()" style="flex:1; padding:10px; background:#1f6feb; border:none; border-radius:6px; color:#fff; font-family:monospace; font-size:14px; cursor:pointer; font-weight:bold;">Generate Map</button>
+                </div>
             </div>
         </div>
     </div>
@@ -1259,6 +1332,55 @@ DASHBOARD_HTML = """\
 
         function toggleCreator() {
             creatorOverlay.style.display = creatorOverlay.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function autoTheme() {
+            const btn = document.getElementById('btn-auto-theme');
+            btn.disabled = true; btn.textContent = '...';
+            fetch('/api/auto-generate', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({field: 'theme'}),
+            }).then(r => r.json()).then(d => {
+                btn.disabled = false; btn.textContent = 'Auto Generate';
+                if (d.text) document.getElementById('creator-theme').value = d.text;
+                else creatorStatus.textContent = d.error || 'Failed';
+            }).catch(() => { btn.disabled = false; btn.textContent = 'Auto Generate'; });
+        }
+
+        function autoLogic() {
+            const btn = document.getElementById('btn-auto-logic');
+            const theme = document.getElementById('creator-theme').value.trim();
+            btn.disabled = true; btn.textContent = '...';
+            fetch('/api/auto-generate', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({field: 'logic', theme}),
+            }).then(r => r.json()).then(d => {
+                btn.disabled = false; btn.textContent = 'Auto Generate';
+                if (d.text) document.getElementById('creator-logic').value = d.text;
+                else creatorStatus.textContent = d.error || 'Failed';
+            }).catch(() => { btn.disabled = false; btn.textContent = 'Auto Generate'; });
+        }
+
+        function autoAll() {
+            creatorStatus.textContent = 'Auto-generating theme & logic...';
+            creatorStatus.style.color = '#58a6ff';
+            fetch('/api/auto-generate', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({field: 'all'}),
+            }).then(r => r.json()).then(d => {
+                if (d.theme) document.getElementById('creator-theme').value = d.theme;
+                if (d.logic) document.getElementById('creator-logic').value = d.logic;
+                if (d.theme || d.logic) {
+                    creatorStatus.textContent = 'Auto-generated! Click Generate Map to create.';
+                    creatorStatus.style.color = '#3fb950';
+                } else {
+                    creatorStatus.textContent = d.error || 'Failed';
+                    creatorStatus.style.color = '#f85149';
+                }
+            }).catch(e => {
+                creatorStatus.textContent = 'Error: ' + e;
+                creatorStatus.style.color = '#f85149';
+            });
         }
 
         function copyRules() {
