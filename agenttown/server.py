@@ -1267,7 +1267,10 @@ DASHBOARD_HTML = """\
     </div>
     <div id="right-panel">
         <div id="map-panel">
-            <h2>SCENE VIEW</h2>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <h2>SCENE VIEW</h2>
+                <button onclick="toggleFullscreenScene()" style="background:none;border:1px solid #30363d;color:#8b949e;border-radius:3px;padding:2px 6px;cursor:pointer;font-family:monospace;font-size:10px;">Fullscreen</button>
+            </div>
             <div id="scene-graph"></div>
         </div>
         <div id="puzzle-panel">
@@ -1385,6 +1388,32 @@ DASHBOARD_HTML = """\
             if (e.key === 'ArrowLeft') prevCard();
             else if (e.key === 'ArrowRight') nextCard();
         });
+
+        // --- Scene Fullscreen ---
+        function toggleFullscreenScene() {
+            const panel = document.getElementById('map-panel');
+            if (panel.style.position === 'fixed') {
+                panel.style.position = '';
+                panel.style.top = '';
+                panel.style.left = '';
+                panel.style.right = '';
+                panel.style.bottom = '';
+                panel.style.zIndex = '';
+                panel.style.background = '';
+                panel.style.padding = '';
+                panel.style.overflow = '';
+            } else {
+                panel.style.position = 'fixed';
+                panel.style.top = '0';
+                panel.style.left = '0';
+                panel.style.right = '0';
+                panel.style.bottom = '0';
+                panel.style.zIndex = '999';
+                panel.style.background = '#0a0e14';
+                panel.style.padding = '16px';
+                panel.style.overflow = 'auto';
+            }
+        }
 
         // --- Log tab switching ---
         const serverLogDiv = document.getElementById('server-log');

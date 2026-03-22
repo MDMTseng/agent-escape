@@ -14,6 +14,8 @@ class World:
     def __init__(self, state: WorldState | None = None) -> None:
         self.state = state or WorldState()
         self.event_log = EventLog()
+        # Track room visit history per agent: {agent_id: [(tick, room_id, room_name), ...]}
+        self._room_history: dict[str, list[tuple[int, str, str]]] = {}
 
     @property
     def tick(self) -> int:
@@ -26,6 +28,11 @@ class World:
     def perceive(self, agent: AgentState) -> dict:
         """Build a perception payload for an agent — what they can see/know right now."""
         room = self.state.get_agent_room(agent)
+
+        # Track room visit history
+        history = self._room_history.setdefault(agent.id, [])
+        if not history or history[-1][1] != room.id:
+            history.append((self.state.tick, room.id, room.name))
         others = [
             {"name": a.name, "description": a.description}
             for a in self.state.agents_in_room(room.id)
@@ -61,6 +68,7 @@ class World:
             ],
             "recent_events": event_descriptions,
             "hints": hints,
+            "room_history": [h[2] for h in history],  # list of room names visited in order
             "goal": agent.goal,
         }
 

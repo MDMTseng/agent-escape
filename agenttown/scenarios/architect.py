@@ -396,8 +396,10 @@ def reverse_generate(
 
     Returns: (nodes, edges, endings)
     """
-    # Deterministic seed from story input
-    seed_hash = hashlib.sha256(story_input.seed_string().encode()).hexdigest()
+    # Semi-random seed: story input + current time for variation on regenerate
+    import time
+    seed_str = story_input.seed_string() + str(int(time.time() * 1000))
+    seed_hash = hashlib.sha256(seed_str.encode()).hexdigest()
     seed_int = int(seed_hash[:8], 16)
     rng = random.Random(seed_int)
 

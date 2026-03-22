@@ -15,7 +15,7 @@ PERCEPTION_TEMPLATE = """\
 Tick {tick} | {room_name}: {room_description}
 See: {entities} | Exits: {exits} | Others: {others} | Inventory: {inventory}
 Events: {recent_events}
-{hints}Act now.\
+{room_history}{hints}Act now. Do NOT go back to rooms you already visited unless you need something there.\
 """
 
 
@@ -55,6 +55,9 @@ def build_perception_message(perception: dict) -> str:
     hints_list = perception.get("hints", [])
     hints = "HINTS: " + "; ".join(hints_list) + "\n" if hints_list else ""
 
+    room_hist = perception.get("room_history", [])
+    room_history = "Visited rooms (in order): " + " → ".join(room_hist) + "\n" if len(room_hist) > 1 else ""
+
     return PERCEPTION_TEMPLATE.format(
         tick=perception.get("tick", 0),
         room_name=perception["room"]["name"],
@@ -64,6 +67,7 @@ def build_perception_message(perception: dict) -> str:
         others=others,
         inventory=inventory,
         recent_events=events,
+        room_history=room_history,
         hints=hints,
     )
 
