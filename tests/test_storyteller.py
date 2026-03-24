@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -83,11 +85,11 @@ VALID_TRAITS = [
 ]
 
 TRAIT_PUZZLE_MAP = {
-    "paranoid": ["key_lock", "combination_lock", "sequential"],
+    "paranoid": ["key_lock", "combination_lock", "combination_lock"],
     "artistic": ["combination_lock", "password_door", "examine_reveal"],
     "scholarly": ["combination_lock", "password_door"],
     "sentimental": ["combination_lock", "examine_reveal"],
-    "meticulous": ["combination_lock", "sequential"],
+    "meticulous": ["combination_lock", "combination_lock"],
     "secretive": ["examine_reveal", "key_lock"],
     "protective": ["key_lock", "pressure_plate"],
     "grieving": ["examine_reveal", "password_door"],
@@ -258,6 +260,85 @@ class TestRoomStructure:
 
 
 # ---------------------------------------------------------------------------
+# Cooperative puzzles
+# ---------------------------------------------------------------------------
+
+class TestCooperativePuzzles:
+    """At difficulty >= 3, puzzles require both agents to cooperate."""
+
+    def test_agents_start_in_different_rooms(self):
+        from agenttown.scenarios.storyteller import build_story_world
+
+        world, _, _ = build_story_world(
+            theme="gothic_manor",
+            premise="A paranoid alchemist hid his formula",
+            difficulty=3,
+        )
+        agents = list(world.state.agents.values())
+        assert len(agents) == 2
+        assert agents[0].room_id != agents[1].room_id, "Agents should start in different rooms at difficulty >= 3"
+
+    def test_cooperative_clue_in_start_room(self):
+        from agenttown.scenarios.storyteller import build_story_world
+
+        world, _, _ = build_story_world(
+            theme="gothic_manor",
+            premise="A paranoid alchemist hid his formula",
+            difficulty=3,
+        )
+        start_room = world.state.rooms[list(world.state.agents.values())[0].room_id]
+        coop_entities = [
+            e for e in start_room.entities.values()
+            if e.properties.get("cooperative")
+        ]
+        assert len(coop_entities) >= 1, "Start room should have a cooperative clue"
+
+    def test_final_ward_requires_password(self):
+        from agenttown.scenarios.storyteller import build_story_world
+
+        world, _, meta = build_story_world(
+            theme="gothic_manor",
+            premise="A paranoid alchemist hid his formula",
+            difficulty=3,
+        )
+        # Find the Final Ward entity
+        ward = None
+        for room in world.state.rooms.values():
+            for entity in room.entities.values():
+                if entity.name == "Final Ward":
+                    ward = entity
+                    break
+        assert ward is not None, "Final Ward should exist at difficulty >= 3"
+        assert ward.properties.get("puzzle_type") == "password_door"
+        assert ward.properties.get("cooperative") is True
+
+    def test_escape_chain_has_cooperative_step(self):
+        from agenttown.scenarios.storyteller import build_story_world
+
+        world, _, meta = build_story_world(
+            theme="gothic_manor",
+            premise="A paranoid alchemist hid his formula",
+            difficulty=3,
+        )
+        chain = meta["escape_chain"]
+        coop_steps = [s for s in chain if s.get("cooperative")]
+        assert len(coop_steps) >= 1, "Escape chain should have cooperative steps"
+
+    def test_low_difficulty_no_coop(self):
+        """Difficulty 2 should NOT have cooperative puzzles."""
+        from agenttown.scenarios.storyteller import build_story_world
+
+        world, _, meta = build_story_world(
+            theme="gothic_manor",
+            premise="A simple test",
+            difficulty=2,
+        )
+        agents = list(world.state.agents.values())
+        # At difficulty 2, agents start in same room
+        assert agents[0].room_id == agents[1].room_id
+
+
+# ---------------------------------------------------------------------------
 # Clue reachability validation
 # ---------------------------------------------------------------------------
 
@@ -353,3 +434,102 @@ class TestFullPipeline:
         r1_names = {r.name for r in w1.state.rooms.values()}
         r2_names = {r.name for r in w2.state.rooms.values()}
         assert r1_names != r2_names
+
+
+# ---------------------------------------------------------------------------
+# AI world bible generation
+# ---------------------------------------------------------------------------
+
+class TestAIWorldBible:
+    """Tests for AI-powered world bible generation."""
+
+    def test_generate_world_bible_ai_fallback(self):
+        """When API call fails, falls back to deterministic generation."""
+        from agenttown.scenarios.storyteller import generate_world_bible_ai, generate_world_bible
+
+        with patch("agenttown.scenarios.storyteller.get_api_key", return_value="fake-key"):
+            with patch("agenttown.scenarios.storyteller.Anthropic") as mock_cls:
+                mock_client = MagicMock()
+                mock_cls.return_value = mock_client
+                mock_client.messages.create.side_effect = Exception("API unavailable")
+
+                result = generate_world_bible_ai(
+                    theme="gothic_manor",
+                    premise="A test premise",
+                    num_characters=3,
+                    difficulty=3,
+                )
+
+        # Should return valid bible from fallback
+        assert "setting" in result
+        assert "characters" in result
+        assert "inciting_incident" in result
+        assert len(result["characters"]) == 3
+        assert result["setting"]["theme"] == "gothic_manor"
+
+        # Verify it matches deterministic output
+        expected = generate_world_bible(
+            theme="gothic_manor",
+            premise="A test premise",
+            num_characters=3,
+            difficulty=3,
+        )
+        assert result == expected
+
+    def test_generate_world_bible_ai_format(self):
+        """If API is available, verify output format matches deterministic version."""
+        try:
+            from agenttown.auth import get_api_key
+            key = get_api_key()
+            if not key:
+                pytest.skip("No API key available")
+        except Exception:
+            pytest.skip("Cannot obtain API key")
+
+        try:
+            from anthropic import Anthropic
+        except ImportError:
+            pytest.skip("anthropic package not installed")
+
+        from agenttown.scenarios.storyteller import generate_world_bible_ai, VALID_TRAITS
+
+        result = generate_world_bible_ai(
+            theme="gothic_manor",
+            premise="A mysterious alchemist vanished leaving traps behind",
+            num_characters=3,
+            difficulty=3,
+        )
+
+        # Validate top-level structure
+        assert "setting" in result
+        assert "characters" in result
+        assert "inciting_incident" in result
+
+        # Setting structure
+        setting = result["setting"]
+        assert "theme" in setting
+        assert "premise" in setting
+        assert "rooms" in setting
+        assert len(setting["rooms"]) >= 3
+        for room in setting["rooms"]:
+            assert "name" in room
+            assert "desc" in room
+
+        # Character structure
+        assert len(result["characters"]) == 3
+        for char in result["characters"]:
+            assert "name" in char
+            assert "desc" in char
+            assert "trait" in char
+            assert "secret" in char
+            assert "role" in char
+            assert "relationships" in char
+            assert char["trait"] in VALID_TRAITS
+            assert len(char["relationships"]) >= 1
+            for rel in char["relationships"]:
+                assert "target" in rel
+                assert "type" in rel
+
+        # Inciting incident is a non-empty string
+        assert isinstance(result["inciting_incident"], str)
+        assert len(result["inciting_incident"]) > 10
