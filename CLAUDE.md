@@ -30,12 +30,9 @@ A virtual world where LLM-powered agents live, interact with each other, and sol
 - **Scripts**: `start_qqwweerr.sh` (start/stop/restart) and `run_qqwweerr.py` (server launcher). Token `qqwweerr` is in the filenames so processes are identifiable.
 - **Usage**:
   ```bash
-  bash start_qqwweerr.sh start          # starts server + Cloudflare tunnel
-  bash start_qqwweerr.sh restart        # restarts server ONLY — tunnel stays up
-  bash start_qqwweerr.sh stop           # stops server only
-  bash start_qqwweerr.sh stop_all       # stops server + tunnel
-  bash start_qqwweerr.sh start_tunnel   # starts tunnel only
-  bash start_qqwweerr.sh stop_tunnel    # stops tunnel only
+  bash start_qqwweerr.sh start          # starts server
+  bash start_qqwweerr.sh restart        # restarts server
+  bash start_qqwweerr.sh stop           # stops server
   ```
-- **Port**: `8741`. Tunnel URL is logged to `/tmp/agenttown_tunnel.log`.
-- **Important**: Do NOT kill the Cloudflare tunnel on restart — quick tunnels get a new random URL each time, so the user would lose their link. `restart` only recycles the server; the tunnel keeps proxying to the same port.
+- **Port**: `8741`.
+- **Tunnels**: Use the `/tunnel` skill or WebTunnelHub directly (not this script).

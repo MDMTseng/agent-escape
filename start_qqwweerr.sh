@@ -7,18 +7,11 @@
 # - On Windows/MSYS2, `ps aux` does NOT show script arguments — only the
 #   bare executable (e.g. /c/dlcv/python). So `ps aux | grep qqwweerr` won't
 #   work. Use `wmic` instead to match by command line.
-# - Cloudflare quick tunnels get a new random URL each time they start.
-#   Do NOT kill/restart the tunnel unless necessary — the user would have
-#   to use the new URL. On restart, only the server process is recycled;
-#   the tunnel stays up and keeps proxying to the same localhost port.
-# - The tunnel must be started AFTER the server is up, so we sleep 2s first.
-# - Only use `start_tunnel` or `stop_tunnel` when you explicitly need to
-#   create or destroy the tunnel.
+# - For tunnels, use the /tunnel skill or WebTunnelHub directly.
 # ============================================================================
 
 PORT=8741
 TOKEN="qqwweerr"
-TUNNEL_LOG="/tmp/agenttown_tunnel.log"
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Load keys from .env — export each KEY=VALUE line
@@ -72,30 +65,9 @@ stop_server() {
     fi
 }
 
-start_tunnel() {
-    echo "Starting Cloudflare tunnel..."
-    nohup cloudflared tunnel --url "http://localhost:$PORT" > "$TUNNEL_LOG" 2>&1 &
-    sleep 5
-
-    PUBLIC_URL=$(grep -o 'https://[^ |]*trycloudflare.com' "$TUNNEL_LOG")
-    if [ -n "$PUBLIC_URL" ]; then
-        echo "Tunnel is up at $PUBLIC_URL"
-    else
-        echo "WARNING: Could not get tunnel URL. Check $TUNNEL_LOG"
-    fi
-}
-
-stop_tunnel() {
-    taskkill //F //IM cloudflared.exe > /dev/null 2>&1
-    echo "Tunnel stopped"
-}
-
 case "${1:-start}" in
-    start)         start_server; start_tunnel ;;
-    stop)          stop_server; stop_tunnel ;;
-    restart)       stop_server; sleep 1; start_server ;;   # tunnel stays up
-    start_tunnel)  start_tunnel ;;
-    stop_tunnel)   stop_tunnel ;;
-    stop_all)      stop_server; stop_tunnel ;;
-    *)             echo "Usage: $0 {start|stop|restart|start_tunnel|stop_tunnel|stop_all}" ;;
+    start)         start_server ;;
+    stop)          stop_server ;;
+    restart)       stop_server; sleep 1; start_server ;;
+    *)             echo "Usage: $0 {start|stop|restart}" ;;
 esac
