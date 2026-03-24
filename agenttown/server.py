@@ -123,6 +123,9 @@ async def lifespan(app: FastAPI):
         tick = sim_world.tick
         agents = list(sim_world.state.agents.values())
         perceptions = {a.id: sim_world.perceive(a) for a in agents}
+        # Clear last results after building perception (agent has now "seen" them)
+        for a in agents:
+            sim_world.clear_last_results(a.id)
 
         logger.info(f"{'='*60}")
         logger.info(f"TICK {tick}")

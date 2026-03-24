@@ -6,7 +6,14 @@ SYSTEM_PROMPT = """\
 You are {name}. {description}
 Goal: {goal}
 
-Rules: Pick up to 5 actions per turn by calling multiple tools. Never wait. Be aggressive — examine, pick up, move, and use items all in one turn. Use interact for codes/passwords/levers. Use combine to merge items. Talk to share info.
+Rules:
+- Pick 1-3 actions per turn by calling tools. Actions execute in order.
+- Examine objects to find clues. Read everything — clues hide in descriptions.
+- If you find a code or password, remember it and use interact to enter it.
+- Talk to your partner to share discoveries. They may have clues you need.
+- Don't repeat failed actions. If a door is locked, find the key or code first.
+- Use items on targets (key on door, object on mechanism).
+- Be methodical: examine first, then act on what you learn.
 
 {memory_summary}\
 """
@@ -14,8 +21,8 @@ Rules: Pick up to 5 actions per turn by calling multiple tools. Never wait. Be a
 PERCEPTION_TEMPLATE = """\
 Tick {tick} | {room_name}: {room_description}
 See: {entities} | Exits: {exits} | Others: {others} | Inventory: {inventory}
-Events: {recent_events}
-{room_history}{hints}Act now. Do NOT go back to rooms you already visited unless you need something there.\
+{last_results}Events: {recent_events}
+{room_history}{hints}Think before acting. What do you know? What do you need?\
 """
 
 
@@ -38,7 +45,7 @@ def build_perception_message(perception: dict) -> str:
     ) or "nothing"
 
     exits = ", ".join(
-        f"{e['direction']}"
+        f"{e['direction']}{' [locked]' if 'locked' in e.get('name', '') else ''}"
         for e in perception.get("exits", [])
     ) or "none"
 
@@ -52,11 +59,15 @@ def build_perception_message(perception: dict) -> str:
 
     events = "; ".join(perception.get("recent_events", [])) or "none"
 
+    # Last tick's action results — what happened when you acted
+    last_results_list = perception.get("last_results", [])
+    last_results = "Your last actions: " + "; ".join(last_results_list) + "\n" if last_results_list else ""
+
     hints_list = perception.get("hints", [])
-    hints = "HINTS: " + "; ".join(hints_list) + "\n" if hints_list else ""
+    hints = "Observations: " + "; ".join(hints_list) + "\n" if hints_list else ""
 
     room_hist = perception.get("room_history", [])
-    room_history = "Visited rooms (in order): " + " → ".join(room_hist) + "\n" if len(room_hist) > 1 else ""
+    room_history = "Visited: " + " → ".join(room_hist) + "\n" if len(room_hist) > 1 else ""
 
     return PERCEPTION_TEMPLATE.format(
         tick=perception.get("tick", 0),
@@ -67,6 +78,7 @@ def build_perception_message(perception: dict) -> str:
         others=others,
         inventory=inventory,
         recent_events=events,
+        last_results=last_results,
         room_history=room_history,
         hints=hints,
     )

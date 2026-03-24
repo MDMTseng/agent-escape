@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from typing import Any
 
 import anthropic
@@ -25,9 +26,26 @@ from .prompts import AGENT_TOOLS, build_perception_message, build_system_prompt
 logger = logging.getLogger(__name__)
 
 REFLECT_PROMPT = """\
-Agent {name}, goal: {goal}. Memories: {memories}. Facts: {working_memory}.
-Write 1 sentence: what to do next.\
+You are {name}. Goal: {goal}.
+Facts: {working_memory}
+Recent: {memories}
+Consider: What unsolved puzzles remain? What info am I missing? \
+What did others tell me I haven't acted on? What actions failed — don't repeat? \
+What should I prioritize next?
+Reply in 1-2 sentences with your plan.\
 """
+
+_KEY_OUTCOME_PATTERNS = re.compile(
+    r'(solv|fail|unlock|lock|discov|reveal|open|can\'t|tries to|says|told|talk)',
+    re.IGNORECASE,
+)
+
+
+def _extract_key_outcomes(events: list[str]) -> str:
+    """Extract the most important event descriptions for structured memory."""
+    key = [e.strip()[:80] for e in events if _KEY_OUTCOME_PATTERNS.search(e)]
+    return "; ".join(key[:4]) if key else ""
+
 
 # Convert tool definitions to Anthropic format
 ANTHROPIC_TOOLS = [
@@ -130,12 +148,22 @@ class LLMBrain:
 
         # --- Memory processing ---
         events_text = "\n".join(perception.get("recent_events", []))
+        action_names = ", ".join(a.type for a in actions if hasattr(a, "type"))
+
+        # Build structured memory summary instead of raw events
+        key_outcomes = _extract_key_outcomes(perception.get("recent_events", []))
+        if key_outcomes:
+            summary = f"Tick {tick}: {action_names}. Results: {key_outcomes}"
+        elif action_names:
+            summary = f"Tick {tick}: {action_names}."
+        else:
+            summary = perception_text[:200]
+
         self._memory.record(
             tick=tick,
-            content=events_text or perception_text[:200],
+            content=summary,
             category="observation",
         )
-        action_names = ", ".join(a.type for a in actions if hasattr(a, "type"))
         self._extract_facts(agent, events_text, action_names, tick)
 
         if self._memory.should_reflect():
@@ -148,6 +176,7 @@ class LLMBrain:
         import re
         facts = list(self._memory.get_working_memory())
         importance = 2
+        events_lower = events.lower()
 
         # Extract quoted text (clues, inscriptions)
         quotes = re.findall(r'"([^"]{5,80})"', events)
@@ -165,11 +194,48 @@ class LLMBrain:
                 facts.append(fact)
                 importance = 5
 
-        # Track key events
-        if "unlock" in events.lower() or "revealed" in events.lower():
+        # Track FAILED actions
+        for pattern in [r"tries to (.{5,60})", r"can't (.{5,60})", r"locked (.{5,60})"]:
+            for match in re.findall(pattern, events_lower):
+                fact = f"FAILED: {match.strip()}"
+                if fact not in facts:
+                    facts.append(fact)
+                    importance = max(importance, 3)
+
+        # Track COMMUNICATION — extract speech from Talk/says events
+        speech_patterns = re.findall(r'(?:says|told|tells|whispers)[:\s]+"?([^"\n]{5,80})"?', events, re.IGNORECASE)
+        talk_patterns = re.findall(r'Talk[:\s]+(.{5,80})', events)
+        for msg in speech_patterns + talk_patterns:
+            fact = msg.strip()[:60]
+            if fact not in facts:
+                facts.append(fact)
+                importance = max(importance, 3)
+
+        # Track DISCOVERIES
+        if re.search(r'\b(reveals?|discovers?|opens?)\b', events_lower):
+            # Extract what was discovered
+            for pattern in [r'(\w+)\s+reveals?\s+(.{5,60})', r'discovers?\s+(.{5,60})', r'opens?\s+(.{5,60})']:
+                for match in re.findall(pattern, events_lower):
+                    desc = match if isinstance(match, str) else " ".join(match)
+                    fact = f"DISCOVERED: {desc.strip()[:50]}"
+                    if fact not in facts:
+                        facts.append(fact)
             importance = 5
-        elif "picks up" in events.lower() or "examines" in events.lower():
-            importance = 3
+
+        # Track PUZZLE STATE — solved/unlocked
+        solved_matches = re.findall(r'(\w[\w\s]{2,30})\s+(?:solved|unlocked)', events_lower)
+        unlocked_matches = re.findall(r'(?:solved|unlocked)\s+(?:the\s+)?(\w[\w\s]{2,30})', events_lower)
+        for name in solved_matches + unlocked_matches:
+            fact = f"SOLVED: {name.strip()[:40]}"
+            if fact not in facts:
+                facts.append(fact)
+                importance = 5
+
+        # Track key events (legacy)
+        if "unlock" in events_lower or "revealed" in events_lower:
+            importance = 5
+        elif "picks up" in events_lower or "examines" in events_lower:
+            importance = max(importance, 3)
 
         # Cap at 10 facts, keep newest
         self._memory.update_working_memory(facts[-10:])

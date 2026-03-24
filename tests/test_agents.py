@@ -6,7 +6,8 @@ from agenttown.agents.prompts import (
     build_perception_message,
     build_system_prompt,
 )
-from agenttown.agents.brain import _parse_json
+from agenttown.agents.brain import _parse_json, _extract_key_outcomes, REFLECT_PROMPT, LLMBrain
+from agenttown.world.models import AgentState
 
 
 class TestAgentMemory:
@@ -224,3 +225,161 @@ class TestParseJson:
     def test_empty_string(self):
         result = _parse_json("")
         assert result is None
+
+
+class TestReflectPrompt:
+    def test_reflect_prompt_contains_key_questions(self):
+        """The new reflect prompt should ask about unsolved puzzles, failures, etc."""
+        assert "unsolved puzzles" in REFLECT_PROMPT.lower()
+        assert "missing" in REFLECT_PROMPT.lower()
+        assert "failed" in REFLECT_PROMPT.lower()
+        assert "prioritize" in REFLECT_PROMPT.lower()
+
+    def test_reflect_prompt_format_fields(self):
+        """Prompt must accept all four format fields."""
+        result = REFLECT_PROMPT.format(
+            name="Alice",
+            goal="Escape",
+            memories="T1:found key; T2:tried door",
+            working_memory="code: 1847; door locked",
+        )
+        assert "Alice" in result
+        assert "Escape" in result
+        assert "T1:found key" in result
+        assert "code: 1847" in result
+
+    def test_reflect_prompt_compact(self):
+        """Prompt should be compact (< 200 tokens ~ roughly < 800 chars)."""
+        assert len(REFLECT_PROMPT) < 800
+
+
+class TestExtractKeyOutcomes:
+    def test_extracts_solve_events(self):
+        events = ["Alice solved the puzzle", "Nothing happened"]
+        result = _extract_key_outcomes(events)
+        assert "solved" in result.lower()
+
+    def test_extracts_fail_events(self):
+        events = ["Alice tries to open the door", "Bob can't reach the shelf"]
+        result = _extract_key_outcomes(events)
+        assert "tries to" in result
+        assert "can't" in result
+
+    def test_extracts_talk_events(self):
+        events = ["Bob says: the code is hidden", "Wind blows"]
+        result = _extract_key_outcomes(events)
+        assert "says" in result
+
+    def test_extracts_discovery_events(self):
+        events = ["The painting reveals a secret passage"]
+        result = _extract_key_outcomes(events)
+        assert "reveals" in result
+
+    def test_no_key_outcomes(self):
+        events = ["Wind blows gently", "The room is quiet"]
+        result = _extract_key_outcomes(events)
+        assert result == ""
+
+    def test_limits_to_four(self):
+        events = [
+            "Alice fails attempt 1",
+            "Bob fails attempt 2",
+            "Carol fails attempt 3",
+            "Dave fails attempt 4",
+            "Eve fails attempt 5",
+        ]
+        result = _extract_key_outcomes(events)
+        assert result.count(";") <= 3  # max 4 items = max 3 semicolons
+
+
+class TestExtractFactsImproved:
+    """Test the improved _extract_facts with failure, communication, discovery, and solve tracking."""
+
+    def _make_brain_and_agent(self):
+        """Create a brain (bypassing API client) and a test agent."""
+        # Patch to avoid needing a real API key
+        import unittest.mock as mock
+        with mock.patch("agenttown.agents.brain.get_api_key", return_value="fake-key"):
+            with mock.patch("anthropic.Anthropic"):
+                brain = LLMBrain(api_key="fake-key")
+        agent = AgentState(name="Alice", room_id="r1", goal="Escape the room")
+        return brain, agent
+
+    def test_failed_actions_tracked(self):
+        brain, agent = self._make_brain_and_agent()
+        events = "Alice tries to open the heavy door but it won't budge"
+        brain._extract_facts(agent, events, "use", tick=1)
+        wm = brain.memory.get_working_memory()
+        assert any("FAILED:" in f for f in wm)
+
+    def test_cant_actions_tracked(self):
+        brain, agent = self._make_brain_and_agent()
+        events = "Alice can't reach the top shelf without a ladder"
+        brain._extract_facts(agent, events, "use", tick=1)
+        wm = brain.memory.get_working_memory()
+        assert any("FAILED:" in f for f in wm)
+
+    def test_locked_tracked(self):
+        brain, agent = self._make_brain_and_agent()
+        # Need stream entry for importance update
+        brain.memory.record(tick=1, content="test")
+        events = "The door is locked and won't open"
+        brain._extract_facts(agent, events, "use", tick=1)
+        wm = brain.memory.get_working_memory()
+        assert any("FAILED:" in f for f in wm)
+
+    def test_communication_tracked(self):
+        brain, agent = self._make_brain_and_agent()
+        brain.memory.record(tick=1, content="test")
+        events = 'Bob says: "The code is hidden behind the painting"'
+        brain._extract_facts(agent, events, "talk", tick=1)
+        wm = brain.memory.get_working_memory()
+        # Should capture the speech content OR the quoted clue
+        assert len(wm) > 0
+        combined = " ".join(wm)
+        assert "code" in combined.lower() or "painting" in combined.lower()
+
+    def test_discovery_importance_5(self):
+        brain, agent = self._make_brain_and_agent()
+        brain.memory.record(tick=1, content="test")
+        events = "The old painting reveals a hidden compartment with a golden key"
+        brain._extract_facts(agent, events, "examine", tick=1)
+        wm = brain.memory.get_working_memory()
+        assert any("DISCOVERED:" in f for f in wm)
+        # Importance should be 5
+        assert brain.memory._stream[-1].importance == 5
+
+    def test_solved_tracked(self):
+        brain, agent = self._make_brain_and_agent()
+        brain.memory.record(tick=1, content="test")
+        events = "The ancient puzzle solved after entering the code"
+        brain._extract_facts(agent, events, "use", tick=1)
+        wm = brain.memory.get_working_memory()
+        assert any("SOLVED:" in f for f in wm)
+
+    def test_unlocked_tracked(self):
+        brain, agent = self._make_brain_and_agent()
+        brain.memory.record(tick=1, content="test")
+        events = "Alice unlocked the chest with the brass key"
+        brain._extract_facts(agent, events, "use", tick=1)
+        wm = brain.memory.get_working_memory()
+        assert any("SOLVED:" in f for f in wm)
+        assert brain.memory._stream[-1].importance == 5
+
+    def test_codes_still_extracted(self):
+        """Verify legacy code extraction still works."""
+        brain, agent = self._make_brain_and_agent()
+        brain.memory.record(tick=1, content="test")
+        events = 'The inscription reads "The answer is 1847"'
+        brain._extract_facts(agent, events, "examine", tick=1)
+        wm = brain.memory.get_working_memory()
+        assert any("code: 1847" in f for f in wm)
+
+    def test_quotes_still_extracted(self):
+        """Verify legacy quote extraction still works."""
+        brain, agent = self._make_brain_and_agent()
+        brain.memory.record(tick=1, content="test")
+        events = 'The wall has an inscription: "Seek the light beyond the shadow"'
+        brain._extract_facts(agent, events, "examine", tick=1)
+        wm = brain.memory.get_working_memory()
+        assert any("Seek the light" in f for f in wm)
