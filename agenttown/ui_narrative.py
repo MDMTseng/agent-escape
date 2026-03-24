@@ -27,6 +27,29 @@ NARRATIVE_HTML = """\
             color: #c9d1d9;
         }
 
+        /* ===== ATMOSPHERIC EFFECTS ===== */
+        body::before {
+            content: '';
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.4) 100%);
+            pointer-events: none; z-index: 50;
+        }
+        body::after {
+            content: '';
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+            pointer-events: none; z-index: 49; opacity: 0.5;
+        }
+
+        /* ===== SCREEN TRANSITIONS ===== */
+        .screen-fade-in {
+            animation: screenFadeIn 0.6s ease-out forwards;
+        }
+        @keyframes screenFadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
         /* ===== SCROLLBAR ===== */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #0d1117; }
@@ -268,24 +291,38 @@ NARRATIVE_HTML = """\
             padding: 20px; overflow: hidden; position: relative;
         }
         .feed-card {
-            background: #161b22; border: 1px solid #30363d; border-radius: 12px;
-            padding: 28px 32px; max-width: 720px; width: 100%;
-            line-height: 1.9; font-size: 16px; color: #e6edf3;
-            box-shadow: 0 4px 24px rgba(0,0,0,0.5);
-            min-height: 120px;
+            background: linear-gradient(180deg, #161b22 0%, #0f1318 100%);
+            border: 1px solid #30363d; border-radius: 12px;
+            padding: 32px 36px; max-width: 720px; width: 100%;
+            line-height: 2.0; font-size: 17px; color: #e6edf3;
+            box-shadow: 0 6px 32px rgba(0,0,0,0.6);
+            min-height: 140px;
+            animation: cardFadeIn 0.5s ease-out;
+        }
+        @keyframes cardFadeIn {
+            from { opacity: 0; transform: scale(0.98); }
+            to { opacity: 1; transform: scale(1); }
         }
         .feed-card .fc-chapter {
-            font-family: monospace; font-size: 11px; color: #e3b341;
-            letter-spacing: 2px; margin-bottom: 12px;
+            font-family: monospace; font-size: 10px; color: #e3b341;
+            letter-spacing: 3px; text-transform: uppercase; margin-bottom: 16px;
+            opacity: 0.8;
         }
-        .feed-card .fc-narrative { margin-bottom: 16px; }
+        .feed-card .fc-narrative {
+            margin-bottom: 20px; font-style: italic; color: #d4cfc4;
+            text-shadow: 0 0 40px rgba(227, 179, 65, 0.05);
+        }
         .feed-card .fc-events {
             font-family: 'Courier New', monospace; font-size: 11px;
-            color: #8b949e; border-top: 1px solid #21262d; padding-top: 12px;
+            color: #6e7681; border-top: 1px solid #21262d; padding-top: 12px;
             line-height: 1.6;
         }
-        .feed-card .fc-events .ev-line { padding: 1px 0; }
-        .feed-card.finished { border-color: #3fb950; }
+        .feed-card .fc-events .ev-line { padding: 2px 0; }
+        .feed-card .fc-events .ev-line.ev-discover { color: #e3b341; }
+        .feed-card .fc-events .ev-line.ev-solve { color: #3fb950; }
+        .feed-card .fc-events .ev-line.ev-fail { color: #f85149; }
+        .feed-card .fc-events .ev-line.ev-talk { color: #c9d1d9; }
+        .feed-card.finished { border-color: #3fb950; box-shadow: 0 0 20px rgba(63, 185, 80, 0.1); }
         .feed-card.finished .fc-chapter { color: #3fb950; }
 
         /* Card navigation */
@@ -912,6 +949,7 @@ function showRevealScreen(data) {
 
     seedScreen.style.display = 'none';
     revealScreen.style.display = 'flex';
+    revealScreen.classList.add('screen-fade-in');
 
     // Title
     const themeNames = {gothic_manor: 'Gothic Manor', sci_fi_lab: 'Sci-Fi Lab', ancient_tomb: 'Ancient Tomb'};
@@ -978,6 +1016,7 @@ function beginSimulation() {
     const feedScreen = document.getElementById('feed-screen');
     revealScreen.style.display = 'none';
     feedScreen.style.display = 'flex';
+    feedScreen.classList.add('screen-fade-in');
     storyScreen = 'feed';
 
     // Set title
@@ -1016,7 +1055,10 @@ function renderFeedCard() {
     let html = `<div class="fc-chapter">CHAPTER ${c.tick + 1}</div>`;
     html += `<div class="fc-narrative">${(c.narrative || 'No narration.').replace(/\\n/g, '<br>')}</div>`;
     if (c.events && c.events.length) {
-        html += `<div class="fc-events">${c.events.map(e => `<div class="ev-line">${e.description}</div>`).join('')}</div>`;
+        html += `<div class="fc-events">${c.events.map(e => {
+            const cls = e.type === 'examine' ? 'ev-discover' : e.type === 'state_change' ? 'ev-solve' : e.type === 'fail' ? 'ev-fail' : e.type === 'talk' ? 'ev-talk' : '';
+            return `<div class="ev-line ${cls}">${e.description}</div>`;
+        }).join('')}</div>`;
     }
     card.innerHTML = html;
     card.className = 'feed-card' + (isFinished ? ' finished' : '');
