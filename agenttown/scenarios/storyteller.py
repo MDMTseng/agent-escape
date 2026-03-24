@@ -16,6 +16,9 @@ Every clue exists because humans are imperfect and leave traces.
 from __future__ import annotations
 
 import hashlib
+import json
+import logging
+import os
 import random
 from typing import Any
 
@@ -29,6 +32,13 @@ from agenttown.world.models import (
     WorldState,
 )
 from agenttown.world.world import World
+
+try:
+    from anthropic import Anthropic
+except ImportError:
+    Anthropic = None  # type: ignore[assignment,misc]
+
+from agenttown.auth import get_api_key
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +211,146 @@ def generate_world_bible(
         "characters": characters,
         "inciting_incident": incident,
     }
+
+
+logger = logging.getLogger(__name__)
+
+# JSON schema for structured AI output
+_WORLD_BIBLE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "characters": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "desc": {"type": "string"},
+                    "trait": {"type": "string", "enum": VALID_TRAITS},
+                    "secret": {"type": "string"},
+                    "role": {"type": "string", "enum": ["builder", "inhabitant", "visitor", "guardian"]},
+                    "relationships": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "target": {"type": "string"},
+                                "type": {"type": "string"},
+                            },
+                            "required": ["target", "type"],
+                        },
+                    },
+                },
+                "required": ["name", "desc", "trait", "secret", "role", "relationships"],
+            },
+        },
+        "inciting_incident": {"type": "string"},
+        "rooms": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "desc": {"type": "string"},
+                },
+                "required": ["name", "desc"],
+            },
+        },
+    },
+    "required": ["characters", "inciting_incident", "rooms"],
+}
+
+
+def generate_world_bible_ai(
+    theme: str,
+    premise: str,
+    num_characters: int = 3,
+    difficulty: int = 3,
+) -> dict[str, Any]:
+    """Generate a world bible using the Claude API for rich, unique content.
+
+    Falls back to deterministic generate_world_bible() on any API failure.
+    """
+    try:
+        if Anthropic is None:
+            raise ImportError("anthropic package not installed")
+
+        api_key = get_api_key()
+        if not api_key:
+            raise ValueError("No API key available")
+
+        client = Anthropic(api_key=api_key)
+        model = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5")
+
+        theme_key = theme.replace(" ", "_").replace("-", "_").lower()
+        if theme_key not in THEME_ROOMS:
+            theme_key = "gothic_manor"
+
+        num_rooms = min(3 + difficulty, len(THEME_ROOMS[theme_key]))
+
+        prompt = (
+            f"Create a world bible for a {theme_key.replace('_', ' ')} escape room.\n"
+            f"Premise: {premise}\n"
+            f"Generate {num_characters} characters and {num_rooms} rooms.\n\n"
+            f"Rules:\n"
+            f"- Each character needs a unique name, description, a trait from this list: {VALID_TRAITS}, "
+            f"a secret, a role (builder/inhabitant/visitor/guardian), and relationships to other characters.\n"
+            f"- Each relationship has a target (another character's name) and type (e.g. distrusts, protects, fears).\n"
+            f"- Every character must have at least one relationship.\n"
+            f"- Create an atmospheric inciting incident explaining why puzzles exist.\n"
+            f"- Room descriptions should be vivid and tied to the theme. Last room should be an exit/escape room.\n"
+            f"- Each room has 'name' and 'desc' fields.\n"
+        )
+
+        response = client.messages.create(
+            model=model,
+            max_tokens=1024,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "world_bible",
+                    "strict": True,
+                    "schema": _WORLD_BIBLE_SCHEMA,
+                },
+            },
+        )
+
+        content = response.content[0].text
+        data = json.loads(content)
+
+        # Validate basic structure
+        characters = data["characters"]
+        if len(characters) != num_characters:
+            raise ValueError(f"Expected {num_characters} characters, got {len(characters)}")
+
+        rooms = data["rooms"]
+        if len(rooms) < 3:
+            raise ValueError(f"Expected at least 3 rooms, got {len(rooms)}")
+
+        # Validate traits
+        for char in characters:
+            if char["trait"] not in VALID_TRAITS:
+                raise ValueError(f"Invalid trait: {char['trait']}")
+
+        return {
+            "setting": {
+                "theme": theme_key,
+                "premise": premise,
+                "rooms": rooms,
+            },
+            "characters": characters,
+            "inciting_incident": data["inciting_incident"],
+        }
+
+    except Exception as e:
+        logger.warning(f"AI world bible generation failed, falling back to deterministic: {e}")
+        return generate_world_bible(
+            theme=theme,
+            premise=premise,
+            num_characters=num_characters,
+            difficulty=difficulty,
+        )
 
 
 def generate_clues_for_puzzle(
@@ -665,20 +815,80 @@ def _build_rooms_and_puzzles(
         "check_type": "finish",
     })
 
-    # --- Create agents (the investigators) ---
+    # --- Cooperative puzzle: information asymmetry ---
+    # A clue in the start room that must be spoken at a ward near the exit.
+    # Agents start in different rooms, forcing Talk to share the password.
+    if len(room_ids) >= 3 and difficulty >= 3:
+        coop_password = bible["characters"][0]["name"].lower()
+        coop_room = ws.rooms[start_room_id]
+        coop_clue_id = _stable_id("coop-clue")
+        coop_clue = Entity(
+            id=coop_clue_id,
+            name="Whispered Inscription",
+            description="Faint words etched into the wall, barely visible.",
+            properties={
+                "on_examine": {
+                    "message": (
+                        f'The inscription reads: "When all seems lost, '
+                        f"speak the word '{coop_password}' to the final ward.\""
+                    ),
+                },
+                "cooperative": True,
+            },
+        )
+        coop_room.add_entity(coop_clue)
+
+        # Ward near the exit
+        exit_room = ws.rooms[exit_room_id]
+        coop_ward_id = _stable_id("coop-ward")
+        coop_ward = Entity(
+            id=coop_ward_id,
+            name="Final Ward",
+            description="A shimmering barrier. It seems to listen for a spoken word.",
+            properties={
+                "puzzle_type": "password_door",
+                "password": coop_password,
+                "case_sensitive": False,
+                "cooperative": True,
+                "on_solve": {
+                    "set_state": "solved",
+                    "message": "The Final Ward dissolves! The way is clear.",
+                },
+            },
+        )
+        exit_room.add_entity(coop_ward)
+        escape_chain.append({
+            "step": len(escape_chain) + 1,
+            "action": "solve",
+            "target": "Final Ward",
+            "entity_id": coop_ward_id,
+            "room": exit_room.name,
+            "room_id": exit_room_id,
+            "description": f"Say '{coop_password}' to the Final Ward (requires cooperation!)",
+            "status": "pending",
+            "check_type": "solve",
+            "cooperative": True,
+        })
+
+    # Renumber escape chain
+    for idx, step in enumerate(escape_chain):
+        step["step"] = idx + 1
+
+    # --- Create agents in DIFFERENT rooms ---
+    agent_b_room = room_ids[1] if len(room_ids) >= 3 and difficulty >= 3 else start_room_id
     agent_a = AgentState(
         id="investigator_a",
         name="Alice",
         description="A sharp-eyed scholar who reads between the lines",
         room_id=start_room_id,
-        goal="Examine everything. Read clues. Share discoveries with your partner. Find a way out.",
+        goal="Examine everything carefully. Share ALL discoveries with Bob via Talk — he needs your clues! Find a way out together.",
     )
     agent_b = AgentState(
         id="investigator_b",
         name="Bob",
         description="A bold explorer who acts first and thinks later",
-        room_id=start_room_id,
-        goal="Explore rooms. Try doors and mechanisms. Use items. Work with your partner to escape.",
+        room_id=agent_b_room,
+        goal="Explore rooms, try doors and mechanisms. Ask Alice what she's found — she has clues you need. Work together to escape.",
     )
     ws.add_agent(agent_a)
     ws.add_agent(agent_b)
@@ -784,8 +994,12 @@ def build_story_world(
     premise: str,
     difficulty: int = 3,
     num_characters: int = 3,
+    use_ai: bool = False,
 ) -> tuple[World, list[str], dict[str, Any]]:
     """Full pipeline: story seed → playable World + metadata.
+
+    Args:
+        use_ai: If True, use AI-powered world bible generation via Claude API.
 
     Returns:
         (world, agent_ids, metadata)
@@ -794,7 +1008,8 @@ def build_story_world(
     rng = random.Random(f"{theme}-{premise}-{difficulty}")
 
     # Step 1: Generate world bible
-    bible = generate_world_bible(
+    gen_fn = generate_world_bible_ai if use_ai else generate_world_bible
+    bible = gen_fn(
         theme=theme,
         premise=premise,
         num_characters=num_characters,
