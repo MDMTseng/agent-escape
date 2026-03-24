@@ -750,6 +750,114 @@ async def generate_architect(body: dict | None = None):
         return {"error": str(e)}
 
 
+@app.get("/api/themes")
+async def get_themes():
+    """Return available storyteller themes with room/character previews."""
+    from agenttown.scenarios.storyteller import THEME_ROOMS, THEME_CHARACTERS
+
+    themes = {}
+    for key in THEME_ROOMS:
+        themes[key] = {
+            "rooms": THEME_ROOMS[key],
+            "characters": THEME_CHARACTERS[key],
+        }
+    return {"themes": themes}
+
+
+@app.post("/api/generate-story")
+async def generate_story(body: dict | None = None):
+    """Generate a scenario using the story-driven world generation pipeline."""
+    global sim_world, sim_brains, sim_paused, sim_token_usage, sim_scenario, sim_escape_chain
+
+    if not body:
+        return {"error": "Missing request body"}
+
+    theme = body.get("theme", "gothic_manor")
+    premise = body.get("premise", "")
+    difficulty = body.get("difficulty", 3)
+    num_characters = body.get("num_characters", 3)
+
+    if not premise:
+        return {"error": "Premise is required"}
+
+    valid_themes = ("gothic_manor", "sci_fi_lab", "ancient_tomb")
+    if theme not in valid_themes:
+        return {"error": f"Invalid theme. Must be one of: {', '.join(valid_themes)}"}
+
+    if not (2 <= difficulty <= 5):
+        return {"error": "Difficulty must be between 2 and 5"}
+
+    if not (2 <= num_characters <= 5):
+        return {"error": "num_characters must be between 2 and 5"}
+
+    sim_paused = True
+
+    try:
+        from agenttown.scenarios.storyteller import build_story_world
+        import copy
+
+        await broadcast({
+            "type": "processing", "tick": 0, "step": "generating",
+            "message": f"Building story world: {theme}...",
+        })
+
+        sim_world, agent_ids, metadata = build_story_world(
+            theme=theme,
+            premise=premise,
+            difficulty=difficulty,
+            num_characters=num_characters,
+        )
+
+        sim_escape_chain = copy.deepcopy(metadata["escape_chain"])
+        sim_scenario = "storyteller"
+
+        # Create fresh brains
+        use_claude = os.environ.get("AGENTTOWN_CLAUDE", "").lower() in ("1", "true", "yes")
+        if use_claude:
+            from agenttown.agents.brain import LLMBrain
+            sim_brains.clear()
+            sim_brains.update({aid: LLMBrain() for aid in agent_ids})
+        else:
+            sim_brains.clear()
+            sim_brains.update({aid: RandomBrain() for aid in agent_ids})
+
+        sim_token_usage.update({"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+        _log_buffer.clear()
+
+        n_rooms = len(sim_world.state.rooms)
+        n_agents = len(agent_ids)
+        logger.info(f"Storyteller built: {n_rooms} rooms, {n_agents} agents, {len(sim_escape_chain)} chain steps")
+
+        await broadcast({
+            "type": "snapshot",
+            "tick": sim_world.tick,
+            "paused": True,
+            "world_state": sim_world.snapshot(),
+            "escape_chain": sim_escape_chain,
+        })
+
+        if sim_step_event:
+            sim_step_event.set()
+
+        return {
+            "status": "generated",
+            "rooms": n_rooms,
+            "agents": n_agents,
+            "chain_steps": len(sim_escape_chain),
+            "world_bible": {
+                "theme": metadata["theme"],
+                "premise": metadata["premise"],
+                "difficulty": metadata["difficulty"],
+                "characters": metadata["world_bible"]["characters"],
+                "inciting_incident": metadata["world_bible"]["inciting_incident"],
+            },
+        }
+
+    except Exception as e:
+        logger.error(f"Story generation failed: {e}")
+        return {"error": str(e)}
+
+
 @app.post("/api/auto-generate")
 async def auto_generate(body: dict | None = None):
     """Auto-generate theme or logic text using AI. Uses existing input as context."""
