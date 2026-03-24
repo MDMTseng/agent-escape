@@ -83,11 +83,11 @@ VALID_TRAITS = [
 ]
 
 TRAIT_PUZZLE_MAP = {
-    "paranoid": ["key_lock", "combination_lock", "sequential"],
+    "paranoid": ["key_lock", "combination_lock", "combination_lock"],
     "artistic": ["combination_lock", "password_door", "examine_reveal"],
     "scholarly": ["combination_lock", "password_door"],
     "sentimental": ["combination_lock", "examine_reveal"],
-    "meticulous": ["combination_lock", "sequential"],
+    "meticulous": ["combination_lock", "combination_lock"],
     "secretive": ["examine_reveal", "key_lock"],
     "protective": ["key_lock", "pressure_plate"],
     "grieving": ["examine_reveal", "password_door"],

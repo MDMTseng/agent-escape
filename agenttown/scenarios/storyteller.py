@@ -36,11 +36,11 @@ from agenttown.world.world import World
 # ---------------------------------------------------------------------------
 
 TRAIT_PUZZLE_MAP: dict[str, list[str]] = {
-    "paranoid": ["key_lock", "combination_lock", "sequential"],
+    "paranoid": ["key_lock", "combination_lock", "combination_lock"],
     "artistic": ["combination_lock", "password_door", "examine_reveal"],
     "scholarly": ["combination_lock", "password_door"],
     "sentimental": ["combination_lock", "examine_reveal"],
-    "meticulous": ["combination_lock", "sequential"],
+    "meticulous": ["combination_lock", "combination_lock"],
     "secretive": ["examine_reveal", "key_lock"],
     "protective": ["key_lock", "pressure_plate"],
     "grieving": ["examine_reveal", "password_door"],
@@ -356,6 +356,7 @@ def _build_rooms_and_puzzles(
     # Connect rooms with doors — linear chain + optional parallel paths
     directions = ["east", "south", "east", "south", "east", "south"]
     opposites = {"east": "west", "south": "north", "north": "south", "west": "east"}
+    used_puzzle_types: set[str] = set()
 
     for i in range(len(room_ids) - 1):
         dir_idx = i % len(directions)
@@ -366,12 +367,15 @@ def _build_rooms_and_puzzles(
         is_puzzle_door = room_ids[i + 1] in puzzle_rooms or room_ids[i + 1] == exit_room_id
         door_id = _stable_id(f"door-{i}")
 
-        # Pick puzzle type based on character trait
+        # Pick puzzle type based on character trait, avoiding repeats
         char_idx = i % len(characters)
         char = characters[char_idx]
         trait = char.get("trait", "paranoid")
         available_types = puzzles_for_trait(trait)
-        puzzle_type = rng.choice(available_types)
+        # Prefer unused puzzle types for variety
+        unused = [t for t in available_types if t not in used_puzzle_types]
+        puzzle_type = rng.choice(unused if unused else available_types)
+        used_puzzle_types.add(puzzle_type)
 
         # Get solution for this puzzle type
         solution = solutions.get(puzzle_type, "1234")
