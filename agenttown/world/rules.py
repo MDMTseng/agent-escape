@@ -325,10 +325,11 @@ def _execute_use(action: Use, agent: AgentState, world: WorldState, tick: int) -
     targets = room.get_entities_by_name(action.target)
     visible_targets = [t for t in targets if t.state != EntityState.HIDDEN]
 
-    # Check doors
-    for door_id in room.doors.values():
+    # Check doors — match by name or by direction
+    for direction, door_id in room.doors.items():
         door = world.doors[door_id]
-        if action.target.lower() in door.name.lower():
+        target_lower = action.target.lower()
+        if target_lower in door.name.lower() or target_lower == direction:
             visible_targets.append(door)
 
     if not visible_targets:
