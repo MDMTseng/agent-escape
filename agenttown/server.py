@@ -338,6 +338,12 @@ async def websocket_endpoint(ws: WebSocket):
 
 @app.get("/")
 async def index():
+    from agenttown.ui_narrative import NARRATIVE_HTML
+    return HTMLResponse(NARRATIVE_HTML)
+
+
+@app.get("/dashboard")
+async def dashboard():
     return HTMLResponse(DASHBOARD_HTML)
 
 
