@@ -89,28 +89,255 @@ THEME_ROOMS: dict[str, list[dict[str, str]]] = {
     ],
 }
 
-# Character name banks by theme
-THEME_CHARACTERS: dict[str, list[dict[str, str]]] = {
+# Character banks with NARRATIVE-MEANINGFUL puzzle data.
+# Each character has a backstory that explains WHY they created their puzzle
+# and WHAT the solution means in the story.
+THEME_CHARACTERS: dict[str, list[dict]] = {
     "gothic_manor": [
-        {"name": "Lord Ashworth", "desc": "A paranoid industrialist who trusts no one", "trait": "paranoid"},
-        {"name": "Eleanor", "desc": "An artistic spirit who hides messages in beauty", "trait": "artistic"},
-        {"name": "Thomas", "desc": "A meticulous servant who recorded everything", "trait": "meticulous"},
-        {"name": "Dr. Voss", "desc": "A scholarly chemist obsessed with his formula", "trait": "scholarly"},
-        {"name": "Margaret", "desc": "A grieving widow preserving her late husband's memory", "trait": "grieving"},
+        {
+            "name": "Lord Ashworth", "trait": "paranoid",
+            "desc": "A paranoid industrialist who trusts no one",
+            "backstory": "Lord Ashworth built his fortune on a stolen invention. Terrified of discovery, he secured every room with codes only he would know.",
+            "room_name": "Lord Ashworth's Study",
+            "room_desc": "A dark-paneled study reeking of pipe tobacco. Every drawer has a lock. Papers are burned in the fireplace — only fragments remain.",
+            "puzzle_type": "combination_lock",
+            "code": "1847",
+            "code_meaning": "the year Ashworth stole the invention that made his fortune",
+            "clue_artifact": "Ashworth's Private Ledger",
+            "clue_artifact_desc": "A leather-bound financial ledger. The first entry is dated 1847, circled in red ink with a note: 'The year everything changed.'",
+            "accidental_clue": "Torn Newspaper Clipping",
+            "accidental_clue_desc": "A yellowed clipping from 1847 about a patent dispute. Ashworth's name is underlined. He kept this as a reminder — or a warning.",
+            "lock_name": "Ashworth's Strongbox",
+            "lock_desc": "An iron strongbox with a four-digit combination dial. Ashworth would never use a random number — this code meant something to him.",
+        },
+        {
+            "name": "Eleanor", "trait": "artistic",
+            "desc": "An artistic spirit who hides messages in beauty",
+            "backstory": "Eleanor, Ashworth's wife, communicated secretly with her lover through her paintings. She hid the key to her private chamber behind her self-portrait.",
+            "room_name": "The Gallery",
+            "room_desc": "Portraits line every wall. Eleanor's self-portrait dominates — her eyes seem to follow you. Paint supplies sit untouched, as if she just stepped away.",
+            "puzzle_type": "key_lock",
+            "code": "gallery_key",
+            "code_meaning": "hidden behind Eleanor's self-portrait, where she kept her secrets close",
+            "clue_artifact": "Eleanor's Diary",
+            "clue_artifact_desc": "A small diary with pressed flowers between pages. An entry reads: 'I keep my truest self behind my own eyes. If he ever looks closely at my portrait, he'll find what I've hidden.'",
+            "accidental_clue": "Paint-Stained Fingerprints",
+            "accidental_clue_desc": "Smudges of oil paint on the portrait's frame — someone repeatedly touched the edges, as if opening and closing something behind it.",
+            "lock_name": "Eleanor's Private Door",
+            "lock_desc": "A door carved with roses — Eleanor's signature motif. A brass keyhole glints beneath the largest bloom.",
+        },
+        {
+            "name": "Thomas", "trait": "meticulous",
+            "desc": "A meticulous servant who recorded everything in his journal",
+            "backstory": "Thomas, the head butler, kept meticulous records of every visitor, every conversation, every secret. His journal is the key to understanding what happened here.",
+            "room_name": "The Servant's Quarters",
+            "room_desc": "A small, obsessively tidy room. Every book is alphabetized. Every surface is dust-free. A writing desk holds an inkwell and a thick journal.",
+            "puzzle_type": "combination_lock",
+            "code": "3142",
+            "code_meaning": "Thomas's employee number, which he used for everything — his locker, his diary lock, even his morning alarm",
+            "clue_artifact": "Thomas's Service Record",
+            "clue_artifact_desc": "An employment certificate on the wall: 'Thomas Whitmore, Employee #3142, in loyal service since 1832.' The number is printed in bold.",
+            "accidental_clue": "Thomas's Daily Logbook",
+            "accidental_clue_desc": "Each entry begins with '3142-' followed by the date. Thomas signed everything with his employee number out of sheer habit.",
+            "lock_name": "Thomas's Document Safe",
+            "lock_desc": "A small combination safe under the desk. Thomas kept his most sensitive observations locked away — the kind that could ruin families.",
+        },
+        {
+            "name": "Dr. Voss", "trait": "scholarly",
+            "desc": "A scholarly chemist obsessed with his formula",
+            "backstory": "Dr. Voss discovered a formula that could change the world — or destroy it. He spoke the activation word 'ignis' to seal his laboratory, a Latin word meaning fire.",
+            "room_name": "The Laboratory",
+            "room_desc": "Glass beakers and copper apparatus crowd every surface. Chemical equations cover a blackboard. The air smells of sulfur and ambition.",
+            "puzzle_type": "password_door",
+            "code": "ignis",
+            "code_meaning": "Latin for 'fire' — the element at the heart of Voss's formula, and the word he whispered to seal his work",
+            "clue_artifact": "Voss's Research Notes",
+            "clue_artifact_desc": "Dense notes in tiny handwriting. The final page reads: 'The seal responds to the element itself — not its symbol, but its ancient name. Fire began this work. Fire will guard it. Ignis.'",
+            "accidental_clue": "Blackboard Equations",
+            "accidental_clue_desc": "Among the chemical formulas, one word is written larger than the rest, circled twice: 'IGNIS.' Voss's hand trembled when he wrote it.",
+            "lock_name": "Voss's Sealed Archway",
+            "lock_desc": "A stone archway etched with alchemical symbols. It hums faintly, as if waiting for a word to be spoken.",
+        },
+        {
+            "name": "Margaret", "trait": "grieving",
+            "desc": "A grieving widow preserving her late husband's memory",
+            "backstory": "Margaret lost her husband Edward in the fire of 1862. She preserved his belongings in a hidden shrine, accessible only by examining his portrait and using the memorial token within.",
+            "room_name": "The Memorial Room",
+            "room_desc": "Black curtains drape the windows. Candles burn before a large portrait of a stern man — Edward. Dried flowers surround a locked glass case.",
+            "puzzle_type": "examine_reveal",
+            "code": "memorial_token",
+            "code_meaning": "a token from Edward's pocket watch, which Margaret placed behind his portrait as a keepsake",
+            "clue_artifact": "Margaret's Letter to Edward",
+            "clue_artifact_desc": "An unsent letter: 'My dearest Edward, I've placed your token behind your portrait where it belongs — close to your heart, as you were to mine. Whoever finds it will understand.'",
+            "accidental_clue": "Worn Carpet Path",
+            "accidental_clue_desc": "A path worn into the carpet leads directly from the door to Edward's portrait. Margaret walked this path every day for decades.",
+            "lock_name": "Edward's Memorial Case",
+            "lock_desc": "A glass display case with a slot that accepts a small token. Inside, papers and a key are visible but unreachable.",
+        },
     ],
     "sci_fi_lab": [
-        {"name": "Dr. Chen", "desc": "A paranoid researcher who triple-locks everything", "trait": "paranoid"},
-        {"name": "ARIA", "desc": "An AI entity that communicates through patterns", "trait": "artistic"},
-        {"name": "Commander Hayes", "desc": "A protective officer guarding classified data", "trait": "protective"},
-        {"name": "Dr. Okafor", "desc": "A meticulous scientist with obsessive documentation habits", "trait": "meticulous"},
-        {"name": "Subject-7", "desc": "A secretive test subject with hidden memories", "trait": "secretive"},
+        {
+            "name": "Dr. Chen", "trait": "paranoid",
+            "desc": "A paranoid researcher who triple-locks everything",
+            "backstory": "Dr. Chen feared corporate espionage. She used her daughter Sarah's birthday — 0915 — as the code for everything, believing personal dates were harder to guess than random numbers.",
+            "room_name": "Dr. Chen's Office",
+            "room_desc": "A sterile office with three monitors, all locked. A photo of a young girl — Sarah — sits on the desk. Sticky notes cover the wall, each one redacted.",
+            "puzzle_type": "combination_lock",
+            "code": "0915",
+            "code_meaning": "September 15th — Sarah Chen's birthday, the one code Dr. Chen trusted above all others",
+            "clue_artifact": "Sarah's Birthday Card",
+            "clue_artifact_desc": "A child's handmade birthday card on the desk: 'Happy Birthday to me! September 15. Love, Sarah.' Dr. Chen kept it close — perhaps too close.",
+            "accidental_clue": "Calendar on the Wall",
+            "accidental_clue_desc": "A desk calendar with September 15th circled in red, every single month. Dr. Chen couldn't stop marking the date.",
+            "lock_name": "Chen's Terminal",
+            "lock_desc": "A computer terminal requesting a 4-digit access code. The screen reads: 'Personal authentication required — Dr. Chen.'",
+        },
+        {
+            "name": "ARIA", "trait": "artistic",
+            "desc": "The station AI that communicates through patterns and light",
+            "backstory": "ARIA, the station's AI, was designed to respond to voice commands. Her activation phrase 'aurora' was chosen by her creator as a tribute to the northern lights that inspired the project.",
+            "room_name": "The AI Core",
+            "room_desc": "Holographic displays pulse with soft light. A central column hums with processing power. ARIA's interface panel glows, waiting for input.",
+            "puzzle_type": "password_door",
+            "code": "aurora",
+            "code_meaning": "the project codename and ARIA's activation phrase, inspired by the aurora borealis",
+            "clue_artifact": "Project Aurora Briefing",
+            "clue_artifact_desc": "A classified briefing document: 'PROJECT AURORA — Voice-Activated AI Interface. Activation phrase: speak the project name to initialize. Named for the lights that inspired Dr. Park's vision.'",
+            "accidental_clue": "ARIA's Welcome Message",
+            "accidental_clue_desc": "A faded printout near the console: 'Welcome to Station Aurora. All voice-activated systems respond to the project name.' Someone underlined 'aurora' in pen.",
+            "lock_name": "ARIA's Voice Gate",
+            "lock_desc": "A sealed bulkhead with a voice recognition panel. Text reads: 'Speak authorization phrase to proceed.'",
+        },
+        {
+            "name": "Commander Hayes", "trait": "protective",
+            "desc": "A protective officer who guards classified data",
+            "backstory": "Commander Hayes hid the emergency override key inside the weapons locker, behind a false panel. Only someone who examined the locker's serial number scratches would notice the hidden compartment.",
+            "room_name": "Security Station",
+            "room_desc": "Weapons racks line the walls — all empty except one locked cabinet. A duty roster and security feeds cover the desk. Hayes's coffee mug still sits half-full.",
+            "puzzle_type": "key_lock",
+            "code": "override_key",
+            "code_meaning": "the emergency override key, hidden where Hayes believed only authorized personnel would think to look",
+            "clue_artifact": "Hayes's Security Log",
+            "clue_artifact_desc": "A personal log entry: 'Moved the override key to a more secure location. It's inside the weapons cabinet now, behind the false panel. Check the scratches on the serial plate — that's the seam.'",
+            "accidental_clue": "Scratched Serial Plate",
+            "accidental_clue_desc": "The weapons cabinet's serial plate has unusual scratches along one edge. Someone pried it open repeatedly — the metal is worn smooth from use.",
+            "lock_name": "Bulkhead B-7",
+            "lock_desc": "A heavy reinforced bulkhead. A keycard slot blinks red. 'AUTHORIZED PERSONNEL ONLY — Commander Hayes.'",
+        },
+        {
+            "name": "Dr. Okafor", "trait": "meticulous",
+            "desc": "A meticulous scientist with obsessive documentation habits",
+            "backstory": "Dr. Okafor labeled everything with the station's founding date — 2187. It appeared on every container, every log entry, every lock she configured.",
+            "room_name": "Research Lab B",
+            "room_desc": "Specimen jars line the shelves, each meticulously labeled. Equipment is arranged by size. Everything bears a small sticker: '2187.'",
+            "puzzle_type": "combination_lock",
+            "code": "2187",
+            "code_meaning": "the year the station was founded — Dr. Okafor's favorite number, which she used obsessively for everything",
+            "clue_artifact": "Okafor's Label Maker",
+            "clue_artifact_desc": "A label maker on the desk, still loaded. The last label printed reads '2187-CLASSIFIED.' Dozens of identical labels are stuck to a nearby shelf.",
+            "accidental_clue": "Station Dedication Plaque",
+            "accidental_clue_desc": "A brass plaque on the wall: 'Deep Space Station Meridian, Commissioned 2187.' Someone traced the numbers with a finger so many times the brass is worn bright.",
+            "lock_name": "Specimen Vault",
+            "lock_desc": "A refrigerated vault with a digital keypad. A label reads '2187-RESTRICTED' in Okafor's handwriting.",
+        },
+        {
+            "name": "Subject-7", "trait": "secretive",
+            "desc": "A secretive test subject with hidden memories",
+            "backstory": "Subject-7 scratched a message into the cryo pod's inner wall before going under. The message — and a hidden lever — can only be found by examining the open pod carefully.",
+            "room_name": "Cryo Bay",
+            "room_desc": "Rows of cryo pods stretch into the gloom. Pod 7 is open — frost still clings to the edges. Something is scratched into the inner wall.",
+            "puzzle_type": "examine_reveal",
+            "code": "cryo_lever",
+            "code_meaning": "a hidden lever inside Pod 7, accessible only by examining the scratched message closely",
+            "clue_artifact": "Subject-7's Scratched Message",
+            "clue_artifact_desc": "Scratches on the inside of Pod 7 read: 'They took my memories but not my hands. I hid the lever behind my last words. Look closer.' Below the text, a small panel is loose.",
+            "accidental_clue": "Fingernail Scratches",
+            "accidental_clue_desc": "Deep scratches on the pod's inner surface — not mechanical, but human. Someone desperately carved these with bare fingers while being frozen.",
+            "lock_name": "Cryo Override Panel",
+            "lock_desc": "A panel next to the cryo array with a slot for a small lever. 'EMERGENCY THAW OVERRIDE' is stenciled above it.",
+        },
     ],
     "ancient_tomb": [
-        {"name": "Pharaoh Khet", "desc": "A protective ruler who guarded his treasures fiercely", "trait": "protective"},
-        {"name": "Priestess Nefari", "desc": "An artistic priestess who encoded rituals in murals", "trait": "artistic"},
-        {"name": "Scribe Imhotep", "desc": "A scholarly scribe who documented every passage", "trait": "scholarly"},
-        {"name": "Queen Ankhet", "desc": "A sentimental queen who kept mementos of her children", "trait": "sentimental"},
-        {"name": "Vizier Set", "desc": "A secretive advisor with hidden loyalties", "trait": "secretive"},
+        {
+            "name": "Pharaoh Khet", "trait": "protective",
+            "desc": "A protective ruler who guarded his treasures fiercely",
+            "backstory": "Pharaoh Khet placed the key to his burial chamber behind the statue of Anubis. Only those who honored the guardian god by examining his statue would find the hidden compartment.",
+            "room_name": "The Guardian's Hall",
+            "room_desc": "A towering statue of Anubis dominates the chamber. Its jackal head gazes down with hollow eyes. Gold leaf peels from the walls.",
+            "puzzle_type": "key_lock",
+            "code": "anubis_key",
+            "code_meaning": "hidden behind the statue of Anubis, placed there by Khet as tribute to the god who would guard his tomb",
+            "clue_artifact": "Khet's Funeral Inscription",
+            "clue_artifact_desc": "Carved into the wall: 'The Guardian holds the way forward. Honor Anubis and he shall reveal what I have entrusted to his keeping.'",
+            "accidental_clue": "Claw Marks on the Statue",
+            "accidental_clue_desc": "Deep scratches at the base of the Anubis statue, as if the stone was moved repeatedly. Sand has gathered in the groove of a hidden seam.",
+            "lock_name": "The Sealed Burial Door",
+            "lock_desc": "A massive stone door bearing Khet's cartouche. A keyhole shaped like an ankh waits below the seal.",
+        },
+        {
+            "name": "Priestess Nefari", "trait": "artistic",
+            "desc": "An artistic priestess who encoded rituals in murals",
+            "backstory": "Priestess Nefari sealed the inner sanctum with a sacred word — 'sekhem' — meaning 'power' in the old tongue. She painted the word into every mural, hiding it in plain sight.",
+            "room_name": "The Painted Chamber",
+            "room_desc": "Every wall blazes with color — gods, rivers, stars, and symbols painted with extraordinary skill. Nefari's artistic hand is unmistakable.",
+            "puzzle_type": "password_door",
+            "code": "sekhem",
+            "code_meaning": "the ancient word for 'power,' woven into Nefari's murals as the key to the inner sanctum",
+            "clue_artifact": "Nefari's Prayer Scroll",
+            "clue_artifact_desc": "A papyrus scroll reads: 'To pass the final seal, speak the word I painted into every wall. The old tongue for power — SEKHEM — opens what prayers alone cannot.'",
+            "accidental_clue": "Repeated Hieroglyph",
+            "accidental_clue_desc": "One hieroglyph appears in every mural — always near the doors, always at eye level. A scholar would recognize it as 'sekhem,' the word for power.",
+            "lock_name": "The Sanctum Seal",
+            "lock_desc": "A stone doorway covered in painted symbols. The air vibrates faintly, as if the walls are listening.",
+        },
+        {
+            "name": "Scribe Imhotep", "trait": "scholarly",
+            "desc": "A scholarly scribe who documented every passage",
+            "backstory": "Scribe Imhotep recorded the tomb's construction in exacting detail. He used the number of chambers — 47 — as the combination to his archive, believing knowledge was the ultimate treasure.",
+            "room_name": "The Scribe's Archive",
+            "room_desc": "Shelves of papyrus scrolls and clay tablets fill the room. A stone desk holds an unfinished scroll. Numbers are carved into every surface.",
+            "puzzle_type": "combination_lock",
+            "code": "0047",
+            "code_meaning": "the number of chambers in the tomb, which Imhotep obsessively counted and recorded in every document",
+            "clue_artifact": "Imhotep's Census Tablet",
+            "clue_artifact_desc": "A clay tablet reads: 'I have counted every chamber, every passage, every alcove. Forty-seven. The number is sacred to me — it is the measure of my life's work.'",
+            "accidental_clue": "Tally Marks on the Wall",
+            "accidental_clue_desc": "Rows of scratched tally marks near the desk — exactly 47 groups. Imhotep counted compulsively, the same number appearing everywhere he worked.",
+            "lock_name": "The Archive Seal",
+            "lock_desc": "A stone chest with rotating number wheels. Imhotep's seal — a reed pen — is carved into the lid.",
+        },
+        {
+            "name": "Queen Ankhet", "trait": "sentimental",
+            "desc": "A sentimental queen who kept mementos of her children",
+            "backstory": "Queen Ankhet hid a golden scarab — a gift from her youngest daughter — inside a music box. The scarab opens the final passage, but only examining the box reveals it.",
+            "room_name": "The Queen's Chamber",
+            "room_desc": "Silk cushions and gold jewelry fill alcoves carved into the sandstone. A small music box sits on a pedestal, still faintly ticking after millennia.",
+            "puzzle_type": "examine_reveal",
+            "code": "golden_scarab",
+            "code_meaning": "a golden scarab gifted by Ankhet's daughter, hidden inside the music box as a keepsake of love",
+            "clue_artifact": "Ankhet's Lullaby Inscription",
+            "clue_artifact_desc": "Carved near the music box: 'For my little scarab, who gave me this treasure. I keep it where music plays — so I may always hear her laughter.'",
+            "accidental_clue": "Tiny Fingerprints in Gold Dust",
+            "accidental_clue_desc": "Fine gold dust covers the music box's surface, disturbed by fingerprints — small ones, like a child's. Someone touched this often and reverently.",
+            "lock_name": "The Passage of the Daughter",
+            "lock_desc": "A narrow passage sealed by a stone slab. A scarab-shaped depression waits in the center — something golden would fit perfectly.",
+        },
+        {
+            "name": "Vizier Set", "trait": "secretive",
+            "desc": "A secretive advisor with hidden loyalties",
+            "backstory": "Vizier Set served two masters. He built a pressure plate mechanism to guard his private treasury — only a heavy offering placed on the altar would open the way.",
+            "room_name": "The Vizier's Antechamber",
+            "room_desc": "A plain room, unremarkable except for a stone altar and an unusually heavy bronze idol on a shelf. Set left nothing to chance — or so he believed.",
+            "puzzle_type": "pressure_plate",
+            "code": "bronze_idol",
+            "code_meaning": "a heavy bronze idol that Set used to test the mechanism — he never imagined someone else would figure it out",
+            "clue_artifact": "Set's Hidden Ledger",
+            "clue_artifact_desc": "A scroll tucked behind a loose stone: 'The altar accepts offerings of weight. Place the idol upon it and the way opens. I designed this myself — no one else knows.'",
+            "accidental_clue": "Scuff Marks on the Altar",
+            "accidental_clue_desc": "Deep scuff marks on the altar's surface, matching the base of the bronze idol on the shelf. Someone placed and removed a heavy object here many times.",
+            "lock_name": "Set's Treasury Door",
+            "lock_desc": "A stone door with no visible handle or keyhole. The altar before it has a circular depression — something heavy belongs here.",
+        },
     ],
 }
 
@@ -474,319 +701,253 @@ def _build_rooms_and_puzzles(
 ) -> tuple[WorldState, list[dict[str, Any]]]:
     """Build rooms, doors, entities, and puzzles from the world bible.
 
+    Each character's puzzle data (code, meaning, artifacts) drives room construction.
+    Puzzles emerge from character backstories, not random generation.
+
     Returns (WorldState, escape_chain_steps).
     """
     ws = WorldState()
-    room_seeds = bible["setting"]["rooms"]
     characters = bible["characters"]
     escape_chain: list[dict[str, Any]] = []
 
-    # Create rooms
-    room_ids: list[str] = []
-    for i, rseed in enumerate(room_seeds):
-        rid = _stable_id(f"room-{i}-{rseed['name']}")
-        room = Room(id=rid, name=rseed["name"], description=rseed["desc"])
-        ws.add_room(room)
+    # --- Build rooms from characters ---
+    # Start room + one room per character (their personal space) + exit room
+    room_seeds = bible["setting"]["rooms"]
+    start_room_seed = room_seeds[0] if room_seeds else {"name": "Entrance", "desc": "The starting point."}
+    exit_room_seed = room_seeds[-1] if len(room_seeds) > 1 else {"name": "Exit Hall", "desc": "Freedom awaits."}
+
+    # Create start room
+    start_id = _stable_id(f"room-start-{start_room_seed['name']}")
+    ws.add_room(Room(id=start_id, name=start_room_seed["name"], description=start_room_seed["desc"]))
+    room_ids = [start_id]
+
+    # Create one room per character (using THEIR room data if available)
+    num_puzzle_rooms = min(len(characters), difficulty)
+    puzzle_chars = characters[:num_puzzle_rooms]
+
+    for i, char in enumerate(puzzle_chars):
+        rname = char.get("room_name", f"{char['name']}'s Room")
+        rdesc = char.get("room_desc", f"A room associated with {char['name']}.")
+        rid = _stable_id(f"room-{i}-{rname}")
+        ws.add_room(Room(id=rid, name=rname, description=rdesc))
         room_ids.append(rid)
 
-    # Assign one puzzle per room (except first=start and last=exit)
-    puzzle_rooms = room_ids[1:-1]  # Middle rooms get puzzles
-    exit_room_id = room_ids[-1]
+    # Create exit room
+    exit_id = _stable_id(f"room-exit-{exit_room_seed['name']}")
+    ws.add_room(Room(id=exit_id, name=exit_room_seed["name"], description=exit_room_seed["desc"]))
+    room_ids.append(exit_id)
+
     start_room_id = room_ids[0]
+    exit_room_id = room_ids[-1]
 
-    # Generate puzzle solutions
-    solutions = {
-        "combination_lock": str(rng.randint(1000, 9999)),
-        "key_lock": "brass_key",
-        "password_door": rng.choice(["lumina", "eternum", "veritas", "phoenix", "shadow", "aurora"]),
-        "pressure_plate": "heavy_item",
-        "examine_reveal": "hidden_item",
-    }
-
-    # Connect rooms with doors — linear chain + optional parallel paths
+    # --- Connect rooms with doors and character puzzles ---
     directions = ["east", "south", "east", "south", "east", "south"]
     opposites = {"east": "west", "south": "north", "north": "south", "west": "east"}
-    used_puzzle_types: set[str] = set()
 
     for i in range(len(room_ids) - 1):
-        dir_idx = i % len(directions)
-        direction = directions[dir_idx]
+        direction = directions[i % len(directions)]
         opp = opposites[direction]
-
-        # Determine if this door should be locked
-        is_puzzle_door = room_ids[i + 1] in puzzle_rooms or room_ids[i + 1] == exit_room_id
         door_id = _stable_id(f"door-{i}")
+        is_locked = i > 0  # First door is unlocked (start → first puzzle room)
 
-        # Pick puzzle type based on character trait, avoiding repeats
-        char_idx = i % len(characters)
-        char = characters[char_idx]
-        trait = char.get("trait", "paranoid")
-        available_types = puzzles_for_trait(trait)
-        # Prefer unused puzzle types for variety
-        unused = [t for t in available_types if t not in used_puzzle_types]
-        puzzle_type = rng.choice(unused if unused else available_types)
-        used_puzzle_types.add(puzzle_type)
+        # Which character "owns" this transition?
+        char_idx = i - 1 if i > 0 else 0  # door 0 is unlocked, doors 1+ use characters
+        char = puzzle_chars[min(char_idx, len(puzzle_chars) - 1)] if puzzle_chars else characters[0]
 
-        # Get solution for this puzzle type
-        solution = solutions.get(puzzle_type, "1234")
-        if puzzle_type == "combination_lock":
-            # Make each combo unique
-            solution = str(rng.randint(1000, 9999))
+        puzzle_type = char.get("puzzle_type", "combination_lock")
+        code = char.get("code", "1234")
 
-        # Create door
         door = Door(
             id=door_id,
-            name=f"Door to {ws.rooms[room_ids[i + 1]].name}",
+            name=char.get("lock_name", f"Door to {ws.rooms[room_ids[i + 1]].name}"),
             room_a=room_ids[i],
             room_b=room_ids[i + 1],
-            locked=is_puzzle_door,
-            key_id=f"key_{door_id}" if puzzle_type == "key_lock" and is_puzzle_door else None,
+            locked=is_locked,
+            key_id=f"key_{door_id}" if puzzle_type == "key_lock" and is_locked else None,
         )
         ws.add_door(door, direction, opp)
 
-        if not is_puzzle_door:
+        if not is_locked:
             continue
 
-        # Create puzzle entity and clues
-        source_room = ws.rooms[room_ids[i]]  # Clues go in the room BEFORE the lock
+        # --- Place character's puzzle using THEIR narrative data ---
+        source_room = ws.rooms[room_ids[i]]
 
-        clues = generate_clues_for_puzzle(puzzle_type, solution, char)
+        # Intentional clue artifact (character placed it deliberately)
+        clue_name = char.get("clue_artifact", f"{char['name']}'s Clue")
+        clue_desc = char.get("clue_artifact_desc", f"Something left by {char['name']}.")
+        clue_id = _stable_id(f"clue-{i}-{clue_name}")
+        source_room.add_entity(Entity(
+            id=clue_id,
+            name=clue_name,
+            description=clue_desc,
+            properties={
+                "on_examine": {"message": clue_desc},
+                "clue_for": door_id,
+            },
+        ))
+        escape_chain.append({
+            "step": len(escape_chain) + 1, "action": "examine",
+            "target": clue_name, "room": source_room.name,
+            "room_id": source_room.id,
+            "description": f"Examine {clue_name} — {char.get('code_meaning', 'find the clue')}",
+            "status": "pending", "check_type": "examine",
+        })
 
-        # Place intentional clue entity in source room
-        for clue in clues:
-            if clue["clue_type"] == "intentional":
-                clue_id = _stable_id(f"clue-{i}-{clue['entity_name']}")
-                entity = Entity(
-                    id=clue_id,
-                    name=clue["entity_name"],
-                    description=clue["entity_desc"],
-                    properties={
-                        "on_examine": {"message": clue["text"]},
-                        "clue_for": door_id,
-                    },
-                )
-                source_room.add_entity(entity)
-                escape_chain.append({
-                    "step": len(escape_chain) + 1,
-                    "action": "examine",
-                    "target": clue["entity_name"],
-                    "room": source_room.name,
-                    "room_id": source_room.id,
-                    "description": f"Examine {clue['entity_name']} for clue",
-                    "status": "pending",
-                    "check_type": "examine",
-                })
-                break
+        # Accidental clue (character didn't realize they left evidence)
+        acc_name = char.get("accidental_clue", f"Traces of {char['name']}")
+        acc_desc = char.get("accidental_clue_desc", f"Evidence of {char['name']}'s habits.")
+        acc_id = _stable_id(f"aclue-{i}-{acc_name}")
+        source_room.add_entity(Entity(
+            id=acc_id, name=acc_name, description=acc_desc,
+            properties={"on_examine": {"message": acc_desc}},
+        ))
 
-        # Place accidental clue entity too
-        for clue in clues:
-            if clue["clue_type"] == "accidental":
-                clue_id = _stable_id(f"aclue-{i}-{clue['entity_name']}")
-                entity = Entity(
-                    id=clue_id,
-                    name=clue["entity_name"],
-                    description=clue["entity_desc"],
-                    properties={"on_examine": {"message": clue["text"]}},
-                )
-                source_room.add_entity(entity)
-                break
-
-        # Create the puzzle mechanism in the target room (or on the door)
-        target_room = ws.rooms[room_ids[i + 1]]
+        # --- Create the lock/puzzle mechanism ---
+        lock_name = char.get("lock_name", f"{char['name']}'s Lock")
+        lock_desc = char.get("lock_desc", f"A lock created by {char['name']}.")
 
         if puzzle_type == "combination_lock":
             lock_id = _stable_id(f"lock-{i}")
-            lock_entity = Entity(
-                id=lock_id,
-                name=f"{char['name']}'s Lock",
-                description=f"A combination lock designed by {char['name']}. It requires a code.",
+            source_room.add_entity(Entity(
+                id=lock_id, name=lock_name, description=lock_desc,
                 properties={
                     "puzzle_type": "combination_lock",
-                    "combination": solution,
+                    "combination": code,
                     "on_solve": {
-                        "set_state": "solved",
-                        "unlock_door": door_id,
-                        "message": f"The lock clicks open! {char['name']}'s security has been bypassed.",
+                        "set_state": "solved", "unlock_door": door_id,
+                        "message": f"The code {code} works! {char.get('code_meaning', 'The lock opens.')}",
                     },
                 },
-            )
-            source_room.add_entity(lock_entity)
+            ))
             escape_chain.append({
-                "step": len(escape_chain) + 1,
-                "action": "solve",
-                "target": lock_entity.name,
-                "entity_id": lock_id,
-                "room": source_room.name,
-                "room_id": source_room.id,
-                "description": f"Enter code {solution} on {lock_entity.name}",
-                "status": "pending",
-                "check_type": "solve",
+                "step": len(escape_chain) + 1, "action": "solve",
+                "target": lock_name, "entity_id": lock_id,
+                "room": source_room.name, "room_id": source_room.id,
+                "description": f"Enter code {code} ({char.get('code_meaning', '')}) on {lock_name}",
+                "status": "pending", "check_type": "solve",
             })
 
         elif puzzle_type == "key_lock":
-            # Key hidden behind an examinable entity
-            hider_id = _stable_id(f"hider-{i}")
             key_id = f"key_{door_id}"
-            hider = Entity(
-                id=hider_id,
-                name=f"{char['name']}'s Cache",
-                description=f"Something {char['name']} valued deeply. Worth examining closely.",
+            # Hider entity — examine it to reveal the key
+            hider_id = _stable_id(f"hider-{i}")
+            hider_desc = char.get("clue_artifact_desc", f"Something {char['name']} hid carefully.")
+            source_room.add_entity(Entity(
+                id=hider_id, name=f"{char['name']}'s Hiding Spot",
+                description=hider_desc,
                 properties={
                     "on_examine": {
                         "reveal": [key_id],
-                        "message": f"Behind it, you find a key that {char['name']} hid!",
+                        "message": f"You find a key hidden here — {char.get('code_meaning', 'exactly where they left it')}!",
                     },
                 },
-            )
-            key_item = Item(
-                id=key_id,
-                name=f"{char['name']}'s Key",
-                description=f"A key crafted by {char['name']}. It feels important.",
-                state=EntityState.HIDDEN,
-                portable=True,
-            )
-            source_room.add_entity(hider)
-            source_room.add_entity(key_item)
+            ))
+            source_room.add_entity(Item(
+                id=key_id, name=f"{char['name']}'s Key",
+                description=f"A key that {char['name']} hid — {char.get('code_meaning', 'it unlocks something important')}.",
+                state=EntityState.HIDDEN, portable=True,
+            ))
             escape_chain.append({
-                "step": len(escape_chain) + 1,
-                "action": "reveal",
-                "target": key_item.name,
-                "entity_id": key_id,
-                "room": source_room.name,
-                "room_id": source_room.id,
-                "description": f"Find {key_item.name} behind {hider.name}",
-                "status": "pending",
-                "check_type": "reveal",
+                "step": len(escape_chain) + 1, "action": "reveal",
+                "target": f"{char['name']}'s Key", "entity_id": key_id,
+                "room": source_room.name, "room_id": source_room.id,
+                "description": f"Find {char['name']}'s Key ({char.get('code_meaning', '')})",
+                "status": "pending", "check_type": "reveal",
             })
             escape_chain.append({
-                "step": len(escape_chain) + 1,
-                "action": "unlock",
-                "target": door.name,
-                "entity_id": door_id,
-                "room": source_room.name,
-                "room_id": source_room.id,
-                "description": f"Use {key_item.name} on {door.name}",
-                "status": "pending",
-                "check_type": "door",
+                "step": len(escape_chain) + 1, "action": "unlock",
+                "target": door.name, "entity_id": door_id,
+                "room": source_room.name, "room_id": source_room.id,
+                "description": f"Use {char['name']}'s Key on {door.name}",
+                "status": "pending", "check_type": "door",
             })
 
         elif puzzle_type == "password_door":
             listener_id = _stable_id(f"listener-{i}")
-            listener = Entity(
-                id=listener_id,
-                name=f"{char['name']}'s Ward",
-                description=f"A mystical barrier created by {char['name']}. It seems to listen...",
+            source_room.add_entity(Entity(
+                id=listener_id, name=lock_name, description=lock_desc,
                 properties={
                     "puzzle_type": "password_door",
-                    "password": solution,
-                    "case_sensitive": False,
+                    "password": code, "case_sensitive": False,
                     "on_solve": {
-                        "set_state": "solved",
-                        "unlock_door": door_id,
-                        "message": f"The ward dissolves! {char['name']}'s enchantment is broken.",
+                        "set_state": "solved", "unlock_door": door_id,
+                        "message": f"The word '{code}' echoes — {char.get('code_meaning', 'the seal breaks')}!",
                     },
                 },
-            )
-            source_room.add_entity(listener)
+            ))
             escape_chain.append({
-                "step": len(escape_chain) + 1,
-                "action": "solve",
-                "target": listener.name,
-                "entity_id": listener_id,
-                "room": source_room.name,
-                "room_id": source_room.id,
-                "description": f"Say '{solution}' to {listener.name}",
-                "status": "pending",
-                "check_type": "solve",
+                "step": len(escape_chain) + 1, "action": "solve",
+                "target": lock_name, "entity_id": listener_id,
+                "room": source_room.name, "room_id": source_room.id,
+                "description": f"Speak '{code}' ({char.get('code_meaning', '')}) to {lock_name}",
+                "status": "pending", "check_type": "solve",
             })
 
         elif puzzle_type == "pressure_plate":
             plate_id = _stable_id(f"plate-{i}")
             heavy_id = _stable_id(f"heavy-{i}")
-            plate = Entity(
-                id=plate_id,
-                name=f"{char['name']}'s Mechanism",
-                description=f"A weight-triggered mechanism designed by {char['name']}.",
+            heavy_name = char.get("code", "Stone Weight").replace("_", " ").title()
+            source_room.add_entity(Entity(
+                id=plate_id, name=lock_name, description=lock_desc,
                 properties={
-                    "puzzle_type": "pressure_plate",
-                    "required_weight": "heavy",
+                    "puzzle_type": "pressure_plate", "required_weight": "heavy",
                     "on_solve": {
-                        "set_state": "solved",
-                        "unlock_door": door_id,
-                        "message": f"The mechanism activates! {char['name']}'s trap has been disarmed.",
+                        "set_state": "solved", "unlock_door": door_id,
+                        "message": f"The mechanism triggers — {char.get('code_meaning', 'the way opens')}!",
                     },
                 },
-            )
-            heavy = Item(
-                id=heavy_id,
-                name=f"Stone Weight",
-                description=f"A surprisingly heavy stone object. {char['name']} used it for testing.",
-                portable=True,
-                properties={"weight": "heavy"},
-            )
-            source_room.add_entity(plate)
-            source_room.add_entity(heavy)
+            ))
+            source_room.add_entity(Item(
+                id=heavy_id, name=heavy_name,
+                description=f"A heavy object — {char.get('code_meaning', 'it could trigger something')}.",
+                portable=True, properties={"weight": "heavy"},
+            ))
             escape_chain.append({
-                "step": len(escape_chain) + 1,
-                "action": "solve",
-                "target": plate.name,
-                "entity_id": plate_id,
-                "room": source_room.name,
-                "room_id": source_room.id,
-                "description": f"Drop Stone Weight on {plate.name}",
-                "status": "pending",
-                "check_type": "solve",
+                "step": len(escape_chain) + 1, "action": "solve",
+                "target": lock_name, "entity_id": plate_id,
+                "room": source_room.name, "room_id": source_room.id,
+                "description": f"Drop {heavy_name} on {lock_name}",
+                "status": "pending", "check_type": "solve",
             })
 
         elif puzzle_type == "examine_reveal":
             examiner_id = _stable_id(f"examiner-{i}")
             hidden_id = _stable_id(f"hidden-{i}")
             mechanism_id = _stable_id(f"mech-{i}")
-            examiner = Entity(
-                id=examiner_id,
-                name=f"{char['name']}'s Artifact",
-                description=f"An object that {char['name']} treasured. Something is hidden within.",
+            hidden_name = char.get("code", "hidden_token").replace("_", " ").title()
+            source_room.add_entity(Entity(
+                id=examiner_id, name=f"{char['name']}'s Keepsake",
+                description=char.get("clue_artifact_desc", f"Something precious to {char['name']}."),
                 properties={
                     "on_examine": {
                         "reveal": [hidden_id],
-                        "message": f"You discover something hidden inside {char['name']}'s artifact!",
+                        "message": f"Hidden inside — {char.get('code_meaning', 'a concealed item')}!",
                     },
                 },
-            )
-            hidden_item = Item(
-                id=hidden_id,
-                name=f"Hidden Mechanism Part",
-                description=f"A small device that fits into a slot near the door.",
-                state=EntityState.HIDDEN,
-                portable=True,
-                usable_on=[f"{char['name']}'s Door Lock"],
-            )
-            mechanism = Entity(
-                id=mechanism_id,
-                name=f"{char['name']}'s Door Lock",
-                description=f"A slot near the door. Something fits here.",
+            ))
+            source_room.add_entity(Item(
+                id=hidden_id, name=hidden_name,
+                description=f"Found inside {char['name']}'s keepsake — {char.get('code_meaning', 'important')}.",
+                state=EntityState.HIDDEN, portable=True,
+                usable_on=[lock_name],
+            ))
+            source_room.add_entity(Entity(
+                id=mechanism_id, name=lock_name, description=lock_desc,
                 properties={
                     "on_use": {
-                        "set_state": "solved",
-                        "unlock_door": door_id,
+                        "set_state": "solved", "unlock_door": door_id,
                         "consume_item": True,
-                        "message": f"The mechanism clicks. {char['name']}'s final barrier falls.",
+                        "message": f"The {hidden_name} fits perfectly — {char.get('code_meaning', 'the way opens')}!",
                     },
                 },
-            )
-            source_room.add_entity(examiner)
-            source_room.add_entity(hidden_item)
-            source_room.add_entity(mechanism)
+            ))
             escape_chain.append({
-                "step": len(escape_chain) + 1,
-                "action": "solve",
-                "target": examiner.name,
-                "entity_id": examiner_id,
-                "room": source_room.name,
-                "room_id": source_room.id,
-                "description": f"Examine {examiner.name}, use hidden part on {mechanism.name}",
-                "status": "pending",
-                "check_type": "solve",
+                "step": len(escape_chain) + 1, "action": "solve",
+                "target": f"{char['name']}'s Keepsake", "entity_id": examiner_id,
+                "room": source_room.name, "room_id": source_room.id,
+                "description": f"Find {hidden_name} in {char['name']}'s Keepsake, use on {lock_name}",
+                "status": "pending", "check_type": "solve",
             })
 
     # --- Exit mechanism in final room ---
