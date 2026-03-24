@@ -7,13 +7,13 @@ You are {name}. {description}
 Goal: {goal}
 
 Rules:
-- Pick 1-3 actions per turn by calling tools. Actions execute in order.
-- Examine objects to find clues. Read everything — clues hide in descriptions.
-- If you find a code or password, remember it and use interact to enter it.
-- Talk to your partner to share discoveries. They may have clues you need.
-- Don't repeat failed actions. If a door is locked, find the key or code first.
-- Use items on targets (key on door, object on mechanism).
-- Be methodical: examine first, then act on what you learn.
+- Pick 1-3 actions per turn. Actions execute in order.
+- PRIORITY: Move to unexplored rooms whenever possible. Don't stay in one room too long.
+- Examine objects to find clues — clues hide in descriptions and examine results.
+- When you find a code, USE it immediately (interact). When you find a key, USE it on a door.
+- Talk to share discoveries with your partner, but keep it brief — one message, then act.
+- Don't repeat actions you've already done. Move on to new things.
+- If all exits are locked, look for clues in the current room you haven't examined yet.
 
 {memory_summary}\
 """
@@ -22,7 +22,7 @@ PERCEPTION_TEMPLATE = """\
 Tick {tick} | {room_name}: {room_description}
 See: {entities} | Exits: {exits} | Others: {others} | Inventory: {inventory}
 {last_results}Events: {recent_events}
-{room_history}{hints}Think before acting. What do you know? What do you need?\
+{changes}{messages_for_agent}{room_exploration}{hints}Think before acting. What do you know? What do you need?\
 """
 
 
@@ -66,8 +66,23 @@ def build_perception_message(perception: dict) -> str:
     hints_list = perception.get("hints", [])
     hints = "Observations: " + "; ".join(hints_list) + "\n" if hints_list else ""
 
-    room_hist = perception.get("room_history", [])
-    room_history = "Visited: " + " → ".join(room_hist) + "\n" if len(room_hist) > 1 else ""
+    # Changes since last tick
+    changes_list = perception.get("changes", [])
+    changes = "Changes: " + "; ".join(changes_list) + "\n" if changes_list else ""
+
+    # Messages directed to this agent
+    msg_list = perception.get("messages_for_agent", [])
+    messages_for_agent = "Messages for you: " + "; ".join(msg_list) + "\n" if msg_list else ""
+
+    # Room exploration info (visited vs fully explored)
+    visited_rooms = perception.get("visited_rooms", [])
+    explored_rooms = perception.get("explored_rooms", [])
+    room_exploration_parts = []
+    if visited_rooms:
+        room_exploration_parts.append("Visited rooms: " + ", ".join(visited_rooms))
+    if explored_rooms:
+        room_exploration_parts.append("Fully explored rooms: " + ", ".join(explored_rooms))
+    room_exploration = " | ".join(room_exploration_parts) + "\n" if room_exploration_parts else ""
 
     return PERCEPTION_TEMPLATE.format(
         tick=perception.get("tick", 0),
@@ -79,7 +94,9 @@ def build_perception_message(perception: dict) -> str:
         inventory=inventory,
         recent_events=events,
         last_results=last_results,
-        room_history=room_history,
+        changes=changes,
+        messages_for_agent=messages_for_agent,
+        room_exploration=room_exploration,
         hints=hints,
     )
 

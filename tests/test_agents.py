@@ -207,6 +207,89 @@ class TestPrompts:
         tool_names = {t["name"] for t in AGENT_TOOLS}
         assert tool_names == {"move", "pick_up", "drop", "use", "examine", "talk", "interact", "combine"}
 
+    def test_perception_shows_changes(self):
+        """Changes should appear in the perception message."""
+        perception = {
+            "tick": 2,
+            "room": {"name": "Hall", "description": "A grand hall"},
+            "entities": [],
+            "exits": [],
+            "others": [],
+            "inventory": [],
+            "recent_events": [],
+            "changes": ["Key is gone", "Bob arrived"],
+        }
+        msg = build_perception_message(perception)
+        assert "Changes:" in msg
+        assert "Key is gone" in msg
+        assert "Bob arrived" in msg
+
+    def test_perception_no_changes_no_line(self):
+        """No changes should not produce a Changes line."""
+        perception = {
+            "tick": 0,
+            "room": {"name": "Room"},
+            "entities": [],
+            "exits": [],
+            "others": [],
+            "inventory": [],
+            "recent_events": [],
+            "changes": [],
+        }
+        msg = build_perception_message(perception)
+        assert "Changes:" not in msg
+
+    def test_perception_shows_messages_for_agent(self):
+        """Directed messages should appear in the perception message."""
+        perception = {
+            "tick": 2,
+            "room": {"name": "Hall"},
+            "entities": [],
+            "exits": [],
+            "others": [],
+            "inventory": [],
+            "recent_events": [],
+            "messages_for_agent": ['Bob: "The code is 42"'],
+        }
+        msg = build_perception_message(perception)
+        assert "Messages for you:" in msg
+        assert "code is 42" in msg
+
+    def test_perception_shows_observations_not_hints(self):
+        """Hints should be labeled 'Observations:', not 'HINTS:'."""
+        perception = {
+            "tick": 1,
+            "room": {"name": "Room"},
+            "entities": [],
+            "exits": [],
+            "others": [],
+            "inventory": [],
+            "recent_events": [],
+            "hints": ["The floor plate is slightly depressed."],
+        }
+        msg = build_perception_message(perception)
+        assert "Observations:" in msg
+        assert "HINTS:" not in msg
+
+    def test_perception_shows_visited_and_explored_rooms(self):
+        """Perception message should show visited vs explored rooms."""
+        perception = {
+            "tick": 3,
+            "room": {"name": "Room C"},
+            "entities": [],
+            "exits": [],
+            "others": [],
+            "inventory": [],
+            "recent_events": [],
+            "visited_rooms": ["Room C"],
+            "explored_rooms": ["Room A", "Room B"],
+        }
+        msg = build_perception_message(perception)
+        assert "Visited rooms:" in msg
+        assert "Fully explored rooms:" in msg
+        assert "Room A" in msg
+        assert "Room C" in msg
+
 
 class TestParseJson:
     def test_plain_json(self):
