@@ -830,9 +830,19 @@ def _build_rooms_and_puzzles(
         # --- Place character's puzzle using THEIR narrative data ---
         source_room = ws.rooms[room_ids[i]]
 
+        def _short_name(text: str, fallback: str, max_len: int = 40) -> str:
+            """Ensure entity names are short and usable by agents."""
+            if not text or len(text) > max_len:
+                # Try to extract a short name from the beginning
+                if text and ":" in text[:max_len]:
+                    return text[:text.index(":")].strip()[:max_len]
+                return fallback
+            return text
+
         # Intentional clue artifact (character placed it deliberately)
-        clue_name = char.get("clue_artifact", f"{char['name']}'s Clue")
-        clue_desc = char.get("clue_artifact_desc", f"Something left by {char['name']}.")
+        raw_clue = char.get("clue_artifact", "")
+        clue_name = _short_name(raw_clue, f"{char['name']}'s Journal")
+        clue_desc = char.get("clue_artifact_desc", raw_clue or f"Something left by {char['name']}.")
         clue_id = _stable_id(f"clue-{i}-{clue_name}")
         source_room.add_entity(Entity(
             id=clue_id,
@@ -852,8 +862,9 @@ def _build_rooms_and_puzzles(
         })
 
         # Accidental clue (character didn't realize they left evidence)
-        acc_name = char.get("accidental_clue", f"Traces of {char['name']}")
-        acc_desc = char.get("accidental_clue_desc", f"Evidence of {char['name']}'s habits.")
+        raw_acc = char.get("accidental_clue", "")
+        acc_name = _short_name(raw_acc, f"{char['name']}'s Traces")
+        acc_desc = char.get("accidental_clue_desc", raw_acc or f"Evidence of {char['name']}'s habits.")
         acc_id = _stable_id(f"aclue-{i}-{acc_name}")
         source_room.add_entity(Entity(
             id=acc_id, name=acc_name, description=acc_desc,
@@ -972,10 +983,11 @@ def _build_rooms_and_puzzles(
             examiner_id = _stable_id(f"examiner-{i}")
             hidden_id = _stable_id(f"hidden-{i}")
             mechanism_id = _stable_id(f"mech-{i}")
-            hidden_name = char.get("code", "hidden_token").replace("_", " ").title()
+            raw_hidden = char.get("code", "hidden_token").replace("_", " ").title()
+            hidden_name = _short_name(raw_hidden, f"{char['name']}'s Token")
             source_room.add_entity(Entity(
                 id=examiner_id, name=f"{char['name']}'s Keepsake",
-                description=char.get("clue_artifact_desc", f"Something precious to {char['name']}."),
+                description=f"Something precious belonging to {char['name']}. Examine it closely — something may be hidden inside.",
                 properties={
                     "on_examine": {
                         "reveal": [hidden_id],
