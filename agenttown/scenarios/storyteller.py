@@ -769,9 +769,13 @@ def _build_rooms_and_puzzles(
     start_room_seed = room_seeds[0] if room_seeds else {"name": "Entrance", "desc": "The starting point."}
     exit_room_seed = room_seeds[-1] if len(room_seeds) > 1 else {"name": "Exit Hall", "desc": "Freedom awaits."}
 
+    def _room_desc(seed: dict) -> str:
+        """Get room description, handling both 'desc' and 'description' keys."""
+        return seed.get("desc", seed.get("description", "A mysterious room."))
+
     # Create start room
     start_id = _stable_id(f"room-start-{start_room_seed['name']}")
-    ws.add_room(Room(id=start_id, name=start_room_seed["name"], description=start_room_seed["desc"]))
+    ws.add_room(Room(id=start_id, name=start_room_seed["name"], description=_room_desc(start_room_seed)))
     room_ids = [start_id]
 
     # Create one room per character (using THEIR room data if available)
@@ -780,14 +784,14 @@ def _build_rooms_and_puzzles(
 
     for i, char in enumerate(puzzle_chars):
         rname = char.get("room_name", f"{char['name']}'s Room")
-        rdesc = char.get("room_desc", f"A room associated with {char['name']}.")
+        rdesc = char.get("room_desc", char.get("room_description", f"A room associated with {char['name']}."))
         rid = _stable_id(f"room-{i}-{rname}")
         ws.add_room(Room(id=rid, name=rname, description=rdesc))
         room_ids.append(rid)
 
     # Create exit room
     exit_id = _stable_id(f"room-exit-{exit_room_seed['name']}")
-    ws.add_room(Room(id=exit_id, name=exit_room_seed["name"], description=exit_room_seed["desc"]))
+    ws.add_room(Room(id=exit_id, name=exit_room_seed["name"], description=_room_desc(exit_room_seed)))
     room_ids.append(exit_id)
 
     start_room_id = room_ids[0]
