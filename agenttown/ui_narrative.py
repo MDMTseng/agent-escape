@@ -22,6 +22,9 @@ NARRATIVE_HTML = """\
         /* ===== RESET & BASE ===== */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body { height: 100%; overflow: hidden; }
+        @media (max-width: 900px) {
+            html, body { height: auto; min-height: 100%; overflow: auto; }
+        }
         body {
             font-family: 'Georgia', 'Times New Roman', serif;
             background: #0d1117;
@@ -631,15 +634,39 @@ NARRATIVE_HTML = """\
 
         /* ===== MOBILE ===== */
         @media (max-width: 900px) {
+            /* Enable scrolling on all screens */
+            #story-mode { height: auto; min-height: 100vh; overflow: auto; }
+            #library-screen, #seed-screen, #reveal-screen {
+                height: auto; min-height: 100vh; overflow-y: auto !important;
+                flex: none;
+            }
+            #feed-screen {
+                height: auto; min-height: 100vh; overflow-y: auto !important;
+                flex: none;
+            }
+            #feed-screen #feed-card-container {
+                overflow-y: auto; flex: none; min-height: 200px;
+            }
+            /* Director mode scrollable on mobile too */
+            #director-mode {
+                height: auto; min-height: 100vh; overflow: auto;
+                flex-direction: column;
+            }
+            #dir-story-panel, #dir-right-panel {
+                flex: none; height: auto; overflow: visible;
+                border-right: none; border-bottom: 1px solid #21262d;
+            }
+            #dir-right-panel { max-height: none; }
+
             #library-screen { padding: 20px 12px; }
             #library-screen .lib-title { font-size: 24px; }
             .lib-story-card .lsc-header { flex-direction: column; align-items: flex-start; gap: 8px; }
             .lib-story-card .lsc-actions { width: 100%; flex-wrap: wrap; }
             .lib-story-card .lsc-actions button { flex: 1; text-align: center; }
-            #seed-screen { padding: 20px 12px; }
+            #seed-screen { padding: 20px 12px; justify-content: flex-start; }
             #seed-screen .seed-title { font-size: 24px; }
-            .theme-cards { gap: 10px; }
-            .theme-card { width: 160px; padding: 14px 10px; }
+            .theme-cards { gap: 8px; justify-content: center; }
+            .theme-card { width: calc(50% - 8px); min-width: 140px; padding: 12px 8px; }
             .theme-card .tc-icon { font-size: 24px; }
             .theme-card .tc-name { font-size: 13px; }
 
