@@ -153,6 +153,86 @@ NARRATIVE_HTML = """\
             margin-right: 8px;
         }
         #feed-btn-library:hover { background: #3d3010; }
+        #feed-btn-reveal {
+            font-family: monospace; font-size: 11px; padding: 4px 12px;
+            border: 1px solid #d2a8ff; border-radius: 4px; cursor: pointer;
+            background: #1a1030; color: #d2a8ff; transition: all 0.2s;
+            margin-left: 6px;
+        }
+        #feed-btn-reveal:hover { background: #2a1840; }
+
+        /* Mystery Reveal Modal */
+        #reveal-modal {
+            display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.92); z-index: 200; overflow-y: auto;
+            padding: 20px;
+        }
+        #reveal-modal .reveal-content {
+            max-width: 800px; margin: 0 auto; padding: 20px;
+        }
+        #reveal-modal .reveal-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 24px; border-bottom: 1px solid #30363d; padding-bottom: 16px;
+        }
+        #reveal-modal .reveal-header h2 { color: #d2a8ff; font-size: 24px; }
+        #reveal-modal .close-reveal {
+            font-family: monospace; font-size: 12px; padding: 6px 16px;
+            border: 1px solid #30363d; border-radius: 4px; cursor: pointer;
+            background: #21262d; color: #c9d1d9;
+        }
+        .reveal-incident {
+            background: #161b22; border-left: 3px solid #f85149; padding: 16px;
+            border-radius: 0 8px 8px 0; margin-bottom: 24px;
+            font-style: italic; color: #e6edf3; line-height: 1.8;
+        }
+        .reveal-chapter {
+            background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+            padding: 20px; margin-bottom: 16px;
+        }
+        .reveal-chapter .rc-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 12px;
+        }
+        .reveal-chapter .rc-num { color: #e3b341; font-family: monospace; font-size: 11px; letter-spacing: 2px; }
+        .reveal-chapter .rc-char { color: #58a6ff; font-size: 18px; font-weight: bold; }
+        .reveal-chapter .rc-trait {
+            font-family: monospace; font-size: 10px; padding: 2px 8px;
+            background: #21262d; border-radius: 3px; color: #8b949e;
+        }
+        .reveal-chapter .rc-backstory { color: #c9d1d9; margin-bottom: 12px; line-height: 1.7; }
+        .reveal-chapter .rc-secret { color: #f85149; font-style: italic; margin-bottom: 12px; }
+        .reveal-detail {
+            display: grid; grid-template-columns: auto 1fr; gap: 4px 12px;
+            font-family: monospace; font-size: 12px; margin-bottom: 8px;
+        }
+        .reveal-detail .rd-label { color: #8b949e; text-align: right; }
+        .reveal-detail .rd-value { color: #e6edf3; }
+        .reveal-detail .rd-code { color: #3fb950; font-weight: bold; }
+        .reveal-detail .rd-meaning { color: #e3b341; font-style: italic; }
+        .reveal-room-map {
+            background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+            padding: 16px; margin-top: 20px;
+        }
+        .reveal-room-map h3 { color: #e3b341; font-family: monospace; font-size: 13px; margin-bottom: 12px; }
+        .reveal-room {
+            padding: 8px; border-bottom: 1px solid #21262d; font-family: monospace; font-size: 12px;
+        }
+        .reveal-room:last-child { border-bottom: none; }
+        .reveal-room .rr-name { color: #58a6ff; font-weight: bold; }
+        .reveal-room .rr-conn { color: #8b949e; margin-left: 16px; }
+        .reveal-chain {
+            background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+            padding: 16px; margin-top: 20px;
+        }
+        .reveal-chain h3 { color: #3fb950; font-family: monospace; font-size: 13px; margin-bottom: 12px; }
+        .reveal-step {
+            padding: 6px 8px; font-family: monospace; font-size: 12px;
+            border-left: 2px solid #30363d; margin-left: 8px; margin-bottom: 4px;
+            padding-left: 12px;
+        }
+        .reveal-step .rs-num { color: #e3b341; }
+        .reveal-step .rs-desc { color: #e6edf3; }
+        .reveal-step.coop { border-left-color: #d2a8ff; }
 
         /* ===== SCROLLBAR ===== */
         ::-webkit-scrollbar { width: 6px; }
@@ -797,6 +877,7 @@ NARRATIVE_HTML = """\
     <div id="feed-screen">
         <div id="feed-header">
             <button id="feed-btn-library" onclick="goToLibrary()">Library</button>
+            <button id="feed-btn-reveal" onclick="showReveal()">Reveal Mystery</button>
             <div class="fh-title" id="feed-title">AgentTown</div>
             <div id="feed-controls">
                 <button id="feed-btn-pause" onclick="simPause()">Pause</button>
@@ -949,6 +1030,17 @@ NARRATIVE_HTML = """\
 
 <div id="copy-toast">Copied to clipboard!</div>
 
+<!-- Mystery Reveal Modal -->
+<div id="reveal-modal">
+    <div class="reveal-content" id="reveal-body">
+        <div class="reveal-header">
+            <h2>Mystery Revealed</h2>
+            <button class="close-reveal" onclick="closeReveal()">Close</button>
+        </div>
+        <div id="reveal-inner">Loading...</div>
+    </div>
+</div>
+
 <script>
 // ================================================================
 // STATE
@@ -1021,6 +1113,123 @@ function showSeedScreen() {
     document.getElementById('feed-screen').style.display = 'none';
     storyScreen = 'seed';
     currentStoryId = null;
+}
+
+function showReveal() {
+    const modal = document.getElementById('reveal-modal');
+    const inner = document.getElementById('reveal-inner');
+    modal.style.display = 'block';
+    inner.innerHTML = '<div style="color:#8b949e;text-align:center;padding:40px;">Loading mystery...</div>';
+
+    // Determine which story to reveal
+    const storyId = currentStoryId;
+    if (!storyId) {
+        inner.innerHTML = '<div style="color:#f85149;padding:20px;">No story loaded. Create or load a story first.</div>';
+        return;
+    }
+
+    fetch(`/api/stories/${storyId}/reveal`).then(r => r.json()).then(data => {
+        if (data.error) {
+            inner.innerHTML = `<div style="color:#f85149;padding:20px;">${data.error}</div>`;
+            return;
+        }
+
+        let html = '';
+
+        // Title and premise
+        html += `<div style="text-align:center;margin-bottom:24px;">`;
+        html += `<div style="font-size:28px;color:#e3b341;margin-bottom:8px;">${data.title || 'Untitled'}</div>`;
+        html += `<div style="color:#8b949e;font-style:italic;">${data.theme} · Difficulty ${data.difficulty}</div>`;
+        html += `<div style="color:#c9d1d9;margin-top:8px;">${data.premise}</div>`;
+        html += `</div>`;
+
+        // Inciting incident
+        if (data.inciting_incident) {
+            html += `<div class="reveal-incident">${data.inciting_incident}</div>`;
+        }
+
+        // Chapters (characters)
+        if (data.chapters && data.chapters.length) {
+            html += `<h3 style="color:#58a6ff;font-family:monospace;font-size:14px;margin-bottom:12px;letter-spacing:2px;">THE CHARACTERS & THEIR PUZZLES</h3>`;
+            data.chapters.forEach((ch, i) => {
+                html += `<div class="reveal-chapter">`;
+                html += `<div class="rc-header">`;
+                html += `<div><span class="rc-num">CHAPTER ${i + 1}</span></div>`;
+                html += `<span class="rc-trait">${ch.trait}</span>`;
+                html += `</div>`;
+                html += `<div class="rc-char">${ch.character}</div>`;
+                if (ch.backstory) html += `<div class="rc-backstory">${ch.backstory}</div>`;
+                if (ch.secret) html += `<div class="rc-secret">Secret: ${ch.secret}</div>`;
+                html += `<div class="reveal-detail">`;
+                if (ch.room) {
+                    html += `<div class="rd-label">Room:</div><div class="rd-value">${ch.room}</div>`;
+                }
+                if (ch.puzzle_type) {
+                    html += `<div class="rd-label">Puzzle:</div><div class="rd-value">${ch.puzzle_type.replace('_', ' ')}</div>`;
+                }
+                if (ch.code) {
+                    html += `<div class="rd-label">Solution:</div><div class="rd-code">${ch.code}</div>`;
+                }
+                if (ch.code_meaning) {
+                    html += `<div class="rd-label">Why:</div><div class="rd-meaning">${ch.code_meaning}</div>`;
+                }
+                if (ch.clue_artifact) {
+                    html += `<div class="rd-label">Clue:</div><div class="rd-value">${ch.clue_artifact}</div>`;
+                }
+                if (ch.clue_artifact_desc) {
+                    html += `<div class="rd-label"></div><div class="rd-value" style="color:#8b949e;font-size:11px;">${ch.clue_artifact_desc.substring(0, 200)}</div>`;
+                }
+                if (ch.accidental_clue) {
+                    html += `<div class="rd-label">Evidence:</div><div class="rd-value">${ch.accidental_clue}</div>`;
+                }
+                if (ch.accidental_clue_desc) {
+                    html += `<div class="rd-label"></div><div class="rd-value" style="color:#8b949e;font-size:11px;">${ch.accidental_clue_desc.substring(0, 200)}</div>`;
+                }
+                if (ch.lock) {
+                    html += `<div class="rd-label">Lock:</div><div class="rd-value">${ch.lock}</div>`;
+                }
+                html += `</div></div>`;
+            });
+        }
+
+        // Room map
+        if (data.room_map && data.room_map.length) {
+            html += `<div class="reveal-room-map"><h3>ROOM MAP</h3>`;
+            data.room_map.forEach(room => {
+                html += `<div class="reveal-room">`;
+                html += `<div class="rr-name">${room.name}</div>`;
+                if (room.description) html += `<div style="color:#8b949e;font-size:11px;margin:2px 0 4px 0;">${room.description.substring(0, 120)}</div>`;
+                room.connections.forEach(conn => {
+                    const lockIcon = conn.locked ? ' 🔒' : ' →';
+                    html += `<div class="rr-conn">${conn.direction}${lockIcon} ${conn.to} (${conn.door_name})</div>`;
+                });
+                html += `</div>`;
+            });
+            html += `</div>`;
+        }
+
+        // Escape chain
+        if (data.escape_chain && data.escape_chain.length) {
+            html += `<div class="reveal-chain"><h3>SOLUTION PATH</h3>`;
+            data.escape_chain.forEach(step => {
+                const coop = step.cooperative ? ' coop' : '';
+                html += `<div class="reveal-step${coop}">`;
+                html += `<span class="rs-num">${step.step}.</span> `;
+                html += `<span class="rs-desc">${step.description || step.target}</span>`;
+                if (step.room) html += ` <span style="color:#8b949e;">[${step.room}]</span>`;
+                html += `</div>`;
+            });
+            html += `</div>`;
+        }
+
+        inner.innerHTML = html;
+    }).catch(err => {
+        inner.innerHTML = `<div style="color:#f85149;padding:20px;">Failed to load: ${err}</div>`;
+    });
+}
+
+function closeReveal() {
+    document.getElementById('reveal-modal').style.display = 'none';
 }
 
 function goToLibrary() {

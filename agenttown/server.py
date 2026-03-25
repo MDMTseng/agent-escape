@@ -985,6 +985,77 @@ async def get_story(story_id: int):
     return story
 
 
+@app.get("/api/stories/{story_id}/reveal")
+async def reveal_story(story_id: int):
+    """Full mystery reveal — complete story structure with all answers.
+
+    Shows: backstories, puzzle chain, code meanings, clue locations,
+    room connections, and the complete narrative arc.
+    """
+    if not sim_store:
+        return {"error": "Store not initialized"}
+    story = sim_store.get_story(story_id)
+    if not story:
+        return {"error": "Story not found"}
+
+    wb = story.get("world_bible", {})
+    characters = wb.get("characters", [])
+    chain = story.get("escape_chain", [])
+
+    # Build the reveal
+    chapters = []
+    for i, char in enumerate(characters):
+        chapters.append({
+            "chapter": i + 1,
+            "character": char.get("name", "Unknown"),
+            "trait": char.get("trait", ""),
+            "backstory": char.get("backstory", char.get("desc", "")),
+            "secret": char.get("secret", ""),
+            "room": char.get("room_name", ""),
+            "room_desc": char.get("room_desc", ""),
+            "puzzle_type": char.get("puzzle_type", ""),
+            "code": char.get("code", ""),
+            "code_meaning": char.get("code_meaning", ""),
+            "clue_artifact": char.get("clue_artifact", ""),
+            "clue_artifact_desc": char.get("clue_artifact_desc", ""),
+            "accidental_clue": char.get("accidental_clue", ""),
+            "accidental_clue_desc": char.get("accidental_clue_desc", ""),
+            "lock": char.get("lock_name", ""),
+            "lock_desc": char.get("lock_desc", ""),
+        })
+
+    # Room connection map from initial snapshot
+    room_map = []
+    snap = story.get("initial_snapshot", {})
+    state = snap.get("state", {})
+    rooms = state.get("rooms", {})
+    doors = state.get("doors", {})
+    for rid, room in rooms.items():
+        connections = []
+        for direction, did in room.get("doors", {}).items():
+            door = doors.get(did, {})
+            other_id = door.get("room_b") if door.get("room_a") == rid else door.get("room_a")
+            other_name = rooms.get(other_id, {}).get("name", "?") if other_id else "?"
+            connections.append({
+                "direction": direction,
+                "to": other_name,
+                "door_name": door.get("name", ""),
+                "locked": door.get("locked", False),
+            })
+        room_map.append({"name": room["name"], "description": room.get("description", ""), "connections": connections})
+
+    return {
+        "title": story["title"],
+        "theme": story["theme"],
+        "premise": story["premise"],
+        "difficulty": story["difficulty"],
+        "inciting_incident": wb.get("inciting_incident", ""),
+        "chapters": chapters,
+        "escape_chain": chain,
+        "room_map": room_map,
+    }
+
+
 @app.delete("/api/stories/{story_id}")
 async def delete_story(story_id: int):
     """Delete a story and all its saves."""
