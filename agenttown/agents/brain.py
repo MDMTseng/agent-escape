@@ -125,6 +125,7 @@ class LLMBrain:
                 system=system_prompt,
                 tools=ANTHROPIC_TOOLS,
                 messages=[{"role": "user", "content": perception_text}],
+                timeout=30.0,
             )
 
         try:
