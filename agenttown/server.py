@@ -322,13 +322,14 @@ async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
     connected_clients.add(ws)
 
-    # Send current state on connect
+    # Send current state on connect (include escape chain so UI shows progress)
     if sim_world:
         await ws.send_text(json.dumps({
             "type": "snapshot",
             "tick": sim_world.tick,
             "paused": sim_paused,
             "world_state": sim_world.snapshot(),
+            "escape_chain": sim_escape_chain,
         }))
 
     try:
@@ -402,7 +403,7 @@ async def list_saves():
 
 @app.post("/api/load/{save_id}")
 async def load_game(save_id: int):
-    global sim_world, sim_brains, sim_paused
+    global sim_world, sim_brains, sim_paused, sim_escape_chain, sim_current_story_id
     if not sim_store:
         return {"error": "Store not initialized"}
 
@@ -420,14 +421,25 @@ async def load_game(save_id: int):
         for aid, bdata in data["brain_snapshots"].items()
     })
 
+    # Restore escape chain and story context from the parent story
+    story_id = data.get("story_id")
+    if story_id and sim_store:
+        story = sim_store.get_story(story_id)
+        if story:
+            sim_escape_chain = story.get("escape_chain", [])
+            sim_current_story_id = story_id
+            sim_store.touch_story(story_id)
+
     await broadcast({
         "type": "snapshot",
         "tick": sim_world.tick,
         "paused": True,
         "world_state": sim_world.snapshot(),
+        "escape_chain": sim_escape_chain,
     })
 
-    return {"status": "loaded", "tick": sim_world.tick, "name": data["name"]}
+    return {"status": "loaded", "tick": sim_world.tick, "name": data["name"],
+            "story_id": sim_current_story_id}
 
 
 @app.delete("/api/saves/{save_id}")
@@ -1076,6 +1088,11 @@ async def play_story(story_id: int, body: dict | None = None):
 
     save_id = (body or {}).get("save_id")
 
+    # Always fetch story data for escape chain
+    story = sim_store.get_story(story_id)
+    if not story:
+        return {"error": "Story not found"}
+
     if save_id:
         # Load from specific save
         data = sim_store.load(save_id)
@@ -1090,9 +1107,6 @@ async def play_story(story_id: int, body: dict | None = None):
         })
     else:
         # Load from initial state (fresh game)
-        story = sim_store.get_story(story_id)
-        if not story:
-            return {"error": "Story not found"}
         from agenttown.agents.brain import LLMBrain
         sim_world = World.from_full_snapshot(story["initial_snapshot"])
         sim_brains.clear()
@@ -1100,8 +1114,9 @@ async def play_story(story_id: int, body: dict | None = None):
             aid: LLMBrain.from_snapshot(bdata)
             for aid, bdata in story["brain_init"].items()
         })
-        sim_escape_chain = story["escape_chain"]
 
+    # Always restore escape chain from the story
+    sim_escape_chain = story.get("escape_chain", [])
     sim_paused = True
     sim_current_story_id = story_id
     sim_store.touch_story(story_id)
@@ -1109,12 +1124,14 @@ async def play_story(story_id: int, body: dict | None = None):
     await broadcast({
         "type": "snapshot", "tick": sim_world.tick, "paused": True,
         "world_state": sim_world.snapshot(),
+        "escape_chain": sim_escape_chain,
     })
 
     return {
         "status": "loaded",
         "story_id": story_id,
         "tick": sim_world.tick,
+        "title": story.get("title", ""),
     }
 
 
