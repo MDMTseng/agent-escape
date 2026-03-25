@@ -4,6 +4,7 @@ This module contains NARRATIVE_HTML, a complete HTML page that replaces
 DASHBOARD_HTML in server.py. It provides two modes:
 
   - Story Mode (default): An interactive detective novel generator experience
+    with a Story Library home screen for managing multiple stories and saves
   - Director Mode: The original dashboard with controls, scene graph, puzzle
     checklist, and log tabs
 
@@ -49,6 +50,106 @@ NARRATIVE_HTML = """\
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
+
+        /* ===== STORY LIBRARY SCREEN ===== */
+        #library-screen {
+            flex: 1; display: flex; flex-direction: column; align-items: center;
+            padding: 32px 20px; overflow-y: auto;
+        }
+        #library-screen .lib-title {
+            font-size: 36px; color: #e3b341; margin-bottom: 6px;
+            letter-spacing: 2px; text-align: center;
+        }
+        #library-screen .lib-subtitle {
+            font-size: 14px; color: #8b949e; font-style: italic;
+            margin-bottom: 28px; text-align: center;
+        }
+        #btn-create-story {
+            display: inline-block; margin-bottom: 24px; padding: 12px 32px;
+            background: linear-gradient(135deg, #e3b341, #c9952e);
+            border: none; border-radius: 8px; color: #0d1117;
+            font-family: 'Georgia', serif; font-size: 15px; font-weight: bold;
+            cursor: pointer; letter-spacing: 1px; transition: opacity 0.3s;
+        }
+        #btn-create-story:hover { opacity: 0.9; }
+        .story-library-grid {
+            width: 100%; max-width: 720px; display: flex; flex-direction: column; gap: 12px;
+        }
+        .lib-story-card {
+            background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+            padding: 18px 20px; cursor: pointer; transition: all 0.3s;
+        }
+        .lib-story-card:hover { border-color: #8b949e; transform: translateY(-1px); }
+        .lib-story-card.expanded { border-color: #e3b341; }
+        .lib-story-card .lsc-header {
+            display: flex; align-items: center; gap: 12px;
+        }
+        .lib-story-card .lsc-icon {
+            font-size: 28px; flex-shrink: 0;
+        }
+        .lib-story-card .lsc-info { flex: 1; min-width: 0; }
+        .lib-story-card .lsc-title {
+            font-size: 16px; color: #e6edf3; font-weight: bold;
+            margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .lib-story-card .lsc-meta {
+            font-family: monospace; font-size: 11px; color: #8b949e;
+            display: flex; gap: 12px; flex-wrap: wrap;
+        }
+        .lib-story-card .lsc-difficulty {
+            color: #e3b341; letter-spacing: 1px;
+        }
+        .lib-story-card .lsc-actions {
+            display: flex; gap: 6px; flex-shrink: 0;
+        }
+        .lib-story-card .lsc-actions button {
+            font-family: monospace; font-size: 11px; padding: 5px 14px;
+            border: 1px solid #30363d; border-radius: 5px; cursor: pointer;
+            background: #21262d; color: #c9d1d9; transition: all 0.2s;
+        }
+        .lib-story-card .lsc-actions button:hover { background: #30363d; border-color: #58a6ff; }
+        .lib-story-card .lsc-actions button.btn-continue {
+            background: #1f6feb; border-color: #58a6ff; color: #fff;
+        }
+        .lib-story-card .lsc-actions button.btn-continue:hover { background: #388bfd; }
+        .lib-story-card .lsc-actions button.btn-delete { color: #f85149; }
+        .lib-story-card .lsc-actions button.btn-delete:hover { border-color: #f85149; }
+        .lib-story-card .lsc-saves {
+            display: none; margin-top: 14px; padding-top: 12px;
+            border-top: 1px solid #21262d;
+        }
+        .lib-story-card.expanded .lsc-saves { display: block; }
+        .lib-save-entry {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 6px 8px; border-bottom: 1px solid #161b22;
+            font-family: monospace; font-size: 11px;
+        }
+        .lib-save-entry:last-child { border-bottom: none; }
+        .lib-save-entry .lse-info { color: #8b949e; }
+        .lib-save-entry .lse-name { color: #e6edf3; font-weight: bold; }
+        .lib-save-entry button {
+            font-family: monospace; font-size: 10px; padding: 3px 10px;
+            border: 1px solid #30363d; border-radius: 3px; cursor: pointer;
+            background: #21262d; color: #c9d1d9;
+        }
+        .lib-save-entry button:hover { border-color: #58a6ff; }
+        .lib-empty-state {
+            text-align: center; padding: 48px 20px; color: #8b949e;
+            font-style: italic; font-size: 15px;
+        }
+        .lib-loading {
+            text-align: center; padding: 32px; color: #8b949e;
+            font-family: monospace; font-size: 12px;
+        }
+
+        /* Library button in feed header */
+        #feed-btn-library {
+            font-family: monospace; font-size: 11px; padding: 4px 12px;
+            border: 1px solid #e3b341; border-radius: 4px; cursor: pointer;
+            background: #2d2006; color: #e3b341; transition: all 0.2s;
+            margin-right: 8px;
+        }
+        #feed-btn-library:hover { background: #3d3010; }
 
         /* ===== SCROLLBAR ===== */
         ::-webkit-scrollbar { width: 6px; }
@@ -530,6 +631,11 @@ NARRATIVE_HTML = """\
 
         /* ===== MOBILE ===== */
         @media (max-width: 900px) {
+            #library-screen { padding: 20px 12px; }
+            #library-screen .lib-title { font-size: 24px; }
+            .lib-story-card .lsc-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+            .lib-story-card .lsc-actions { width: 100%; flex-wrap: wrap; }
+            .lib-story-card .lsc-actions button { flex: 1; text-align: center; }
             #seed-screen { padding: 20px 12px; }
             #seed-screen .seed-title { font-size: 24px; }
             .theme-cards { gap: 10px; }
@@ -583,8 +689,18 @@ NARRATIVE_HTML = """\
 <!-- ========================================= -->
 <div id="story-mode">
 
+    <!-- Screen 0: Story Library (home) -->
+    <div id="library-screen">
+        <div class="lib-title">AgentTown</div>
+        <div class="lib-subtitle">Your Stories</div>
+        <button id="btn-create-story" onclick="showSeedScreen()">+ Create New Story</button>
+        <div class="story-library-grid" id="story-library-grid">
+            <div class="lib-loading">Loading stories...</div>
+        </div>
+    </div>
+
     <!-- Screen 1: Story Seed -->
-    <div id="seed-screen">
+    <div id="seed-screen" style="display:none;">
         <div class="seed-title">AgentTown</div>
         <div class="seed-subtitle">An interactive detective novel generator</div>
 
@@ -641,6 +757,7 @@ NARRATIVE_HTML = """\
     <!-- Screen 3: Story Feed -->
     <div id="feed-screen">
         <div id="feed-header">
+            <button id="feed-btn-library" onclick="goToLibrary()">Library</button>
             <div class="fh-title" id="feed-title">AgentTown</div>
             <div id="feed-controls">
                 <button id="feed-btn-pause" onclick="simPause()">Pause</button>
@@ -798,10 +915,20 @@ NARRATIVE_HTML = """\
 // STATE
 // ================================================================
 let currentMode = 'story'; // 'story' or 'director'
-let storyScreen = 'seed';  // 'seed', 'reveal', 'feed'
+let storyScreen = 'library';  // 'library', 'seed', 'reveal', 'feed'
 let selectedTheme = 'gothic_manor';
 let isPaused = true;
 let worldBible = null;
+let currentStoryId = null;  // active story ID for save/load
+
+// Theme icons lookup
+const THEME_ICONS = {
+    gothic_manor: '&#x1F3DA;', sci_fi_lab: '&#x1F52C;', ancient_tomb: '&#x1F3DB;',
+    mystery: '&#x1F50D;', horror: '&#x1F480;', fantasy: '&#x2694;',
+};
+const THEME_NAMES = {
+    gothic_manor: 'Gothic Manor', sci_fi_lab: 'Sci-Fi Lab', ancient_tomb: 'Ancient Tomb',
+};
 
 // Feed story cards
 const feedCards = [];
@@ -834,6 +961,229 @@ function toggleMode() {
         storyEl.classList.remove('hidden');
         dirEl.classList.remove('visible');
     }
+}
+
+// ================================================================
+// STORY MODE: LIBRARY SCREEN
+// ================================================================
+function showLibraryScreen() {
+    document.getElementById('library-screen').style.display = 'flex';
+    document.getElementById('seed-screen').style.display = 'none';
+    document.getElementById('reveal-screen').style.display = 'none';
+    document.getElementById('feed-screen').style.display = 'none';
+    storyScreen = 'library';
+    loadStoryLibrary();
+}
+
+function showSeedScreen() {
+    document.getElementById('library-screen').style.display = 'none';
+    document.getElementById('seed-screen').style.display = 'flex';
+    document.getElementById('reveal-screen').style.display = 'none';
+    document.getElementById('feed-screen').style.display = 'none';
+    storyScreen = 'seed';
+    currentStoryId = null;
+}
+
+function goToLibrary() {
+    // Auto-save current game if there is a story_id
+    if (currentStoryId) {
+        fetch('/api/save', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({story_id: currentStoryId}),
+        }).then(() => {
+            showLibraryScreen();
+        }).catch(() => {
+            showLibraryScreen();
+        });
+    } else {
+        // Try saving without story_id
+        fetch('/api/save', {method: 'POST'}).then(() => {
+            showLibraryScreen();
+        }).catch(() => {
+            showLibraryScreen();
+        });
+    }
+}
+
+function loadStoryLibrary() {
+    const grid = document.getElementById('story-library-grid');
+    grid.innerHTML = '<div class="lib-loading">Loading stories...</div>';
+
+    fetch('/api/stories').then(r => r.json()).then(data => {
+        const stories = data.stories || [];
+        if (stories.length === 0) {
+            grid.innerHTML = '<div class="lib-empty-state">No stories yet. Create your first!</div>';
+            return;
+        }
+        grid.innerHTML = stories.map(s => {
+            const icon = THEME_ICONS[s.theme] || '&#x1F4D6;';
+            const diffDots = '&#x25CF;'.repeat(s.difficulty || 3) + '&#x25CB;'.repeat(5 - (s.difficulty || 3));
+            const saveCount = s.save_count || 0;
+            const lastTick = s.last_tick !== undefined ? s.last_tick : '?';
+            const created = s.created_at ? s.created_at.slice(0, 10) : '';
+            return `<div class="lib-story-card" data-story-id="${s.id}" onclick="toggleStoryExpand(this)">
+                <div class="lsc-header">
+                    <div class="lsc-icon">${icon}</div>
+                    <div class="lsc-info">
+                        <div class="lsc-title">${escapeHtml(s.title || 'Untitled Story')}</div>
+                        <div class="lsc-meta">
+                            <span class="lsc-difficulty">${diffDots}</span>
+                            <span>${created}</span>
+                            <span>${saveCount} save${saveCount !== 1 ? 's' : ''}</span>
+                            <span>Tick ${lastTick}</span>
+                        </div>
+                    </div>
+                    <div class="lsc-actions" onclick="event.stopPropagation()">
+                        <button class="btn-continue" onclick="continueStory(${s.id})">Continue</button>
+                        <button onclick="newGameFromStory(${s.id})">New Game</button>
+                        <button class="btn-delete" onclick="deleteStory(${s.id})">Delete</button>
+                    </div>
+                </div>
+                <div class="lsc-saves" id="story-saves-${s.id}">
+                    <div class="lib-loading">Loading saves...</div>
+                </div>
+            </div>`;
+        }).join('');
+    }).catch(err => {
+        grid.innerHTML = '<div class="lib-empty-state">Could not load stories. Server may be unavailable.</div>';
+    });
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+function toggleStoryExpand(cardEl) {
+    const wasExpanded = cardEl.classList.contains('expanded');
+    // Collapse all
+    document.querySelectorAll('.lib-story-card').forEach(c => c.classList.remove('expanded'));
+    if (!wasExpanded) {
+        cardEl.classList.add('expanded');
+        const storyId = cardEl.getAttribute('data-story-id');
+        loadStorySaves(storyId);
+    }
+}
+
+function loadStorySaves(storyId) {
+    const savesDiv = document.getElementById('story-saves-' + storyId);
+    if (!savesDiv) return;
+    savesDiv.innerHTML = '<div class="lib-loading">Loading saves...</div>';
+
+    fetch('/api/stories/' + storyId).then(r => r.json()).then(data => {
+        const saves = data.saves || [];
+        if (saves.length === 0) {
+            savesDiv.innerHTML = '<div style="color:#8b949e;font-family:monospace;font-size:11px;padding:4px;">No saves for this story.</div>';
+            return;
+        }
+        savesDiv.innerHTML = saves.map(s => `
+            <div class="lib-save-entry">
+                <div>
+                    <span class="lse-name">${escapeHtml(s.name || 'Save')}</span>
+                    <span class="lse-info"> -- tick ${s.tick || '?'} -- ${(s.created_at || '').slice(0, 19)}</span>
+                </div>
+                <button onclick="event.stopPropagation(); loadStoryFromSave(${storyId}, ${s.id})">Load</button>
+            </div>
+        `).join('');
+    }).catch(() => {
+        savesDiv.innerHTML = '<div style="color:#f85149;font-family:monospace;font-size:11px;padding:4px;">Failed to load saves.</div>';
+    });
+}
+
+function continueStory(storyId) {
+    currentStoryId = storyId;
+    // Load latest save
+    fetch('/api/stories/' + storyId + '/play', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({mode: 'continue'}),
+    }).then(r => r.json()).then(data => {
+        if (data.error) {
+            alert('Failed to continue story: ' + data.error);
+            return;
+        }
+        feedCards.length = 0; feedCardIdx = -1; feedAutoFollow = true;
+        dirCards.length = 0; dirCardIdx = -1; dirAutoFollow = true;
+        escapeChain = [];
+        jumpToFeedFromLibrary(data.title || 'AgentTown');
+        setButtonState(true);
+        updateAllStatus('Story loaded -- press Resume or Step', '#e3b341');
+    }).catch(err => {
+        alert('Error: ' + err);
+    });
+}
+
+function newGameFromStory(storyId) {
+    currentStoryId = storyId;
+    fetch('/api/stories/' + storyId + '/play', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({mode: 'new_game'}),
+    }).then(r => r.json()).then(data => {
+        if (data.error) {
+            alert('Failed to start new game: ' + data.error);
+            return;
+        }
+        feedCards.length = 0; feedCardIdx = -1; feedAutoFollow = true;
+        dirCards.length = 0; dirCardIdx = -1; dirAutoFollow = true;
+        escapeChain = [];
+        jumpToFeedFromLibrary(data.title || 'AgentTown');
+        setButtonState(true);
+        updateAllStatus('New game ready -- press Resume or Step', '#e3b341');
+    }).catch(err => {
+        alert('Error: ' + err);
+    });
+}
+
+function loadStoryFromSave(storyId, saveId) {
+    currentStoryId = storyId;
+    fetch('/api/stories/' + storyId + '/play', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({mode: 'load_save', save_id: saveId}),
+    }).then(r => r.json()).then(data => {
+        if (data.error) {
+            alert('Failed to load save: ' + data.error);
+            return;
+        }
+        feedCards.length = 0; feedCardIdx = -1; feedAutoFollow = true;
+        dirCards.length = 0; dirCardIdx = -1; dirAutoFollow = true;
+        escapeChain = [];
+        jumpToFeedFromLibrary(data.title || 'AgentTown');
+        setButtonState(true);
+        updateAllStatus(`Loaded save (tick ${data.tick || '?'}) -- press Resume or Step`, '#e3b341');
+    }).catch(err => {
+        alert('Error: ' + err);
+    });
+}
+
+function deleteStory(storyId) {
+    if (!confirm('Delete this story and all its saves? This cannot be undone.')) return;
+    fetch('/api/stories/' + storyId, {method: 'DELETE'}).then(r => r.json()).then(data => {
+        if (data.error) {
+            alert('Failed to delete: ' + data.error);
+            return;
+        }
+        loadStoryLibrary();
+    }).catch(err => {
+        alert('Error: ' + err);
+    });
+}
+
+function jumpToFeedFromLibrary(title) {
+    document.getElementById('library-screen').style.display = 'none';
+    document.getElementById('seed-screen').style.display = 'none';
+    document.getElementById('reveal-screen').style.display = 'none';
+    document.getElementById('feed-screen').style.display = 'flex';
+    document.getElementById('feed-screen').classList.add('screen-fade-in');
+    storyScreen = 'feed';
+    document.getElementById('feed-title').textContent = title || 'AgentTown';
+    document.getElementById('feed-current-card').innerHTML = '<div class="fc-chapter">Waiting for first tick...</div>';
+    updateFeedNav(); updateDirNav();
+    updateTokenDisplay({total_tokens: 0}, null);
+    updateProgressBar([]);
 }
 
 // ================================================================
@@ -911,32 +1261,49 @@ function beginStory() {
     btn.textContent = 'Generating...';
     startTypewriter();
 
-    fetch('/api/generate-story', {
+    // Try the stories/create endpoint first; fall back to generate-story
+    const payload = {
+        theme: selectedTheme,
+        premise: premise,
+        difficulty: difficulty,
+        num_characters: 3,
+    };
+
+    fetch('/api/stories/create', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            theme: selectedTheme,
-            premise: premise,
-            difficulty: difficulty,
-            num_characters: 3,
-        }),
-    }).then(r => r.json()).then(data => {
+        body: JSON.stringify(payload),
+    }).then(r => {
+        if (!r.ok) throw new Error('stories/create not available');
+        return r.json();
+    }).then(data => {
         stopTypewriter();
         btn.disabled = false;
         btn.textContent = 'Begin Story';
-
-        if (data.error) {
-            alert('Generation failed: ' + data.error);
-            return;
-        }
-
+        if (data.error) { alert('Generation failed: ' + data.error); return; }
+        currentStoryId = data.story_id || data.id || null;
         worldBible = data.world_bible || null;
         showRevealScreen(data);
-    }).catch(err => {
-        stopTypewriter();
-        btn.disabled = false;
-        btn.textContent = 'Begin Story';
-        alert('Error: ' + err);
+    }).catch(() => {
+        // Fallback: use the existing generate-story endpoint
+        fetch('/api/generate-story', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload),
+        }).then(r => r.json()).then(data => {
+            stopTypewriter();
+            btn.disabled = false;
+            btn.textContent = 'Begin Story';
+            if (data.error) { alert('Generation failed: ' + data.error); return; }
+            currentStoryId = data.story_id || data.id || null;
+            worldBible = data.world_bible || null;
+            showRevealScreen(data);
+        }).catch(err => {
+            stopTypewriter();
+            btn.disabled = false;
+            btn.textContent = 'Begin Story';
+            alert('Error: ' + err);
+        });
     });
 }
 
@@ -947,13 +1314,13 @@ function showRevealScreen(data) {
     const seedScreen = document.getElementById('seed-screen');
     const revealScreen = document.getElementById('reveal-screen');
 
+    document.getElementById('library-screen').style.display = 'none';
     seedScreen.style.display = 'none';
     revealScreen.style.display = 'flex';
     revealScreen.classList.add('screen-fade-in');
 
     // Title
-    const themeNames = {gothic_manor: 'Gothic Manor', sci_fi_lab: 'Sci-Fi Lab', ancient_tomb: 'Ancient Tomb'};
-    const title = worldBible ? (worldBible.inciting_incident || themeNames[selectedTheme] || 'The World Awakens') : themeNames[selectedTheme] || 'The World Awakens';
+    const title = worldBible ? (worldBible.inciting_incident || THEME_NAMES[selectedTheme] || 'The World Awakens') : THEME_NAMES[selectedTheme] || 'The World Awakens';
     document.getElementById('reveal-title').textContent = title.length > 60 ? title.substring(0, 60) + '...' : title;
 
     const premise = worldBible ? worldBible.premise : document.getElementById('seed-premise').value;
@@ -1020,8 +1387,7 @@ function beginSimulation() {
     storyScreen = 'feed';
 
     // Set title
-    const themeNames = {gothic_manor: 'Gothic Manor', sci_fi_lab: 'Sci-Fi Lab', ancient_tomb: 'Ancient Tomb'};
-    document.getElementById('feed-title').textContent = themeNames[selectedTheme] || 'AgentTown';
+    document.getElementById('feed-title').textContent = THEME_NAMES[selectedTheme] || 'AgentTown';
 
     // Start in paused state, user presses Resume
     setButtonState(true);
@@ -1030,6 +1396,7 @@ function beginSimulation() {
 
 // Jump directly to feed (for reconnect / existing game)
 function jumpToFeed() {
+    document.getElementById('library-screen').style.display = 'none';
     document.getElementById('seed-screen').style.display = 'none';
     document.getElementById('reveal-screen').style.display = 'none';
     document.getElementById('feed-screen').style.display = 'flex';
@@ -1206,7 +1573,11 @@ function simStep() {
     });
 }
 function simSave() {
-    fetch('/api/save', {method:'POST'}).then(r => r.json()).then(d => {
+    const opts = {method:'POST', headers:{'Content-Type':'application/json'}};
+    if (currentStoryId) {
+        opts.body = JSON.stringify({story_id: currentStoryId});
+    }
+    fetch('/api/save', opts).then(r => r.json()).then(d => {
         updateAllStatus(`Saved: ${d.name} (id=${d.save_id})`, '#3fb950');
     });
 }
@@ -1834,7 +2205,7 @@ ws.onmessage = (e) => {
             updateProgressBar(msg.escape_chain);
 
             // If we're on the reveal screen, populate rooms
-            if (storyScreen === 'seed' || document.getElementById('reveal-screen').style.display === 'flex') {
+            if (storyScreen === 'seed' || storyScreen === 'library' || document.getElementById('reveal-screen').style.display === 'flex') {
                 pendingSnapshot = msg.world_state;
                 if (document.getElementById('reveal-screen').style.display === 'flex') {
                     populateRevealRooms(msg.world_state);
@@ -1850,7 +2221,7 @@ ws.onmessage = (e) => {
                 updateAllStatus(`Paused at tick ${msg.tick} -- press Resume or Step`, '#e3b341');
             }
             // If snapshot has ticks, we have an existing game: jump to feed
-            if (msg.tick > 0 && storyScreen === 'seed') {
+            if (msg.tick > 0 && (storyScreen === 'seed' || storyScreen === 'library')) {
                 jumpToFeed();
             }
         }
@@ -1914,6 +2285,7 @@ ws.onmessage = (e) => {
 // INIT
 // ================================================================
 loadThemes();
+loadStoryLibrary();
 </script>
 </body>
 </html>
