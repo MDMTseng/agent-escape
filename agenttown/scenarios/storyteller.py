@@ -442,7 +442,7 @@ def generate_world_bible(
 
 logger = logging.getLogger(__name__)
 
-# JSON schema for structured AI output
+# JSON schema for structured AI output — includes full puzzle data per character
 _WORLD_BIBLE_SCHEMA = {
     "type": "object",
     "properties": {
@@ -454,6 +454,7 @@ _WORLD_BIBLE_SCHEMA = {
                     "name": {"type": "string"},
                     "desc": {"type": "string"},
                     "trait": {"type": "string", "enum": VALID_TRAITS},
+                    "backstory": {"type": "string"},
                     "secret": {"type": "string"},
                     "role": {"type": "string", "enum": ["builder", "inhabitant", "visitor", "guardian"]},
                     "relationships": {
@@ -467,8 +468,23 @@ _WORLD_BIBLE_SCHEMA = {
                             "required": ["target", "type"],
                         },
                     },
+                    # Puzzle data — what this character created
+                    "puzzle_type": {"type": "string", "enum": ["combination_lock", "key_lock", "password_door", "pressure_plate", "examine_reveal"]},
+                    "code": {"type": "string"},
+                    "code_meaning": {"type": "string"},
+                    "room_name": {"type": "string"},
+                    "room_desc": {"type": "string"},
+                    "clue_artifact": {"type": "string"},
+                    "clue_artifact_desc": {"type": "string"},
+                    "accidental_clue": {"type": "string"},
+                    "accidental_clue_desc": {"type": "string"},
+                    "lock_name": {"type": "string"},
+                    "lock_desc": {"type": "string"},
                 },
-                "required": ["name", "desc", "trait", "secret", "role", "relationships"],
+                "required": ["name", "desc", "trait", "backstory", "secret", "role", "relationships",
+                             "puzzle_type", "code", "code_meaning", "room_name", "room_desc",
+                             "clue_artifact", "clue_artifact_desc", "accidental_clue", "accidental_clue_desc",
+                             "lock_name", "lock_desc"],
             },
         },
         "inciting_incident": {"type": "string"},
@@ -515,18 +531,34 @@ def generate_world_bible_ai(
 
         num_rooms = min(3 + difficulty, len(THEME_ROOMS[theme_key]))
 
+        puzzle_types_explained = (
+            "combination_lock (4-digit code), key_lock (hidden key), "
+            "password_door (spoken word), pressure_plate (heavy object), "
+            "examine_reveal (hidden item found by examining)"
+        )
         prompt = (
-            f"Create a world bible for a {theme_key.replace('_', ' ')} escape room.\n"
+            f"Create a story-driven escape room based on this premise:\n"
             f"Premise: {premise}\n"
-            f"Generate {num_characters} characters and {num_rooms} rooms.\n\n"
-            f"Rules:\n"
-            f"- Each character needs a unique name, description, a trait from this list: {VALID_TRAITS}, "
-            f"a secret, a role (builder/inhabitant/visitor/guardian), and relationships to other characters.\n"
-            f"- Each relationship has a target (another character's name) and type (e.g. distrusts, protects, fears).\n"
-            f"- Every character must have at least one relationship.\n"
-            f"- Create an atmospheric inciting incident explaining why puzzles exist.\n"
-            f"- Room descriptions should be vivid and tied to the theme. Last room should be an exit/escape room.\n"
-            f"- Each room has 'name' and 'desc' fields.\n"
+            f"Theme: {theme_key.replace('_', ' ')}\n\n"
+            f"Generate {num_characters} characters who CREATED the puzzles in this place. "
+            f"Each character's personality explains WHY they built their puzzle and WHAT the code means.\n\n"
+            f"For each character provide:\n"
+            f"- name, desc, backstory (2-3 sentences explaining their role in the story)\n"
+            f"- trait (one of: {', '.join(VALID_TRAITS)})\n"
+            f"- secret, role (builder/inhabitant/visitor/guardian)\n"
+            f"- relationships (at least 1, with target name and type)\n"
+            f"- puzzle_type (one of: {puzzle_types_explained}). Use DIFFERENT types for each character.\n"
+            f"- code: the solution (4 digits for combination_lock, a word for password_door, descriptive for others)\n"
+            f"- code_meaning: WHY this code matters in the story (e.g. 'the year he discovered the formula')\n"
+            f"- room_name, room_desc: the room this character occupied (vivid, atmospheric, reflects personality)\n"
+            f"- clue_artifact, clue_artifact_desc: an object the character DELIBERATELY left as a clue (diary, letter, inscription)\n"
+            f"- accidental_clue, accidental_clue_desc: evidence the character LEFT WITHOUT REALIZING (worn path, fingerprints, habits)\n"
+            f"- lock_name, lock_desc: what the puzzle lock looks like\n\n"
+            f"Also provide:\n"
+            f"- inciting_incident: what happened that sealed everything (2-3 sentences)\n"
+            f"- rooms: {num_rooms} rooms with name/desc (first=entrance, last=exit, middle=character rooms)\n\n"
+            f"Make codes MEANINGFUL — a birth year, a name, a Latin word, an employee number. Never random digits.\n"
+            f"Make clue text read like real artifacts — diary entries, letters, inscriptions, notes.\n"
         )
 
         response = client.messages.create(
@@ -1155,12 +1187,13 @@ def build_story_world(
     premise: str,
     difficulty: int = 3,
     num_characters: int = 3,
-    use_ai: bool = False,
+    use_ai: bool = True,
 ) -> tuple[World, list[str], dict[str, Any]]:
     """Full pipeline: story seed → playable World + metadata.
 
     Args:
-        use_ai: If True, use AI-powered world bible generation via Claude API.
+        use_ai: If True (default), try AI-powered generation first for unique,
+                premise-aware content. Falls back to deterministic if AI unavailable.
 
     Returns:
         (world, agent_ids, metadata)
@@ -1168,7 +1201,7 @@ def build_story_world(
     """
     rng = random.Random(f"{theme}-{premise}-{difficulty}")
 
-    # Step 1: Generate world bible
+    # Step 1: Generate world bible — AI first, deterministic fallback
     gen_fn = generate_world_bible_ai if use_ai else generate_world_bible
     bible = gen_fn(
         theme=theme,

@@ -810,13 +810,13 @@ async def generate_story(body: dict | None = None):
             "message": f"Building story world: {theme}...",
         })
 
-        use_ai = os.environ.get("AGENTTOWN_CLAUDE", "").lower() in ("1", "true", "yes")
+        # Always try AI generation first — falls back to deterministic if unavailable
         sim_world, agent_ids, metadata = build_story_world(
             theme=theme,
             premise=premise,
             difficulty=difficulty,
             num_characters=num_characters,
-            use_ai=use_ai,
+            use_ai=True,
         )
 
         sim_escape_chain = copy.deepcopy(metadata["escape_chain"])
