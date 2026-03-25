@@ -49,6 +49,7 @@ sim_scenario: str = ""
 sim_store: Any = None  # GameStore instance
 sim_token_usage: dict = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 sim_escape_chain: list = []  # escape chain steps for progress tracking
+sim_current_story_id: int | None = None  # currently loaded story
 
 
 async def broadcast(message: dict) -> None:
@@ -387,8 +388,9 @@ async def save_game(name: str | None = None):
     if not sim_world or not sim_store:
         return {"error": "No simulation running"}
     save_name = name or f"Tick {sim_world.tick}"
-    save_id = sim_store.save(sim_world, sim_brains, sim_scenario, save_name)
-    return {"save_id": save_id, "name": save_name, "status": "saved"}
+    save_id = sim_store.save(sim_world, sim_brains, sim_scenario, save_name,
+                             story_id=sim_current_story_id)
+    return {"save_id": save_id, "name": save_name, "story_id": sim_current_story_id, "status": "saved"}
 
 
 @app.get("/api/saves")
@@ -867,6 +869,182 @@ async def generate_story(body: dict | None = None):
     except Exception as e:
         logger.error(f"Story generation failed: {e}")
         return {"error": str(e)}
+
+
+# ---- Story Library endpoints ----
+
+@app.get("/api/stories")
+async def list_stories():
+    """List all saved stories with save counts."""
+    if not sim_store:
+        return {"stories": []}
+    return {"stories": sim_store.list_stories()}
+
+
+@app.post("/api/stories/create")
+async def create_story(body: dict | None = None):
+    """Generate a new story, persist it, and load it into the simulation."""
+    global sim_world, sim_brains, sim_paused, sim_token_usage, sim_scenario
+    global sim_escape_chain, sim_current_story_id
+
+    if not body:
+        return {"error": "Missing request body"}
+
+    theme = body.get("theme", "gothic_manor")
+    premise = body.get("premise", "")
+    difficulty = body.get("difficulty", 3)
+    num_characters = body.get("num_characters", 3)
+
+    if not premise:
+        return {"error": "Premise is required"}
+
+    sim_paused = True
+
+    try:
+        from agenttown.scenarios.storyteller import build_story_world
+        import copy
+
+        await broadcast({
+            "type": "processing", "tick": 0, "step": "generating",
+            "message": f"Creating your story...",
+        })
+
+        sim_world, agent_ids, metadata = build_story_world(
+            theme=theme, premise=premise, difficulty=difficulty,
+            num_characters=num_characters, use_ai=True,
+        )
+
+        sim_escape_chain = copy.deepcopy(metadata["escape_chain"])
+        sim_scenario = "storyteller"
+
+        use_claude = os.environ.get("AGENTTOWN_CLAUDE", "").lower() in ("1", "true", "yes")
+        if use_claude:
+            from agenttown.agents.brain import LLMBrain
+            sim_brains.clear()
+            sim_brains.update({aid: LLMBrain() for aid in agent_ids})
+        else:
+            sim_brains.clear()
+            sim_brains.update({aid: RandomBrain() for aid in agent_ids})
+
+        sim_token_usage.update({"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+        _log_buffer.clear()
+
+        # Persist story to database
+        title = premise[:60] if premise else f"{theme} story"
+        wb = metadata.get("world_bible", {})
+
+        if sim_store:
+            sim_current_story_id = sim_store.create_story(
+                title=title, theme=theme, premise=premise, difficulty=difficulty,
+                world_bible=wb, escape_chain=metadata["escape_chain"],
+                world=sim_world, brains=sim_brains,
+            )
+        else:
+            sim_current_story_id = None
+
+        await broadcast({
+            "type": "snapshot", "tick": sim_world.tick, "paused": True,
+            "world_state": sim_world.snapshot(), "escape_chain": sim_escape_chain,
+        })
+
+        if sim_step_event:
+            sim_step_event.set()
+
+        return {
+            "status": "created",
+            "story_id": sim_current_story_id,
+            "title": title,
+            "rooms": len(sim_world.state.rooms),
+            "agents": len(agent_ids),
+            "chain_steps": len(sim_escape_chain),
+            "world_bible": {
+                "theme": metadata["theme"],
+                "premise": metadata["premise"],
+                "difficulty": metadata["difficulty"],
+                "characters": wb.get("characters", []),
+                "inciting_incident": wb.get("inciting_incident", ""),
+            },
+        }
+
+    except Exception as e:
+        logger.error(f"Story creation failed: {e}")
+        return {"error": str(e)}
+
+
+@app.get("/api/stories/{story_id}")
+async def get_story(story_id: int):
+    """Get story details with saves list."""
+    if not sim_store:
+        return {"error": "Store not initialized"}
+    story = sim_store.get_story(story_id)
+    if not story:
+        return {"error": "Story not found"}
+    # Don't send full snapshots in listing — too large
+    story.pop("initial_snapshot", None)
+    story.pop("brain_init", None)
+    return story
+
+
+@app.delete("/api/stories/{story_id}")
+async def delete_story(story_id: int):
+    """Delete a story and all its saves."""
+    if not sim_store:
+        return {"error": "Store not initialized"}
+    if sim_store.delete_story(story_id):
+        return {"status": "deleted"}
+    return {"error": "Story not found"}
+
+
+@app.post("/api/stories/{story_id}/play")
+async def play_story(story_id: int, body: dict | None = None):
+    """Load a story into the simulation. Optionally from a specific save."""
+    global sim_world, sim_brains, sim_paused, sim_escape_chain, sim_current_story_id
+
+    if not sim_store:
+        return {"error": "Store not initialized"}
+
+    save_id = (body or {}).get("save_id")
+
+    if save_id:
+        # Load from specific save
+        data = sim_store.load(save_id)
+        if not data:
+            return {"error": "Save not found"}
+        from agenttown.agents.brain import LLMBrain
+        sim_world = World.from_full_snapshot(data["world_snapshot"])
+        sim_brains.clear()
+        sim_brains.update({
+            aid: LLMBrain.from_snapshot(bdata)
+            for aid, bdata in data["brain_snapshots"].items()
+        })
+    else:
+        # Load from initial state (fresh game)
+        story = sim_store.get_story(story_id)
+        if not story:
+            return {"error": "Story not found"}
+        from agenttown.agents.brain import LLMBrain
+        sim_world = World.from_full_snapshot(story["initial_snapshot"])
+        sim_brains.clear()
+        sim_brains.update({
+            aid: LLMBrain.from_snapshot(bdata)
+            for aid, bdata in story["brain_init"].items()
+        })
+        sim_escape_chain = story["escape_chain"]
+
+    sim_paused = True
+    sim_current_story_id = story_id
+    sim_store.touch_story(story_id)
+
+    await broadcast({
+        "type": "snapshot", "tick": sim_world.tick, "paused": True,
+        "world_state": sim_world.snapshot(),
+    })
+
+    return {
+        "status": "loaded",
+        "story_id": story_id,
+        "tick": sim_world.tick,
+    }
 
 
 @app.post("/api/auto-generate")
