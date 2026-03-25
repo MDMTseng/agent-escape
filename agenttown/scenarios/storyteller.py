@@ -561,36 +561,57 @@ def generate_world_bible_ai(
             f"Make clue text read like real artifacts — diary entries, letters, inscriptions, notes.\n"
         )
 
-        response = client.messages.create(
-            model=model,
-            max_tokens=1024,
-            messages=[{"role": "user", "content": prompt}],
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "world_bible",
-                    "strict": True,
-                    "schema": _WORLD_BIBLE_SCHEMA,
-                },
-            },
+        # Add JSON instruction to prompt
+        prompt += (
+            "\nRespond with ONLY valid JSON matching this structure:\n"
+            '{"characters": [...], "inciting_incident": "...", "rooms": [...]}\n'
+            "No markdown, no explanation — just the JSON object.\n"
         )
 
-        content = response.content[0].text
+        response = client.messages.create(
+            model=model,
+            max_tokens=4096,
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        content = response.content[0].text.strip()
+        # Strip markdown fences if present
+        if content.startswith("```"):
+            content = content.split("\n", 1)[1] if "\n" in content else content[3:]
+        if content.endswith("```"):
+            content = content.rsplit("```", 1)[0]
+        content = content.strip()
         data = json.loads(content)
 
-        # Validate basic structure
+        # Validate and normalize
         characters = data["characters"]
-        if len(characters) != num_characters:
-            raise ValueError(f"Expected {num_characters} characters, got {len(characters)}")
+        if len(characters) < 2:
+            raise ValueError(f"Need at least 2 characters, got {len(characters)}")
 
-        rooms = data["rooms"]
-        if len(rooms) < 3:
-            raise ValueError(f"Expected at least 3 rooms, got {len(rooms)}")
+        rooms = data.get("rooms", [])
+        if len(rooms) < 2:
+            raise ValueError(f"Need at least 2 rooms, got {len(rooms)}")
 
-        # Validate traits
+        # Normalize characters — fill missing fields with defaults
         for char in characters:
-            if char["trait"] not in VALID_TRAITS:
-                raise ValueError(f"Invalid trait: {char['trait']}")
+            if char.get("trait") not in VALID_TRAITS:
+                char["trait"] = "paranoid"  # safe default
+            char.setdefault("backstory", char.get("desc", ""))
+            char.setdefault("secret", "Has a hidden agenda")
+            char.setdefault("role", "inhabitant")
+            char.setdefault("relationships", [])
+            # Puzzle fields — AI should generate these, but default if missing
+            char.setdefault("puzzle_type", "combination_lock")
+            char.setdefault("code", "1234")
+            char.setdefault("code_meaning", "a significant number")
+            char.setdefault("room_name", f"{char['name']}'s Room")
+            char.setdefault("room_desc", f"A room associated with {char['name']}.")
+            char.setdefault("clue_artifact", f"{char['name']}'s Note")
+            char.setdefault("clue_artifact_desc", f"A note left by {char['name']}.")
+            char.setdefault("accidental_clue", f"Traces of {char['name']}")
+            char.setdefault("accidental_clue_desc", f"Evidence of {char['name']}'s presence.")
+            char.setdefault("lock_name", f"{char['name']}'s Lock")
+            char.setdefault("lock_desc", f"A lock created by {char['name']}.")
 
         return {
             "setting": {
@@ -598,8 +619,8 @@ def generate_world_bible_ai(
                 "premise": premise,
                 "rooms": rooms,
             },
-            "characters": characters,
-            "inciting_incident": data["inciting_incident"],
+            "characters": characters[:num_characters],
+            "inciting_incident": data.get("inciting_incident", "Something sealed this place shut."),
         }
 
     except Exception as e:
