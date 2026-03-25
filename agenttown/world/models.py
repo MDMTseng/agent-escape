@@ -31,6 +31,8 @@ class Entity(BaseModel):
     name: str
     description: str = ""
     state: EntityState = EntityState.DEFAULT
+    portable: bool = False
+    usable_on: list[str] = Field(default_factory=list)
     properties: dict[str, Any] = Field(default_factory=dict)
 
     def describe(self) -> str:
@@ -41,7 +43,6 @@ class Item(Entity):
     """An entity that can be picked up and carried."""
 
     portable: bool = True
-    usable_on: list[str] = Field(default_factory=list)
 
 
 class Door(Entity):
