@@ -392,7 +392,7 @@ NARRATIVE_HTML = """\
         /* Card area */
         #card-viewport {
             flex: 1; display: flex; align-items: center; justify-content: center;
-            padding: 20px; overflow: hidden; position: relative;
+            padding: 20px; overflow-y: auto; position: relative;
         }
         .feed-card {
             background: linear-gradient(180deg, #161b22 0%, #0f1318 100%);
@@ -516,10 +516,10 @@ NARRATIVE_HTML = """\
         .save-entry button.del:hover { border-color: #f85149; color: #f85149; }
 
         /* Director story card viewer */
-        #dir-story { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        #dir-story { flex: 1; display: flex; flex-direction: column; overflow: auto; }
         #dir-card-container {
             flex: 1; display: flex; align-items: center; justify-content: center;
-            position: relative; overflow: hidden; padding: 10px;
+            position: relative; overflow-y: auto; padding: 10px;
         }
         .story-card {
             background: #161b22; border: 1px solid #30363d; border-radius: 10px;
@@ -644,8 +644,13 @@ NARRATIVE_HTML = """\
                 height: auto; min-height: 100vh; overflow-y: auto !important;
                 flex: none;
             }
-            #feed-screen #feed-card-container {
-                overflow-y: auto; flex: none; min-height: 200px;
+            #card-viewport {
+                flex: none; height: auto; overflow: visible !important;
+                align-items: flex-start; padding: 10px;
+            }
+            .feed-card {
+                max-height: none; overflow: visible;
+                padding: 18px 16px; font-size: 14px;
             }
             /* Director mode scrollable on mobile too */
             #director-mode {
@@ -683,8 +688,15 @@ NARRATIVE_HTML = """\
             .as-card { min-width: 120px; padding: 4px 8px; font-size: 10px; }
 
             #director-mode.visible { flex-direction: column; height: auto; min-height: 100vh; }
-            #dir-left { flex: none; border-right: none; padding: 12px; border-bottom: 1px solid #21262d; }
+            #director-mode { flex-direction: column; height: auto; min-height: 100vh; overflow-y: auto; }
+            #dir-left {
+                flex: none; height: auto; border-right: none; padding: 12px;
+                border-bottom: 1px solid #21262d; overflow: visible;
+            }
             #dir-left h1 { font-size: 18px; }
+            #dir-story { flex: none; height: auto; overflow: visible; }
+            #dir-card-container { flex: none; height: auto; overflow: visible; align-items: flex-start; }
+            .story-card { max-height: none; overflow: visible; }
             #dir-controls { flex-wrap: wrap; gap: 4px; }
             #dir-controls button { font-size: 10px; padding: 3px 8px; }
             #dir-controls .sep { display: none; }
