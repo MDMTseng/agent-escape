@@ -1047,3 +1047,101 @@ Scroll behavior: Feed scrolls internally on mobile (body does NOT scroll). Botto
     - The useAgentList() and useRoomList() selectors in gameStore.ts have the same React 19 infinite-loop bug — they should be fixed globally (Object.values in a selector creates new references)
     - If more agent data fields are added to the backend (emotional_state, current_action), the card and detail view should be updated to display them
     - The detail sheet animation is CSS-only (no spring physics); could be enhanced with a gesture library like @use-gesture/react in the future
+
+[REVIEW] Feature: "Game Monitor — Agent Status Strip"
+Verdict: PASS
+
+--- Critic's Take ---
+
+The agent status strip arrives with quiet competence. Two compact cards — Alice and
+Bob — sit shoulder to shoulder in a dark trough between the monitor header and the
+narrative filters, like name plates on a detective's evidence board. The proportions
+are right: 140px wide and 62px tall, each card just large enough to carry a name in
+bold and a room location in muted pin-icon shorthand, without overreaching into
+territory that belongs to the narrative feed below. The gold border that lights up on
+selection is restrained — a thin line and a faint 8px glow, not a spotlight. The cards
+know they're supporting cast, not the main attraction.
+
+The detail views earn particular respect. On mobile, the bottom sheet slides up to
+claim exactly half the viewport — enough to show Alice's description, goal, and
+inventory list without obscuring the strip above. A drag handle signals swipe-to-dismiss,
+and the 80px threshold feels generous enough to prevent accidental closes. On desktop,
+the detail morphs into a centered 420px dialog with a 50% black backdrop that dims the
+world behind it. The agent's avatar (a gold-tinted User icon in a rounded circle), room
+location, description section, goal section with Target icon, and inventory list with
+Package icons create a clear information hierarchy. The typography descends gracefully:
+bold name, regular description, uppercase muted section headers. This is a panel you
+can scan in two seconds and understand.
+
+What deserves honest acknowledgment: the backend provides no emotional_state or
+current_action fields. The builder adapted by showing "Thinking..." during processing
+ticks and filling the detail with description and goal instead. It's a pragmatic
+concession, not a shortcut — the feature can't display data that doesn't exist. When
+the backend grows those fields, the UI is architecturally ready to consume them. The
+useMemo workaround for React 19's infinite re-render bug (Object.values creates new
+array refs on every selector call) is clean and correct. The builder used useAgents()
+for a stable record reference and derived the array locally. The broken useAgentList()
+selector remains in the store as a landmine for future consumers — that should be
+fixed globally, but it's not this feature's responsibility.
+
+The one area that hovers between polish and necessity: the snap scrolling. With only
+two agents, there's no overflow to scroll, so the snap-x behavior is invisible. With
+six or eight agents on a phone, the cards will need to prove they glide and snap
+satisfyingly. That test awaits a larger roster, but the CSS infrastructure (snap-x
+snap-mandatory, snap-start on each card, scrollbar-none) is correctly laid.
+
+--- Functional Checklist ---
+[x] Horizontal agent status strip below monitor header — verified at 375px, 768px, 1280px
+[x] Each card shows agent name (bold, gold when active) — verified
+[x] Each card shows current room (MapPin icon + room name) — verified (room_id resolved to name)
+[x] Inventory count icon shown when inventory > 0 — verified (Backpack icon + count)
+[x] Emotional state indicator — N/A (backend field does not exist; builder documented adaptation)
+[x] Current action text — adapted as "Thinking..." during processing state
+[x] Real-time updates from Zustand store — verified (uses useAgents selector with useMemo)
+[x] Click card expands to show detail — verified (bottom sheet mobile, dialog desktop)
+[x] Detail dismissible: backdrop click — verified
+[x] Detail dismissible: Escape key — verified
+[x] Detail dismissible: X button — verified
+[x] Detail dismissible: swipe down (mobile) — code verified (80px threshold, onTouchStart/Move/End)
+[x] Detail shows: avatar, name, room, description, goal, inventory list — verified
+[x] Empty state when no agents — code verified ("No agents in the world yet" message)
+[x] Snap scrolling on mobile — CSS verified (snap-x snap-mandatory)
+[x] Dark theme maintained — verified (bg-secondary #161b22, gold accents)
+[x] No console errors — verified (0 errors through full interaction flow)
+[x] TypeScript clean — verified (tsc --noEmit, 0 errors)
+[x] Vite build clean — verified (265ms, 309KB JS / 45KB CSS)
+
+--- Mobile & Gesture Report ---
+Viewport tested: 375x812 (iPhone 14 equivalent)
+Thumb zone: PASS — agent strip sits in upper portion but cards are large tap targets (140x62px);
+  detail bottom sheet occupies lower 50vh which is in thumb zone; close button 44x44 in header
+Touch targets: PASS — cards 140x62 (well above 44px), close button 44x44, drag handle area generous
+Gestures: snap-x scroll for horizontal card browsing; swipe-down to dismiss bottom sheet (80px threshold)
+One-hand usability: PASS — cards reachable with thumb; bottom sheet dismissible by swipe
+Bottom sheets/drawers: PASS — mobile shows bottom sheet (50vh), desktop shows centered dialog
+Orientation: no landscape-specific testing but flexbox layout should survive rotation
+Scroll behavior: no unwanted horizontal scroll; strip uses overflow-x-auto with scrollbar-none
+
+--- Atmosphere & Polish Notes ---
+- Gold border glow on selected card is atmospheric — candle-flicker quality, not neon
+- Detail panel typography hierarchy is clean: bold name > regular description > muted section headers
+- Inventory items as pill badges with Package icons feel tactile and game-appropriate
+- The "Empty" italic text for zero inventory is a nice touch — not just blank space
+- The active indicator dot (animate-status-pulse) on processing agents adds life to the strip
+- Desktop dialog background correctly uses bg-secondary (#161b22) maintaining dark theme
+
+--- Delight Moments ---
+- The 36px avatar circle with gold-tinted User icon gives each agent a face without needing actual avatars
+- Section headers (DESCRIPTION, GOAL, INVENTORY) in uppercase tracking-wider muted text feel like
+  classified dossier labels — perfectly on-theme for an escape room
+- The aria-label pattern ("Agent Alice, in The Laboratory") is genuinely accessibility-conscious
+
+--- Regression Check ---
+- Narrative feed: PASS (empty state renders, filter bar present, scroll containment intact)
+- Layout: strip adds 79px of height, leaving ample room for narrative feed
+- No horizontal overflow introduced
+
+--- Known Caveats (not blocking) ---
+- useAgentList() selector in gameStore.ts still has React 19 infinite-loop bug — needs global fix
+- emotional_state and current_action display will need updating when backend adds those fields
+- Snap scroll behavior untested with >2 agents (CSS is correct, real test needs larger roster)
