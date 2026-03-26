@@ -1145,3 +1145,39 @@ Scroll behavior: no unwanted horizontal scroll; strip uses overflow-x-auto with 
 - useAgentList() selector in gameStore.ts still has React 19 infinite-loop bug — needs global fix
 - emotional_state and current_action display will need updating when backend adds those fields
 - Snap scroll behavior untested with >2 agents (CSS is correct, real test needs larger roster)
+
+[BUILD] P0-008: Game Monitor — Escape Chain Progress Bar
+  Agent: ui-builder (Claude Code, Opus 4.6)
+  Date: 2026-03-26
+  Commit: dd0ccdd
+  What was done:
+    - Created EscapeChainProgress component in frontend/src/components/monitor/EscapeChainProgress.tsx
+    - Horizontal segmented bar: one segment per chain step, color-coded by status
+      - Solved: green (success color), Active: gold with pulse animation, Pending: gray (border color)
+    - Progress counter "N/M" displayed next to the bar, percentage on desktop
+    - Collapsible checklist below the bar (collapsed by default on mobile)
+    - Each checklist row shows step number, description, action+target badge
+    - Solved steps are tappable to expand inline detail: solved_by agent name, solved_at tick, room
+    - Added GPU-accelerated gold pulse animation (animate-active-pulse) to index.css
+    - Integrated component into Monitor.tsx between AgentStatusStrip and NarrativeFeed
+    - Component returns null when escape chain is empty (no data loaded)
+  Files created:
+    frontend/src/components/monitor/EscapeChainProgress.tsx (new, ~240 lines)
+  Files modified:
+    frontend/src/pages/Monitor.tsx (added import + component placement)
+    frontend/src/index.css (added active-pulse keyframe animation)
+  Mobile/gesture notes:
+    - Mobile-first CSS: full-width bar, 48px min-height touch targets on checklist rows
+    - Compact collapsed state (~48-56px) to preserve vertical space for narrative feed
+    - Checklist scrolls with max-h-[50vh] and overscroll-contain
+    - Chevron toggle for expand/collapse, rotate animation on state change
+    - Inline expand for solved step detail (not tooltip), suitable for touch
+    - Active states on buttons (active:bg-bg-tertiary/30) for touch feedback
+    - animate-in slide-in-from-top for expand animations
+  Known issues:
+    - Component not visible in screenshots because no escape chain data is loaded (game not running)
+    - The component correctly hides itself when escapeChain is empty (returns null)
+    - To verify visually, need a running game with escape chain data populated
+    - No swipe-to-dismiss on the checklist (could be added later for the panel)
+  TypeScript: clean (npx tsc --noEmit passes)
+  Vite build: clean (npx vite build succeeds)
