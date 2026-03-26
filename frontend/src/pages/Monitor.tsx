@@ -15,6 +15,7 @@ import { useWebSocket } from '@/hooks/useWebSocket'
 import { useConnectionStatus, useTick, useIsFinished, useFinishReason } from '@/stores/gameStore'
 import { NarrativeFeed } from '@/components/monitor/NarrativeFeed'
 import { AgentStatusStrip } from '@/components/monitor/AgentStatusStrip'
+import { EscapeChainProgress } from '@/components/monitor/EscapeChainProgress'
 import { Wifi, WifiOff, Loader2, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -78,6 +79,9 @@ export default function Monitor() {
 
       {/* Agent status strip — horizontal scrollable agent cards */}
       <AgentStatusStrip />
+
+      {/* Escape chain progress bar — compact bar + expandable checklist */}
+      <EscapeChainProgress />
 
       {/* Main content area — narrative feed */}
       <div className="flex-1 min-h-0 relative">

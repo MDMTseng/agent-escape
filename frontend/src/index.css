@@ -142,6 +142,17 @@ button, a, [role="button"] {
   animation: status-pulse 2s ease-in-out infinite;
 }
 
+/* Gold pulse for active escape chain step — GPU-accelerated */
+@keyframes active-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.animate-active-pulse {
+  animation: active-pulse 1.5s ease-in-out infinite;
+  will-change: opacity;
+}
+
 /* Sidebar drawer slide-in animation (tablet) */
 @keyframes slideInLeft {
   from { transform: translateX(-100%); }
