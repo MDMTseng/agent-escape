@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { RoomsTab } from '@/components/creator/RoomsTab'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -30,6 +31,7 @@ export interface SceneCreatorState {
   difficulty: number
   worldBible: WorldBible | null
   rooms: RoomNode[]
+  doors: DoorEdge[]
   puzzles: PuzzleItem[]
 }
 
@@ -472,6 +474,7 @@ export default function Creator() {
     difficulty: 3,
     worldBible: null,
     rooms: [],
+    doors: [],
     puzzles: [],
   })
 
@@ -528,7 +531,9 @@ export default function Creator() {
         {activeTab === 'Story' && (
           <StoryTab sceneState={sceneState} setSceneState={setSceneState} />
         )}
-        {activeTab === 'Rooms' && <PlaceholderTab name="Rooms" />}
+        {activeTab === 'Rooms' && (
+          <RoomsTab sceneState={sceneState} setSceneState={setSceneState} />
+        )}
         {activeTab === 'Puzzles' && <PlaceholderTab name="Puzzles" />}
         {activeTab === 'Agents' && <PlaceholderTab name="Agents" />}
         {activeTab === 'Validate' && <PlaceholderTab name="Validate" />}
