@@ -236,3 +236,45 @@ of returning a 404. This is a mobile reliability win even though it's backend co
 - <title>frontend</title> in index.html should become <title>AgentTown</title> — fix
   in frontend/index.html source and rebuild. Not a P0-002 issue; belongs in a future
   polish pass or P0-003.
+
+[BUILD] INFRA: Playwright screenshot tooling — COMPLETE
+  Agent: ui-builder (Claude Code)
+  Date: 2026-03-26
+  Type: Infrastructure (not a feature from ui-feature-list.json)
+  What was done:
+    - Installed Playwright (v1.58.2) as a dev dependency at the project root
+    - Installed Chromium browser via npx playwright install chromium
+    - Created scripts/screenshot.mjs — single screenshot CLI utility
+    - Created scripts/screenshot-suite.mjs — multi-viewport screenshot suite (mobile 375x812, tablet 768x1024, desktop 1280x800)
+    - Created root package.json with npm scripts: "screenshot" and "screenshot:suite"
+    - Added screenshots/ and node_modules/ to .gitignore
+    - Updated .claude/agents/ui-builder.md with Step 3.5 (take screenshots after implementing)
+    - Updated .claude/agents/ui-reviewer.md with screenshot evidence section
+  Files created:
+    package.json — root package.json with Playwright dev dependency and npm scripts
+    package-lock.json — lockfile for reproducible installs
+    scripts/screenshot.mjs — single screenshot utility
+    scripts/screenshot-suite.mjs — multi-viewport screenshot suite
+  Files modified:
+    .gitignore — added screenshots/, *.screenshot.png, node_modules/
+    .claude/agents/ui-builder.md — added Step 3.5 for screenshot capture
+    .claude/agents/ui-reviewer.md — added screenshot evidence section to Step 4
+  How agents should use this:
+    Single screenshot:
+      node scripts/screenshot.mjs http://localhost:5173 screenshots/my-shot.png 375 812
+    Multi-viewport suite:
+      node scripts/screenshot-suite.mjs http://localhost:5173 screenshots/feature-name
+      -> produces feature-name-mobile.png, feature-name-tablet.png, feature-name-desktop.png
+    npm script shortcuts:
+      npm run screenshot -- http://localhost:5173 screenshots/shot.png 375 812
+      npm run screenshot:suite -- http://localhost:5173 screenshots/feature
+  Testing:
+    - Verified both scripts produce valid PNG files against the running Vite dev server
+    - Mobile screenshot (375x812) correctly captured the AgentTown home page
+    - All three viewport sizes (mobile, tablet, desktop) produce distinct screenshots
+    - Scripts handle missing output directories by creating them automatically
+    - Scripts exit with code 1 on failure (e.g., server not running) without crashing
+  Notes:
+    - Port 5173 may be occupied by other dev servers; check Vite output for actual port
+    - The .mjs extension is used so scripts run as ESM regardless of root package.json type
+    - Screenshots are gitignored — they are ephemeral build/review artifacts

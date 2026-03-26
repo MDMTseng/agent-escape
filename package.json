@@ -1,0 +1,13 @@
+{
+  "name": "agenttown",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI-powered escape room game — root tooling (screenshots, CI helpers)",
+  "scripts": {
+    "screenshot": "node scripts/screenshot.mjs",
+    "screenshot:suite": "node scripts/screenshot-suite.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.58.2"
+  }
+}
