@@ -1656,3 +1656,99 @@ Responsive: "Quit" label hidden on mobile (icon only), "ticks" label hidden on x
     - The Monitor page does not yet display story context (title, theme) in its header.
       The Zustand store has storyContext set, but the Monitor header does not read it.
       This could be a follow-up enhancement.
+
+[REVIEW] Feature: "Quick Play flow"
+Verdict: PASS
+
+--- Critic's Take ---
+
+The Quick Play flow is the capstone of the P0 milestone, and it lands with
+satisfying weight. Click the gold lightning-bolt button on the library page and
+the world dissolves into a blurred-glass overlay with orbiting golden rings and
+a Sparkles icon pulsing at the center. "Creating Your Escape Room" appears in
+confident white type, with the chosen theme rendered in gold beneath it --
+"Ancient Tomb," "Gothic Manor," whatever the dice rolled. Below, cycling
+messages ("Conjuring the mystery...", "Building rooms and corridors...",
+"Weaving the escape chain...") keep the user's attention anchored during what
+can be a multi-second AI generation. The indeterminate progress bar slides
+left to right in a smooth loop. This is atmosphere done right -- the loading
+state is not dead time, it is theatre. The user is watching the stage being
+built before the curtain rises.
+
+The Play button on scene cards is equally well-executed: a 44x44px gold circle
+with a filled triangle icon, always visible (not hidden behind a hover state
+that mobile users would never discover). Clicking it triggers a spinner in
+place, the store resets, the API fires, and the app navigates to /monitor
+where the WebSocket delivers the snapshot. Agents appear in their status cards,
+the escape chain shows its segmented progress bar, the narrative feed waits
+for the first tick. The seam between Library and Monitor is invisible -- you
+click Play and you are in the game.
+
+The mobile Quick Play banner deserves specific praise. At 56px tall, full-width,
+gradient-bordered with gold accent, and positioned just below the header, it is
+the most prominent element on the page -- exactly where a call-to-action should
+be. The subtitle "- random escape room" in a softer gold sets expectations
+without cluttering. On desktop, this collapses into a compact gold button in the
+header row alongside "New Scene," which is the correct responsive adaptation.
+
+One gap: the GenerationOverlay has a Cancel button built into its JSX (line
+605-610 of Library.tsx), but the parent never passes the onCancel prop. If the
+AI generation hangs or the network drops, the user is trapped behind a
+fullscreen overlay with no escape. This does not violate the acceptance criteria
+(which say nothing about cancellation), but it is a meaningful UX gap that
+should be addressed in a follow-up.
+
+The full P0 loop is now complete: Library -> Quick Play -> Generation Overlay ->
+Monitor (with agents, chain, narrative, controls) -> Quit -> Library. This is
+the beating heart of the application, and it works.
+
+--- Functional Checklist ---
+[x] Quick Play button on Scene Library — present on mobile (banner) and desktop (header button)
+[x] Calls POST /api/stories/create with random theme + default settings (difficulty: 3, num_characters: 3)
+[x] Shows generation overlay during story creation — animated, atmospheric, themed
+[x] Navigates to /monitor after story creation — verified end-to-end
+[x] Play button on existing scene cards — 44x44px gold button with play icon
+[x] Play calls POST /api/stories/{id}/play — verified via network inspection
+[x] Play navigates to /monitor — verified end-to-end
+[x] Monitor receives WebSocket snapshot — agents, rooms, chain visible
+[x] Full E2E loop: Library -> Play -> Monitor -> Quit -> Library — verified
+[x] TypeScript build clean (tsc --noEmit)
+[x] Vite production build clean (324KB JS, 54KB CSS)
+[x] No console errors on any page
+
+--- Mobile & Gesture Report ---
+Viewport tested: 375x812 (iPhone 14)
+Thumb zone: PASS — Quick Play banner at y=142, FAB at y=676, play buttons on visible cards
+Touch targets: ALL PASS — Quick Play 343x56px, Card Play 44x44px, FAB 56x56px
+Gestures: Swipe-left on cards still reveals delete (no regression), card tap triggers play
+One-hand usability: PASS — Quick Play and card Play are reachable, FAB in thumb zone
+Bottom sheets/drawers: Delete confirm sheet still works (no regression)
+
+--- Atmosphere & Polish Notes ---
+- Generation overlay is the atmospheric highlight: golden orbital rings, cycling messages,
+  indeterminate progress bar. This turns a loading state into a moment of anticipation.
+- The card Play button's gold-on-transparent treatment (bg-gold/15) is the right choice --
+  it signals interactivity without competing with the card title.
+- Empty state "Create Your First Scene" button now triggers Quick Play (since Scene
+  Creator is P1), which is a smart adaptation.
+
+--- Issues (non-blocking) ---
+1. [MINOR] Generation overlay Cancel button exists in JSX but is never wired up (onCancel
+   prop not passed). User cannot cancel a long-running generation.
+2. [COSMETIC] Monitor page does not display story context (title, theme) in its header
+   after navigation from Library. The Zustand store has storyContext set, but the Monitor
+   header does not read it. This would give the user orientation.
+
+--- Delight Moments ---
+- The spinning orbital rings on the generation overlay are genuinely beautiful. They
+  rotate at different speeds (3s and 5s) in opposite directions, creating a subtle
+  sense of magical machinery at work. This is the kind of detail that separates an
+  escape room UI from a generic dashboard.
+- The random theme picker from a curated list of 6 theme/premise combos means every
+  Quick Play feels different. The premises are well-written ("The AI detected an intruder
+  and sealed all bulkheads. But there is no intruder on the sensors.") and set the mood.
+
+--- Regression Check ---
+P0-001 through P0-009: No regressions detected. Library loads, cards display, swipe
+delete works, monitor components (agents, chain, controls, narrative) all render correctly.
+Navigation between pages is clean. WebSocket connects. Build passes.
