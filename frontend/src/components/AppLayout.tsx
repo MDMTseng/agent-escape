@@ -63,7 +63,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   }, [closeDrawer])
 
   return (
-    <div className="min-h-dvh bg-bg-primary text-text-primary flex flex-col">
+    <div className="h-dvh bg-bg-primary text-text-primary flex flex-col overflow-hidden">
       {/* ===== TOP BAR ===== */}
       <header className="sticky top-0 z-50 flex items-center justify-between px-4 h-14 border-b border-border bg-bg-secondary">
         {/* Left: hamburger (tablet only) + title */}
@@ -95,7 +95,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* ===== BODY: sidebar (desktop/tablet) + main content ===== */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* --- Desktop sidebar (>= 1024px): persistent, collapsible --- */}
         <aside
           className={cn(
@@ -194,7 +194,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         )}
 
         {/* --- Main content area --- */}
-        <main className="flex-1 overflow-y-auto pb-16 sm:pb-0">
+        <main className="flex-1 min-h-0 overflow-y-auto pb-16 sm:pb-0">
           {children}
         </main>
       </div>
