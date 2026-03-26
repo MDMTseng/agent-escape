@@ -9,8 +9,11 @@ import os
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from pathlib import Path
+
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 import anthropic
 from agenttown.auth import get_api_key
@@ -341,15 +344,17 @@ async def websocket_endpoint(ws: WebSocket):
         # frequently. The game keeps running; user can reconnect anytime.
 
 
-@app.get("/")
-async def index():
-    from agenttown.ui_narrative import NARRATIVE_HTML
-    return HTMLResponse(NARRATIVE_HTML)
-
-
 @app.get("/dashboard")
 async def dashboard():
+    """Old embedded dashboard UI (fallback)."""
     return HTMLResponse(DASHBOARD_HTML)
+
+
+@app.get("/narrative")
+async def narrative():
+    """Old embedded narrative UI (fallback, previously served at /)."""
+    from agenttown.ui_narrative import NARRATIVE_HTML
+    return HTMLResponse(NARRATIVE_HTML)
 
 
 @app.get("/api/state")
@@ -1226,6 +1231,54 @@ async def get_log(n: int = 50):
 async def log_page():
     """Simple HTML log viewer for mobile."""
     return HTMLResponse(LOG_HTML)
+
+
+# ---------------------------------------------------------------------------
+# Serve Vite-built frontend (SPA)
+# ---------------------------------------------------------------------------
+# The built frontend lives in frontend/dist/. We mount the assets directory
+# for hashed JS/CSS bundles and add a catch-all that serves index.html for
+# any non-API, non-WebSocket path — enabling client-side routing.
+#
+# Priority order (FastAPI matches top-to-bottom):
+#   1. /ws           — WebSocket endpoint
+#   2. /api/*        — API routes (defined above)
+#   3. /dashboard    — old embedded dashboard UI
+#   4. /narrative    — old embedded narrative UI
+#   5. /log          — log viewer
+#   6. /assets/*     — static JS/CSS/fonts from Vite build
+#   7. /*            — SPA catch-all -> index.html
+
+_FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+
+# Mount static assets (JS, CSS, fonts) if the build directory exists
+if (_FRONTEND_DIR / "assets").is_dir():
+    app.mount(
+        "/assets",
+        StaticFiles(directory=str(_FRONTEND_DIR / "assets")),
+        name="frontend-assets",
+    )
+
+# Serve favicon.svg if present
+if (_FRONTEND_DIR / "favicon.svg").is_file():
+    @app.get("/favicon.svg")
+    async def favicon():
+        return FileResponse(str(_FRONTEND_DIR / "favicon.svg"), media_type="image/svg+xml")
+
+
+@app.get("/{full_path:path}")
+async def spa_catch_all(request: Request, full_path: str):
+    """Serve the Vite-built index.html for all unmatched routes (SPA routing).
+
+    If the frontend has not been built yet (no dist/index.html), falls back
+    to the old narrative UI so the server is never broken.
+    """
+    index_file = _FRONTEND_DIR / "index.html"
+    if index_file.is_file():
+        return FileResponse(str(index_file), media_type="text/html")
+    # Fallback: if frontend is not built, serve old narrative UI at /
+    from agenttown.ui_narrative import NARRATIVE_HTML
+    return HTMLResponse(NARRATIVE_HTML)
 
 
 LOG_HTML = """\

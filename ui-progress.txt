@@ -123,6 +123,37 @@ Started: 2026-03-26
   Verdict: PASS — All acceptance criteria met. Clean scaffold, correct dependencies,
   working build pipeline, thoughtful theme implementation.
 
+[BUILD] P0-002: FastAPI serves built frontend — COMPLETE
+  Agent: ui-builder (Claude Code)
+  What was done:
+    - Updated agenttown/server.py to serve the Vite-built frontend from frontend/dist/
+    - Added StaticFiles mount for /assets/* (hashed JS, CSS, font bundles from Vite build)
+    - Added SPA catch-all route /{full_path:path} that serves index.html for client-side routing
+    - Added /favicon.svg route for the built favicon
+    - Moved old GET / (narrative UI) to GET /narrative as a named fallback
+    - Kept GET /dashboard as-is for the old embedded dashboard UI
+    - SPA catch-all gracefully falls back to old narrative UI if frontend/dist/ does not exist
+    - All API routes (/api/*), WebSocket (/ws), /dashboard, /narrative, /log take priority over catch-all
+    - Added "Frontend Dev Servers" section to CLAUDE.md documenting both production and dev workflows
+    - Updated CLAUDE.md stack description to reflect the frontend is implemented (not "planned")
+    - Verified vite build succeeds (198ms, 33 modules, 262KB JS / 24KB CSS)
+    - Verified server imports cleanly and all routes register in correct priority order
+  Files modified:
+    agenttown/server.py — added Path, Request, FileResponse, StaticFiles imports;
+      moved old / to /narrative; added static mount, favicon route, SPA catch-all
+    CLAUDE.md — added Frontend Dev Servers section, updated stack description
+  Mobile & gesture notes:
+    - No mobile-specific changes in this feature (backend-only)
+    - The SPA catch-all means all React Router paths (/, /library, /monitor) now
+      work when accessed directly via URL or on page refresh (important for mobile
+      browsers that may reload the page after backgrounding)
+  Notes for reviewer:
+    - The catch-all uses {full_path:path} which matches any path including nested ones
+    - FastAPI route priority: specific routes are matched before the catch-all
+    - The /assets mount is conditional (only if frontend/dist/assets/ exists)
+    - If frontend/dist/ is missing, GET / still works via narrative HTML fallback
+    - No test file added — this is infrastructure wiring, verified via import + route listing
+
 Phase Summary:
   P0 (10 features): React scaffold, layout, scene library, game monitor basics, quick play
   P1 (8 features):  Scene creator tabs, puzzle dashboard, interactive map, save/load UI
