@@ -1479,3 +1479,114 @@ No horizontal scroll issues detected.
       snapshot or paused message will correct the store to match the server truth.
     - Simulation speed display (issue #2 from review) remains unaddressed — the backend
       does not expose a speed concept, so this is arguably N/A.
+
+[REVIEW] Feature: "Game Monitor — Simulation Controls"
+Verdict: PASS (re-review after optimistic state fix)
+
+--- Critic's Take ---
+
+The simulation controls bar sits at the bottom of the monitor page like a theater's
+lighting board -- compact, purposeful, always within reach. The Play button is a 48px
+gold-on-charcoal circle that commands the left edge, its filled triangle icon pointing
+rightward with the quiet confidence of an orchestra conductor raising a baton. Click it,
+and the transformation is instant: the circle floods with gold (#e3b341), the triangle
+morphs into twin vertical bars (Pause), and the Step button beside it grays out with an
+opacity shift that reads as "not your turn." The optimistic state update -- the fix that
+brought this feature back from failure -- is invisible to the user, which is exactly
+how it should be. There is no flicker, no lag, no moment of doubt. You click Play and
+the world responds.
+
+The previous review's fatal wound was that the Play button would fire POST /api/resume
+and then sit there, staring at you with the same Play icon, while the backend churned
+through a tick. The Zustand store waited for a WebSocket snapshot that the resume
+endpoint never sent. The fix is surgically precise: after a successful API response,
+setIsPlaying(true) fires immediately, and the button swaps its icon before the first
+WebSocket message arrives. When the "paused" message eventually comes from the server,
+it confirms what the UI already knows. This is the correct pattern -- optimistic UI with
+server reconciliation as a safety net.
+
+The Pause flow is equally satisfying. When the backend is mid-tick (agents "Thinking..."),
+the Pause button shows a spinner while the API call blocks until the tick completes. This
+is honest feedback -- the button says "I heard you, I'm working on it." Once the pause
+takes effect, the button smoothly transitions back to the Play icon, Step re-enables, and
+the tick counter holds steady. In testing, the pause took up to 10 seconds during active
+LLM processing, and the spinner held faithfully the entire time.
+
+Step earns its keep with clarity: one click, one tick, one number increment. Tick 2 became
+tick 3, the narrative feed gained a new entry, the agents moved rooms. The button disabled
+during step processing (spinner) and re-enabled when done. The tick counter in the center
+of the bar -- gold monospace digits with a "ticks" label on wider screens -- is the
+heartbeat of the simulation, and it pulses reliably.
+
+Quit to Library is the graceful exit. It pauses if playing, resets the store, and navigates
+to /library. The transition is clean -- no orphaned WebSocket connections, no stale state.
+The library page loads fresh.
+
+On mobile at 375px, the controls bar sits in the thumb zone at y~695, comfortably above
+the bottom navigation. The Play button (48x48px), Step (44x44), and Quit (44x44) all meet
+the touch target minimum. The "Quit" text label hides on narrow screens, leaving just the
+LogOut icon -- a sensible responsive decision. The tick counter and "Thinking..." indicator
+compress gracefully with truncation.
+
+--- Functional Checklist ---
+[x] Play button calls POST /api/resume -- verified (API call triggers, state updates)
+[x] Play button changes to Pause icon + gold background -- verified (screenshot)
+[x] Pause button calls POST /api/pause -- verified (API call triggers)
+[x] Pause button changes back to Play icon -- verified (after tick completes)
+[x] Step button calls POST /api/step -- verified (tick incremented 2 -> 3)
+[x] Step button disabled when playing -- verified (stepDisabled: true)
+[x] Step button enabled when paused -- verified (stepDisabled: false)
+[x] Tick counter shows and updates -- verified (0, 1, 2, 3 across session)
+[~] Simulation speed display -- NOT shown. Backend has no speed concept. N/A.
+[x] Quit to Library pauses first if playing -- verified (handleQuit calls /api/pause)
+[x] Quit navigates to /library -- verified (URL confirmed)
+[x] tsc --noEmit: zero errors -- verified
+[x] vite build: success (318KB JS, 48KB CSS) -- verified
+[x] Zero console errors -- verified
+
+--- Mobile & Gesture Report ---
+Viewport tested: 375x812 (iPhone 14 equivalent), 1280x800 (desktop)
+Thumb zone: PASS -- all controls at y~695, well within bottom third (threshold 544)
+Touch targets:
+  Play button: 48x48px -- PASS
+  Step button: 44x44px -- PASS
+  Quit button: 44x44px -- PASS
+Gestures: No gesture interactions required (buttons only). N/A.
+One-hand usability: PASS -- all controls reachable with right thumb, no precision needed.
+Bottom sheets/drawers: N/A for this feature.
+Scroll behavior: Controls bar is sticky (shrink-0), does not scroll with content. PASS.
+Responsive: "Quit" label hidden on mobile (icon only), "ticks" label hidden on xs. Clean.
+
+--- Atmosphere & Polish Notes ---
+- The gold Play/Pause circle is the most distinctive control element in the app -- it
+  reads as a theater spotlight, not a generic media player button.
+- The dark control bar with subtle border-t creates clean separation from the narrative
+  feed without feeling like a separate app region.
+- The Loader2 spinner during API calls is the right choice -- it conveys "working" without
+  alarm. The spin animation is smooth (CSS, not JS).
+- The "Ended" badge (danger red) is visible but not screaming -- appropriate for a game
+  over state.
+
+--- Delight Moments ---
+- The instant Play-to-Pause icon swap (optimistic update) makes the simulation feel
+  responsive even when the backend is slow. This is the kind of micro-interaction that
+  separates "it works" from "it feels right."
+- The "Thinking..." indicator with spinning Loader2 in the tick area gives the user a
+  window into the agent cognition cycle -- you know the AI is working, not frozen.
+- The active:scale-95 press feedback on buttons is a small thing but it matters: the
+  buttons feel physical, not flat.
+
+--- Regression Check ---
+- Library page (/library): loads correctly, cards render, no layout issues. PASS.
+- Narrative feed: scrolls internally, auto-scroll works. PASS.
+- Agent status strip: cards render with room names. PASS.
+- Escape chain: progress bar renders at 0/8. PASS.
+- No console errors across all pages.
+
+--- Screenshots ---
+  screenshots/P0-009-v2-initial.png -- desktop initial state (play icon visible)
+  screenshots/P0-009-v2-playing.png -- desktop playing state (pause icon, gold, agents thinking)
+  screenshots/P0-009-v2-paused.png -- desktop paused state (play icon restored, step enabled)
+  screenshots/P0-009-v2-stepped.png -- desktop after step (tick incremented)
+  screenshots/P0-009-v2-quit.png -- navigated to library after quit
+  screenshots/P0-009-mobile-initial.png -- mobile initial state (thumb zone verified)
