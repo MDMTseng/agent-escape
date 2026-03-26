@@ -14,6 +14,7 @@
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { useConnectionStatus, useTick, useIsFinished, useFinishReason } from '@/stores/gameStore'
 import { NarrativeFeed } from '@/components/monitor/NarrativeFeed'
+import { AgentStatusStrip } from '@/components/monitor/AgentStatusStrip'
 import { Wifi, WifiOff, Loader2, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -75,7 +76,8 @@ export default function Monitor() {
         <ConnectionBadge />
       </header>
 
-      {/* Placeholder: Agent status strip will go here (P0-007) */}
+      {/* Agent status strip — horizontal scrollable agent cards */}
+      <AgentStatusStrip />
 
       {/* Main content area — narrative feed */}
       <div className="flex-1 min-h-0 relative">
