@@ -1,0 +1,57 @@
+UI Rework Progress Log
+======================
+Branch: uirework
+Started: 2026-03-26
+
+--- 2026-03-26 ---
+[INIT] Created ui-feature-list.json with 24 features across 4 phases (P0-P3)
+[INIT] Created UI_REWORK_SEED.md with full vision document
+[INIT] Created .claude/agents/ui-builder.md subagent definition
+[INIT] No features implemented yet — ready for first ui-builder session
+
+[BUILD] P0-001: React + Vite scaffold — COMPLETE
+  Agent: ui-builder (Claude Code)
+  What was done:
+    - Scaffolded React + TypeScript + Vite project in frontend/ (Vite 8, React 19)
+    - Installed Tailwind CSS v4 with @tailwindcss/vite plugin
+    - Installed shadcn/ui (v4, base-nova style) with Button component and components.json
+    - Installed Zustand, React Router v7, lucide-react, class-variance-authority, clsx, tailwind-merge
+    - Configured Vite proxy: /api -> localhost:8741, /ws -> ws://localhost:8741
+    - Configured path alias @/ -> src/ in tsconfig and vite.config
+    - Created always-dark theme with bg #0d1117, gold #e3b341 mapped into shadcn CSS variables
+    - Created App.tsx with React Router shell (routes: /, /library, /monitor, 404)
+    - Created ConnectionStatus component with health-check fetch to /api/state (auto-polls every 10s)
+    - Created useHealthCheck hook (connecting/connected/disconnected/error states)
+    - Mobile-first CSS: 44px touch targets, clamp() fluid type, 100dvh layout
+    - GPU animation utilities (.animate-gpu, .animate-status-pulse)
+    - Cleaned up Vite boilerplate (removed default App.css, demo assets)
+  Files created/modified:
+    frontend/ (entire new directory)
+    frontend/vite.config.ts — Vite config with React, Tailwind, proxy, path alias
+    frontend/tsconfig.json — added path aliases for shadcn compatibility
+    frontend/tsconfig.app.json — added baseUrl + paths
+    frontend/components.json — shadcn/ui configuration
+    frontend/src/index.css — Tailwind v4 + shadcn + AgentTown dark theme
+    frontend/src/main.tsx — React entry with BrowserRouter
+    frontend/src/App.tsx — Router shell with header, routes, footer
+    frontend/src/lib/utils.ts — cn() utility (clsx + tailwind-merge)
+    frontend/src/hooks/useHealthCheck.ts — /api/state health check hook
+    frontend/src/components/ConnectionStatus.tsx — status indicator component
+    frontend/src/components/ui/button.tsx — shadcn Button (auto-generated)
+    frontend/src/pages/Home.tsx — landing page placeholder
+    frontend/src/pages/Library.tsx — scene library placeholder
+    frontend/src/pages/Monitor.tsx — game monitor placeholder
+    frontend/src/pages/NotFound.tsx — 404 page
+  Notes for reviewer:
+    - Build passes (tsc --noEmit + vite build both succeed)
+    - Shadcn is configured with base-nova style, neutral base color, Geist font
+    - The .dark class variant is defined but :root uses dark values directly (always-dark app)
+    - Proxy config covers both /api (HTTP) and /ws (WebSocket)
+    - Health check uses AbortSignal.timeout(5000) for fetch timeout
+    - All shadcn semantic colors (background, foreground, card, primary, etc.) are mapped to our dark palette
+
+Phase Summary:
+  P0 (10 features): React scaffold, layout, scene library, game monitor basics, quick play
+  P1 (8 features):  Scene creator tabs, puzzle dashboard, interactive map, save/load UI
+  P2 (5 features):  Agent thought bubbles, memory inspector, perception, nudge system, conversations
+  P3 (4 features):  Timeline replay, save branching, export/import, versioning
