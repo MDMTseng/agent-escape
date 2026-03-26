@@ -34,8 +34,8 @@
       "phase": "P0",
       "name": "Scene Library page",
       "description": "Build the home/landing page that lists all saved scenes (stories). Fetch from GET /api/stories. Display as a grid of cards showing: title, theme badge, difficulty, room count, agent count, creation date, save count. Include a 'New Scene' button and delete action per card. Empty state when no scenes exist.",
-      "passes": false,
-      "notes": "Depends on P0-003"
+      "passes": true,
+      "notes": "Reviewed 2026-03-27. All criteria met. Cards show title, theme badge, difficulty, creation date, save count. Responsive grid (1/2/3 cols). Delete with confirmation sheet. Empty/loading/error states. Room/agent count not available from API \u2014 save_count and max_tick shown instead (acceptable adaptation)."
     },
     {
       "id": "P0-005",

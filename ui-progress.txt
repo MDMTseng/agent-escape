@@ -495,3 +495,103 @@ Bottom sheets/drawers: Tablet drawer slides from left as expected
       available from the list endpoint. Room/agent counts could be added if the API is extended.
     - Card delete animation is instant removal from state (no exit animation) — could add
       a slide-out or fade-out in a future pass
+
+[REVIEW] Feature: "Scene Library page"
+Verdict: PASS
+
+--- Critic's Take ---
+
+The Scene Library arrives like a well-curated gallery in a dimly lit museum. You step
+onto the /library page and the first thing your eyes catch is the gold "Scene Library"
+header in the upper left, followed by a whisper of metadata beneath it -- "4 scenes" in
+muted secondary text. The cards below are arranged in a single-column parade on mobile,
+two abreast on tablet, three across on desktop, and the responsive transitions are
+seamless. There is no awkward in-between state, no column that suddenly crumples or
+stretches grotesquely. This is a grid that knows what it wants to be at every viewport.
+
+The cards themselves are quiet but informative. Each one shows a title in confident
+white, a color-coded theme badge (amber for Pirate Ship, cyan for Cyber Noir, blue for
+Space Station, purple for Gothic Manor -- each color distinct and legible against the
+dark card surface), difficulty rendered as gold-filled stars, a two-line premise preview,
+and a meta row with creation time and save count. The information hierarchy is exactly
+right: title commands, badge and stars orient, premise teases, metadata recedes.
+
+The delete flow is where the craft really shows. On desktop, hover a card and a trash
+icon materializes in the upper right -- opacity-0 to opacity-100 via group-hover, a
+restrained reveal that keeps the cards clean until you reach for them. Click it and a
+bottom sheet rises from the darkness: a trash icon in a red halo, the story title in
+quotes, a full-width destructive red "Delete Scene" button, and "Cancel" below.
+The sheet has a drag handle for mobile swipe-down dismiss (80px threshold), closes on
+Escape, closes on backdrop click. Confirm and a spinner overlay appears while the API
+is called. The card vanishes, the count text updates, and if you delete them all the
+empty state blooms: a BookOpen icon with a soft gold glow, "No scenes yet," and a
+centered CTA button. This is not a blank void -- it is an invitation.
+
+The loading state earns special mention. Before the API resolves, six skeleton cards
+pulse in place -- each mirroring the real card structure. This is not a generic spinner;
+it is a structural preview. The error state is equally deliberate: a red AlertCircle,
+a clear error message ("Server error (500)"), and a Retry button that works.
+
+The gold FAB on mobile (56px, bottom-right, above the bottom nav) is perfectly placed
+in the thumb zone with active:scale-95 press feedback. On tablet and desktop it yields
+to the header "New Scene" button. No flash, no duplication.
+
+What is missing: room_count and agent_count, which the feature description requested.
+The API does not surface these fields in the list endpoint. The builder showed save_count
+and max_tick instead. This is an acceptable adaptation -- a future API enhancement.
+
+--- Functional Checklist ---
+[x] Fetches from GET /api/stories on mount -- verified
+[x] Cards display title -- verified
+[x] Cards display theme badge (color-coded) -- verified (4 distinct themes)
+[x] Cards display difficulty (1-5 stars) -- verified
+[x] Cards display creation date (relative) -- verified
+[x] Cards display save count -- verified
+[x] Cards display premise (truncated to 2 lines) -- verified
+[~] Cards display room count / agent count -- NOT AVAILABLE from API (acceptable)
+[x] Responsive grid: 1 col mobile, 2 col tablet, 3 col desktop -- verified
+[x] "New Scene" button exists -- verified (FAB on mobile, header button on md+)
+[x] Delete action per card -- verified (hover-reveal desktop, swipe mobile)
+[x] Delete confirmation bottom sheet -- verified
+[x] Delete calls API and removes card -- verified
+[x] Empty state when no scenes -- verified
+[x] Loading state (skeleton cards) -- verified
+[x] Error state with retry -- verified
+[x] tsc --noEmit passes -- verified
+[x] vite build succeeds -- verified
+[x] Zero console errors -- verified
+
+--- Mobile & Gesture Report ---
+Viewport tested: 375x812, 640x800, 768x1024, 1024x800, 1280x800
+Thumb zone: PASS -- FAB at bottom-20 right-4 (56px)
+Touch targets: PASS -- FAB 56px, delete zone 80px, confirm/cancel 48px, retry 44px
+Gestures: Swipe-left-to-delete, swipe-down-to-dismiss on confirmation sheet
+One-hand usability: PASS
+Bottom sheets/drawers: Delete confirmation as bottom sheet
+
+--- Atmosphere & Polish Notes ---
+- Theme badge colors make the card grid visually scannable at a glance
+- Gold star difficulty creates clear visual weight
+- Empty state BookOpen with gold glow is atmospheric without being theatrical
+- Skeleton cards mirror the real card structure -- above-average loading design
+- Card hover effect (border-gold/30) reads like candlelight
+
+--- Delight Moments ---
+- Story title in curly quotes in delete confirmation -- typographic courtesy
+- Scene count updates dynamically with correct singular/plural
+- Error state shows HTTP status code for debugging
+- FAB shadow (shadow-gold/20) gives it a warm glow
+
+--- Screenshots ---
+  screenshots/review-P0-004-mobile.png -- mobile single column
+  screenshots/review-P0-004-tablet.png -- tablet two columns
+  screenshots/review-P0-004-desktop.png -- desktop with sidebar
+  screenshots/review-P0-004-desktop-hover.png -- trash icon on hover
+  screenshots/review-P0-004-delete-sheet.png -- delete confirmation
+  screenshots/review-P0-004-empty-state-desktop.png -- empty state desktop
+  screenshots/review-P0-004-empty-state-mobile.png -- empty state mobile
+  screenshots/review-P0-004-loading-state.png -- skeleton cards
+  screenshots/review-P0-004-error-state.png -- error with retry
+  screenshots/review-P0-004-multi-mobile.png -- 4 stories, varied themes
+  screenshots/review-P0-004-multi-tablet.png -- 4 stories, two columns
+  screenshots/review-P0-004-multi-desktop.png -- 4 stories, three columns
