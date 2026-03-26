@@ -925,3 +925,74 @@ Jump to latest FAB: Never appears due to scroll containment bug.
   Mobile/gesture notes: No gesture changes. The fix is CSS-only (height constraints).
     Once real WebSocket events arrive, auto-scroll and Jump-to-latest should now work
     because the scroll container is properly constrained.
+
+[REVIEW] Feature: "Game Monitor -- Narrative Feed"
+Verdict: PASS (re-review after scroll containment fix)
+
+--- Critic's Take ---
+
+The scroll containment fix is surgical and correct. Three lines of CSS -- h-dvh
+replacing min-h-dvh on the root, overflow-hidden to seal the boundary, and min-h-0
+on both the body flex container and main -- repaired the entire height chain from
+viewport root to feed scroll container. What was a 3465px runaway div is now a
+properly constrained 610px panel that scrolls internally, exactly as intended.
+
+With 25 narrative cards injected, the feed behaves like a proper stream: the last
+cards are visible at the bottom, the auto-scroll tracked new arrivals faithfully
+(scrollTop: 4598 matching the maximum scrollable distance precisely), and the body
+remained inert at 800px with zero overflow. This is the scroll behavior that should
+have shipped from the start -- content stays inside its container, the page frame
+stays rock-solid.
+
+The "Jump to latest" button is the true proof that the fix works. On the previous
+review, it was a ghost -- present in code but never triggered because the scroll
+container and the viewport were the same height. Now, scrolling to the top triggers
+handleScroll, the 100px threshold detects the departure from bottom, autoScroll
+flips to false, and the gold "Latest" FAB materializes in the bottom-right corner
+with its downward arrow. Clicking it smoothly scrolls back to the anchor div and
+re-enables auto-follow. The entire scroll lifecycle -- auto-follow, manual pause,
+visual indicator, one-tap recovery -- is now complete and functional.
+
+The filter chips remain excellent: Movement correctly isolates 8 of 25 cards (every
+third tick maps to 'move'), and clearing restores all 25. The narrative cards
+themselves are unchanged and still gorgeous -- gold tick badges, colored category
+pills, atmospheric prose, and the subtle event detail section beneath the divider.
+
+On mobile at 375px, the body also does NOT scroll (confirmed via Playwright), the
+bottom nav stays anchored, and the feed scrolls internally. The fix is viewport-
+agnostic, which is exactly right.
+
+--- Functional Checklist ---
+[x] Renders narrator-generated prose as styled cards (one per tick) -- verified with 25 injected cards
+[x] Auto-scroll (follow latest) -- scrollTop matches max scroll distance, atBottom: true
+[x] Manual scroll -- scrolling up disables auto-scroll correctly
+[x] "Jump to latest" button appears when auto-scroll paused -- confirmed visible after scroll-to-top
+[x] "Jump to latest" scrolls back to bottom and re-enables auto-follow -- confirmed atBottom: true after click
+[x] Filter by event type (puzzle, movement, dialogue, discovery) -- Movement filter: 8/25 cards shown, All: 25/25
+[x] Show tick number on each card -- gold "Tick N" badge visible on every card
+[x] TypeScript: zero errors (tsc --noEmit clean)
+[x] Production build: clean (303KB JS, 42KB CSS gzipped)
+
+--- Mobile & Gesture Report ---
+Viewport tested: 375px (iPhone 14 equivalent), 768px (tablet), 1280px (desktop)
+Thumb zone: "Jump to latest" FAB is bottom-right, well within thumb reach. Filter chips are top but horizontally scrollable.
+Touch targets: All filter chips min-h-[36px] with padding reaching 44px effective. "Jump to latest" has min-h-[44px]. Pass.
+Gestures: Filter chips horizontally scrollable with hidden scrollbar. Feed scrolls vertically via touch.
+One-hand usability: Core flow (read feed, scroll, jump to latest, tap filter) all achievable one-handed.
+Bottom sheets/drawers: N/A for this feature.
+Scroll behavior: Feed scrolls internally on mobile (body does NOT scroll). Bottom nav stays anchored. No horizontal overflow.
+
+--- Atmosphere & Polish Notes ---
+- The narrative cards maintain their cinematic quality -- dark panels with gold accents, colored category pills, atmospheric prose. This is a storybook, not a log viewer.
+- Empty state ("Waiting for the story to unfold...") sets the right mood with the BookOpen icon.
+- The "Agents are thinking..." processing indicator with spinning gold loader is a nice touch for live simulation.
+- Filter chips with category-colored active states provide instant visual feedback.
+
+--- Delight Moments ---
+- The "Jump to latest" button appearance is smooth and well-positioned -- it feels like a native chat app's "scroll to bottom" affordance.
+- Auto-scroll tracking is precise: the 100px threshold means you can slightly overshoot the bottom without losing auto-follow, which feels forgiving and natural.
+
+--- Regression Check ---
+- Library page (/library): Card grid renders correctly, main scrolls via overflow-y-auto, no layout breakage. PASS.
+- Home page (/): Verified in screenshots, no issues.
+- Previous features P0-001 through P0-005: All still marked as passing. Build clean. No console errors.

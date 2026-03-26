@@ -50,8 +50,8 @@
       "phase": "P0",
       "name": "Game Monitor \u2014 Narrative Feed",
       "description": "Build the narrative feed panel for the game monitor page. Renders narrator-generated prose as styled cards (one per tick). Supports auto-scroll (follow latest) and manual scroll. Filter by event type (puzzle, movement, dialogue, discovery). Show tick number on each card.",
-      "passes": false,
-      "notes": "Depends on P0-005"
+      "passes": true,
+      "notes": "Re-reviewed 2026-03-26 after scroll containment fix. All criteria met. Auto-scroll, manual pause, Jump-to-latest, filters, tick badges all functional. Build clean."
     },
     {
       "id": "P0-007",
