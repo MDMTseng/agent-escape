@@ -595,3 +595,91 @@ Bottom sheets/drawers: Delete confirmation as bottom sheet
   screenshots/review-P0-004-multi-mobile.png -- 4 stories, varied themes
   screenshots/review-P0-004-multi-tablet.png -- 4 stories, two columns
   screenshots/review-P0-004-multi-desktop.png -- 4 stories, three columns
+
+---
+
+[BUILD] P0-005: WebSocket connection + Zustand store — COMPLETE
+  Agent: ui-builder (Claude Code / Opus 4.6)
+  Date: 2026-03-26
+
+  What was done:
+    Created three files implementing the WebSocket connection layer and
+    centralized game state management:
+
+    1. TypeScript types (frontend/src/types/game.ts):
+       - Interfaces mirroring every backend Pydantic model: Entity, Item, Door,
+         Room, AgentState, WorldState, EscapeChainStep, TickEvent
+       - NarrativeEntry type for accumulated narrator prose
+       - Discriminated union of all 6 WebSocket message types the server sends:
+         snapshot, tick, processing, finished, finished_idle, paused
+       - ConnectionStatus literal type
+
+    2. Zustand store (frontend/src/stores/gameStore.ts):
+       - State slices: connectionStatus, worldState (+ rooms/agents/doors as
+         convenience), escapeChain, narrativeEvents, tick, isPlaying,
+         isProcessing, processingMessage, isFinished, finishReason, storyId,
+         storyContext, tokenUsage
+       - updateFromMessage() dispatcher handles all 6 message types with a
+         switch on msg.type -- updates the correct slices per message
+       - Narrative entries are appended and capped at 500 to bound memory
+       - setStoryContext() for API-driven metadata (not from WS)
+       - reset() clears all state back to initial values
+       - 20+ typed selector hooks exported: useRooms, useAgents, useEscapeChain,
+         useNarrativeEvents, useTick, useConnectionStatus, useIsPlaying,
+         useIsProcessing, useIsFinished, useWorldState, useAgent(id),
+         useRoom(id), useAgentsInRoom(id), useSolvedStepCount, etc.
+
+    3. WebSocket hook (frontend/src/hooks/useWebSocket.ts):
+       - Connects to /ws via Vite proxy (uses window.location for protocol/host)
+       - Parses incoming JSON and calls store.updateFromMessage()
+       - Exponential backoff reconnect: 1s, 2s, 4s, 8s, 16s, max 30s
+       - Connect timeout: 10s (closes and retries if server unresponsive)
+       - Intentional disconnect suppresses auto-reconnect
+       - Clean unmount cleanup (closes socket, clears timers)
+       - Returns { connect, disconnect, sendMessage }
+
+  Files created:
+    frontend/src/types/game.ts — TypeScript interfaces for all game data
+    frontend/src/stores/gameStore.ts — Zustand store + typed selectors
+    frontend/src/hooks/useWebSocket.ts — WebSocket connection hook
+
+  Files modified:
+    (none -- all new files)
+
+  Directories created:
+    frontend/src/types/
+    frontend/src/stores/
+
+  Backend protocol notes:
+    The server sends 6 message types over WebSocket:
+    - "snapshot" — full world state, sent on connect and after reset/load/generate
+    - "tick" — per-tick update with events, narrative prose, world_state, escape_chain
+    - "processing" — agents are thinking (before tick completes)
+    - "paused" — simulation is paused
+    - "finished" — game ended (with reason and final narrative)
+    - "finished_idle" — game already ended (reminder)
+    The server does NOT currently accept messages FROM the client via WS;
+    the client-side receive_text loop is a no-op. Control is via REST API
+    (/api/pause, /api/resume, /api/step, etc.). The sendMessage function
+    is provided for future use.
+
+  Mobile/gesture notes:
+    This feature is pure data layer (store + hook) with no UI components.
+    No mobile/gesture considerations apply. The hook auto-connects on mount
+    and reconnects on disconnect, which is important for mobile browsers
+    that aggressively close WebSocket connections when backgrounded.
+
+  Build verification:
+    - TypeScript: npx tsc --noEmit passes with zero errors
+    - Vite build: npx vite build succeeds (291 KB JS bundle)
+
+  Known issues / considerations:
+    - The server's WS endpoint does not accept any client messages yet; the
+      sendMessage() function is forward-looking infrastructure
+    - Narrative capped at 500 entries; for very long games this means early
+      narrative is lost (acceptable trade-off for memory)
+    - storyContext is set via API responses, not from WebSocket messages,
+      because the server does not include story metadata in WS broadcasts
+    - The escapeChain step shape varies slightly between builder.py,
+      storyteller.py, and architect.py; the TS type captures the common
+      fields. Some steps may have additional properties.
