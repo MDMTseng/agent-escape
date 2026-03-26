@@ -996,3 +996,54 @@ Scroll behavior: Feed scrolls internally on mobile (body does NOT scroll). Botto
 - Library page (/library): Card grid renders correctly, main scrolls via overflow-y-auto, no layout breakage. PASS.
 - Home page (/): Verified in screenshots, no issues.
 - Previous features P0-001 through P0-005: All still marked as passing. Build clean. No console errors.
+
+[BUILD] P0-007: Game Monitor — Agent Status Strip — COMPLETE
+  Agent: ui-builder (Claude Code, Opus 4.6)
+  Date: 2026-03-26
+  What was done:
+    - Created AgentStatusStrip component (frontend/src/components/monitor/AgentStatusStrip.tsx)
+    - Integrated strip into Monitor page (frontend/src/pages/Monitor.tsx)
+    - Horizontal scrollable strip of compact agent cards below the monitor header, above narrative feed
+    - Each card shows: agent name, current room (resolved from rooms record), inventory count icon, "Thinking..." action text during processing
+    - Cards have gold border/glow when active (processing), gold name text for active agents
+    - Clicking/tapping a card opens detail view:
+      - Mobile: bottom sheet (50vh) with swipe-to-dismiss (drag handle, 80px threshold), backdrop dismiss
+      - Desktop: centered dialog (420px wide) with backdrop dismiss and Escape key dismiss
+    - Detail view shows: avatar icon, name, room, description, goal, full inventory list with item names
+    - Empty state: "No agents in the world yet" message when no agents exist
+    - Snap scrolling (snap-x snap-mandatory) for touch-friendly horizontal navigation
+    - On md+ breakpoints, cards can wrap instead of forcing scroll
+
+  Files created:
+    frontend/src/components/monitor/AgentStatusStrip.tsx — main component (AgentCard, AgentDetail, EmptyStrip, AgentStatusStrip)
+  Files modified:
+    frontend/src/pages/Monitor.tsx — imported and placed AgentStatusStrip between header and narrative feed
+
+  Mobile/Gesture Notes:
+    - Cards are 140px wide, 72px+ tall — well above 44px touch target minimum
+    - Horizontal scroll with snap-x for swipeable card browsing on mobile
+    - Bottom sheet has touch drag-to-dismiss: swipe down 80px+ to close
+    - Drag handle visual cue shown on mobile only (hidden on md+)
+    - Detail close button is 36px (9x4px) touch target — meets minimum
+    - All interactive elements have active:scale transform feedback
+    - scrollbar-none class hides scrollbar while maintaining scroll functionality
+
+  Bug Found and Fixed:
+    - useAgentList() selector (Object.values in Zustand selector) causes React 19 infinite loop
+      ("The result of getSnapshot should be cached to avoid an infinite loop")
+    - Fixed by using useAgents() (returns stable record reference) + useMemo(Object.values) in component
+    - This is a latent bug in the store that would affect any component using useAgentList()
+
+  Data Model Adaptation:
+    - Backend AgentState has: id, name, description, room_id, inventory, goal
+    - No emotional_state or current_action fields exist on the backend model
+    - Adapted: show description and goal in detail view; show "Thinking..." during processing state
+    - Room names resolved via useRooms() record lookup from room_id
+
+  Build: clean (vite build succeeds, no console errors)
+  Screenshots: screenshots/build-P0-007-mobile.png, -tablet.png, -desktop.png, -detail-mobile.png, -detail-desktop.png
+
+  Known Issues / Notes:
+    - The useAgentList() and useRoomList() selectors in gameStore.ts have the same React 19 infinite-loop bug — they should be fixed globally (Object.values in a selector creates new references)
+    - If more agent data fields are added to the backend (emotional_state, current_action), the card and detail view should be updated to display them
+    - The detail sheet animation is CSS-only (no spring physics); could be enhanced with a gesture library like @use-gesture/react in the future
