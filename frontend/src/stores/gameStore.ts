@@ -82,6 +82,9 @@ export interface GameState {
     context: GameState['storyContext'],
   ) => void;
 
+  /** Optimistically set isPlaying (used after successful API calls). */
+  setIsPlaying: (playing: boolean) => void;
+
   /** Reset all state to initial values. */
   reset: () => void;
 }
@@ -226,6 +229,10 @@ export const useGameStore = create<GameState>()((set, get) => ({
       }
     }
   },
+
+  // -- Optimistic play state ------------------------------------------------
+
+  setIsPlaying: (playing) => set({ isPlaying: playing }),
 
   // -- Story context --------------------------------------------------------
 

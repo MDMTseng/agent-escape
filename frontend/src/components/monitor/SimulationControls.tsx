@@ -62,7 +62,12 @@ export function SimulationControls() {
     if (playPauseLoading || isFinished) return
     setPlayPauseLoading(true)
     const endpoint = isPlaying ? '/api/pause' : '/api/resume'
-    await apiPost(endpoint)
+    const ok = await apiPost(endpoint)
+    // Optimistically update isPlaying so the UI reflects the new state
+    // immediately, rather than waiting for a snapshot WS message.
+    if (ok) {
+      useGameStore.getState().setIsPlaying(!isPlaying)
+    }
     setPlayPauseLoading(false)
   }, [isPlaying, playPauseLoading, isFinished])
 
@@ -78,11 +83,13 @@ export function SimulationControls() {
   const handleQuit = useCallback(async () => {
     if (quitLoading) return
     setQuitLoading(true)
-    // Pause first, then navigate
+    // Pause first if running, then navigate
     if (isPlaying) {
-      await apiPost('/api/pause')
+      const paused = await apiPost('/api/pause')
+      if (paused) {
+        useGameStore.getState().setIsPlaying(false)
+      }
     }
-    // Small delay so the pause registers on server before we navigate away
     useGameStore.getState().reset()
     navigate('/library')
   }, [quitLoading, isPlaying, navigate])
