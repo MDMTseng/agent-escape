@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Plus, Trash2, BookOpen, Clock, Save, Star,
-  AlertCircle, RefreshCw, Loader2
+  AlertCircle, RefreshCw, Loader2, Play, Sparkles, Zap
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { timeAgo } from '@/lib/timeago'
+import { useGameStore } from '@/stores/gameStore'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -44,6 +45,65 @@ function getThemeColor(theme: string) {
 
 function formatTheme(theme: string) {
   return theme.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
+/* ------------------------------------------------------------------ */
+/*  Quick Play — random theme/premise combinations                      */
+/* ------------------------------------------------------------------ */
+
+const QUICK_PLAY_OPTIONS = [
+  {
+    theme: 'gothic_manor',
+    premise: 'Lord Ashworth discovered his formula was being stolen and locked down the estate before vanishing.',
+  },
+  {
+    theme: 'gothic_manor',
+    premise: 'A mysterious letter summoned everyone to the manor. Now the doors are sealed and the clock is ticking.',
+  },
+  {
+    theme: 'sci_fi_lab',
+    premise: 'An unauthorized experiment breached containment. The station locked down automatically.',
+  },
+  {
+    theme: 'sci_fi_lab',
+    premise: 'The AI detected an intruder and sealed all bulkheads. But there is no intruder on the sensors.',
+  },
+  {
+    theme: 'ancient_tomb',
+    premise: 'The expedition accidentally triggered an ancient mechanism. The entrance sealed behind them.',
+  },
+  {
+    theme: 'ancient_tomb',
+    premise: 'The tomb guardians have awakened. The trials must be completed before the sands fill the chamber.',
+  },
+]
+
+function pickRandomOption() {
+  return QUICK_PLAY_OPTIONS[Math.floor(Math.random() * QUICK_PLAY_OPTIONS.length)]
+}
+
+/* ------------------------------------------------------------------ */
+/*  API helpers for play actions                                        */
+/* ------------------------------------------------------------------ */
+
+async function createStory(theme: string, premise: string) {
+  const res = await fetch('/api/stories/create', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ theme, premise, difficulty: 3, num_characters: 3 }),
+  })
+  if (!res.ok) throw new Error(`Server error (${res.status})`)
+  const data = await res.json()
+  if (data.error) throw new Error(data.error)
+  return data
+}
+
+async function playStory(storyId: number) {
+  const res = await fetch(`/api/stories/${storyId}/play`, { method: 'POST' })
+  if (!res.ok) throw new Error(`Server error (${res.status})`)
+  const data = await res.json()
+  if (data.error) throw new Error(data.error)
+  return data
 }
 
 /* ------------------------------------------------------------------ */
@@ -205,34 +265,56 @@ function SwipeableCard({
 function StoryCard({
   story,
   onDelete,
+  onPlay,
+  playingId,
 }: {
   story: Story
   onDelete: (id: number) => void
+  onPlay: (story: Story) => void
+  playingId: number | null
 }) {
-  const navigate = useNavigate()
+  const isLoading = playingId === story.id
 
   return (
     <SwipeableCard
-      onTap={() => navigate('/monitor')}
+      onTap={() => onPlay(story)}
       onDelete={() => onDelete(story.id)}
     >
       <div className="p-4 space-y-3">
-        {/* Header: title + desktop delete */}
+        {/* Header: title + action buttons */}
         <div className="flex items-start justify-between gap-2">
-          <h3 className="text-text-primary font-semibold leading-tight line-clamp-2 text-base">
+          <h3 className="text-text-primary font-semibold leading-tight line-clamp-2 text-base flex-1">
             {story.title}
           </h3>
-          {/* Desktop-only delete button (hover reveal) */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onDelete(story.id)
-            }}
-            className="hidden md:flex items-center justify-center size-9 min-h-[44px] min-w-[44px] rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 opacity-0 group-hover/card:opacity-100 transition-all shrink-0"
-            aria-label={`Delete ${story.title}`}
-          >
-            <Trash2 className="size-4" />
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            {/* Play button — always visible, prominent */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onPlay(story)
+              }}
+              disabled={isLoading}
+              aria-label={`Play ${story.title}`}
+              className="flex items-center justify-center size-10 min-h-[44px] min-w-[44px] rounded-lg bg-gold/15 text-gold hover:bg-gold/25 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Play className="size-4 ml-0.5" fill="currentColor" />
+              )}
+            </button>
+            {/* Desktop-only delete button (hover reveal) */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete(story.id)
+              }}
+              className="hidden md:flex items-center justify-center size-9 min-h-[44px] min-w-[44px] rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 opacity-0 group-hover/card:opacity-100 transition-all"
+              aria-label={`Delete ${story.title}`}
+            >
+              <Trash2 className="size-4" />
+            </button>
+          </div>
         </div>
 
         {/* Theme badge + difficulty */}
@@ -455,6 +537,93 @@ function DeleteConfirmSheet({
 }
 
 /* ------------------------------------------------------------------ */
+/*  Generation loading overlay — atmospheric, not just a spinner        */
+/* ------------------------------------------------------------------ */
+
+const GENERATION_MESSAGES = [
+  'Conjuring the mystery...',
+  'Building rooms and corridors...',
+  'Breathing life into agents...',
+  'Hiding clues in the shadows...',
+  'Weaving the escape chain...',
+  'Setting the stage...',
+]
+
+function GenerationOverlay({
+  theme,
+  onCancel,
+}: {
+  theme: string
+  onCancel?: () => void
+}) {
+  const [msgIndex, setMsgIndex] = useState(0)
+
+  // Cycle through atmospheric messages
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setMsgIndex(i => (i + 1) % GENERATION_MESSAGES.length)
+    }, 2500)
+    return () => clearInterval(interval)
+  }, [])
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="flex flex-col items-center text-center px-6 max-w-sm">
+        {/* Animated glow ring */}
+        <div className="relative mb-6">
+          <div className="size-20 rounded-full bg-gold/10 flex items-center justify-center animate-pulse">
+            <Sparkles className="size-8 text-gold" />
+          </div>
+          {/* Orbiting ring effect */}
+          <div className="absolute inset-[-8px] rounded-full border-2 border-gold/20 animate-spin" style={{ animationDuration: '3s' }} />
+          <div className="absolute inset-[-16px] rounded-full border border-gold/10 animate-spin" style={{ animationDuration: '5s', animationDirection: 'reverse' }} />
+        </div>
+
+        <h3 className="text-text-primary font-semibold text-lg mb-1">
+          Creating Your Escape Room
+        </h3>
+        <p className="text-gold text-sm font-medium mb-1">
+          {formatTheme(theme)}
+        </p>
+
+        {/* Rotating message */}
+        <p className="text-text-secondary text-sm h-5 transition-opacity duration-300">
+          {GENERATION_MESSAGES[msgIndex]}
+        </p>
+
+        {/* Subtle progress bar (indeterminate) */}
+        <div className="w-48 h-1 bg-bg-tertiary rounded-full mt-6 overflow-hidden">
+          <div
+            className="h-full bg-gold/60 rounded-full"
+            style={{
+              animation: 'indeterminate 1.5s ease-in-out infinite',
+              width: '40%',
+            }}
+          />
+        </div>
+
+        {onCancel && (
+          <button
+            onClick={onCancel}
+            className="mt-6 text-text-muted text-xs hover:text-text-secondary transition-colors min-h-[44px] px-4"
+          >
+            Cancel
+          </button>
+        )}
+      </div>
+
+      {/* CSS for indeterminate progress animation */}
+      <style>{`
+        @keyframes indeterminate {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(350%); }
+        }
+      `}</style>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
 /*  Main Library page                                                  */
 /* ------------------------------------------------------------------ */
 
@@ -465,6 +634,14 @@ export default function Library() {
   const [error, setError] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Story | null>(null)
   const [deleting, setDeleting] = useState(false)
+
+  // Quick Play / Play state
+  const [generating, setGenerating] = useState(false)
+  const [generatingTheme, setGeneratingTheme] = useState('gothic_manor')
+  const [playingStoryId, setPlayingStoryId] = useState<number | null>(null)
+
+  const setStoryContext = useGameStore((s) => s.setStoryContext)
+  const resetGameStore = useGameStore((s) => s.reset)
 
   const fetchStories = useCallback(async () => {
     setLoading(true)
@@ -503,10 +680,66 @@ export default function Library() {
     }
   }
 
+  // --- Quick Play: create a new story with random theme + premise ---
+  const handleQuickPlay = useCallback(async () => {
+    if (generating) return
+    const option = pickRandomOption()
+    setGenerating(true)
+    setGeneratingTheme(option.theme)
+    setError(null)
+
+    try {
+      // Reset store before creating so we start fresh
+      resetGameStore()
+
+      const data = await createStory(option.theme, option.premise)
+
+      // Set story context in Zustand so the Monitor page knows what is loaded
+      setStoryContext(data.story_id, {
+        title: data.title,
+        theme: data.world_bible?.theme ?? option.theme,
+        premise: option.premise,
+        difficulty: data.world_bible?.difficulty ?? 3,
+      })
+
+      // Navigate to monitor — the WebSocket will receive the snapshot
+      navigate('/monitor')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create story')
+    } finally {
+      setGenerating(false)
+    }
+  }, [generating, navigate, resetGameStore, setStoryContext])
+
+  // --- Play an existing story from its card ---
+  const handlePlayStory = useCallback(async (story: Story) => {
+    if (playingStoryId !== null) return
+    setPlayingStoryId(story.id)
+    setError(null)
+
+    try {
+      resetGameStore()
+
+      const data = await playStory(story.id)
+
+      setStoryContext(data.story_id ?? story.id, {
+        title: data.title ?? story.title,
+        theme: story.theme,
+        premise: story.premise,
+        difficulty: story.difficulty,
+      })
+
+      navigate('/monitor')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load story')
+    } finally {
+      setPlayingStoryId(null)
+    }
+  }, [playingStoryId, navigate, resetGameStore, setStoryContext])
+
   const handleNewScene = () => {
-    // For now, navigate to a placeholder. The scene creator is a future feature.
-    // We'll navigate to /library/new in the future; for now show an alert-style hint.
-    navigate('/monitor')
+    // Scene creator is a future feature (P1). For now, trigger Quick Play.
+    handleQuickPlay()
   }
 
   return (
@@ -523,17 +756,41 @@ export default function Library() {
             </p>
           </div>
 
-          {/* Desktop "New Scene" button — hidden on mobile (FAB used instead) */}
-          {!loading && !error && stories.length > 0 && (
+          {/* Desktop header buttons */}
+          <div className="hidden md:flex items-center gap-2">
             <Button
-              onClick={handleNewScene}
-              className="hidden md:inline-flex h-10 gap-2"
+              onClick={handleQuickPlay}
+              disabled={generating}
+              className="h-10 gap-2 bg-gold hover:bg-gold-bright text-bg-primary font-semibold"
             >
-              <Plus className="size-4" />
-              New Scene
+              <Zap className="size-4" />
+              Quick Play
             </Button>
-          )}
+            {!loading && !error && stories.length > 0 && (
+              <Button
+                onClick={handleNewScene}
+                variant="outline"
+                className="h-10 gap-2"
+              >
+                <Plus className="size-4" />
+                New Scene
+              </Button>
+            )}
+          </div>
         </div>
+      </div>
+
+      {/* Quick Play banner — mobile only, prominent call-to-action in thumb zone */}
+      <div className="px-4 pb-3 md:hidden">
+        <button
+          onClick={handleQuickPlay}
+          disabled={generating}
+          className="w-full flex items-center justify-center gap-2.5 h-14 min-h-[56px] rounded-xl bg-gradient-to-r from-gold/20 to-gold/10 border border-gold/30 text-gold font-semibold text-base active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Zap className="size-5" />
+          Quick Play
+          <span className="text-gold/60 text-sm font-normal">- random escape room</span>
+        </button>
       </div>
 
       {/* Content */}
@@ -560,6 +817,8 @@ export default function Library() {
                     const s = stories.find(s => s.id === id)
                     if (s) setDeleteTarget(s)
                   }}
+                  onPlay={handlePlayStory}
+                  playingId={playingStoryId}
                 />
               </div>
             ))}
@@ -595,6 +854,11 @@ export default function Library() {
             <span className="text-text-primary text-sm">Deleting...</span>
           </div>
         </div>
+      )}
+
+      {/* Story generation overlay — atmospheric loading screen */}
+      {generating && (
+        <GenerationOverlay theme={generatingTheme} />
       )}
     </div>
   )
