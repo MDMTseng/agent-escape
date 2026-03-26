@@ -10,7 +10,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
-import { useAgents, useRooms, useIsProcessing, useGameStore } from '@/stores/gameStore'
+import { useAgents, useRooms, useIsProcessing } from '@/stores/gameStore'
 import type { AgentState } from '@/types/game'
 import { cn } from '@/lib/utils'
 import {
@@ -18,7 +18,6 @@ import {
   MapPin,
   Target,
   X,
-  ChevronDown,
   User,
   Backpack,
 } from 'lucide-react'

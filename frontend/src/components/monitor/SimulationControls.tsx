@@ -94,9 +94,6 @@ export function SimulationControls() {
     navigate('/library')
   }, [quitLoading, isPlaying, navigate])
 
-  // Is any action in flight?
-  const anyLoading = playPauseLoading || stepLoading
-
   return (
     <div
       className={cn(
