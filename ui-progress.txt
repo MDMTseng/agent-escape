@@ -827,3 +827,75 @@ loops. Both behaviors are mobile-friendly by design.
       reviewer flags it.
     - The "animate" prop on NarrativeCard only fires on the last card in the list;
       if multiple cards arrive between renders, only the final one animates.
+
+[REVIEW] Feature: "Game Monitor -- Narrative Feed"
+Verdict: FAIL
+
+--- Critics Take ---
+
+The narrative cards themselves are genuinely beautiful work. When a tick arrives over the
+WebSocket, the NarrativeCard component renders it as a dark panel with a gold "Tick 22"
+badge in the top-left corner, colored event category pills (Discovery in purple, Dialogue
+in emerald, Movement in blue) arrayed beside it, and a relative timestamp pushed to the
+right. Below the header, the narrator prose flows in 16px leading-relaxed text -- and the
+prose is rich, atmospheric, cinematic. Then a subtle border-top divider separates the
+narrative from a structured event list, each line preceded by a tiny colored dot matching
+its category. The typography choices, the color coding, the information hierarchy -- all
+of it demonstrates genuine craft. This is not a log file pretending to be a feed; it is
+a storybook that updates in real-time.
+
+The filter chips are equally polished. Five buttons -- All, Puzzle, Movement, Dialogue,
+Discovery -- sit in a horizontally scrollable row. When active, each pill takes on its
+category color, providing immediate visual feedback. Multi-select works correctly. When
+no cards match the active filter, a graceful empty state appears with a gold "Clear
+filters" link. The connection badge with color-coded icons provides situational awareness.
+
+But beneath this beautiful surface, the feed scroll system is broken. The scroll
+container -- the div with overflow-y-auto min-h-0 -- does not actually constrain to the
+viewport. It grows unbounded. On a 1280x800 desktop viewport with four narrative cards,
+the container expands to 3465px tall instead of being clamped to ~610px. The document
+body scrolls instead. This means the auto-scroll logic, the handleScroll callback, the
+"Jump to latest" button -- none of them function. Three core acceptance criteria are
+architecturally non-functional.
+
+The root cause is a CSS height chain break in the AppLayout. The outermost container
+uses min-h-dvh (minimum height, not fixed height), so children can push it taller. The
+main element has min-height: auto instead of min-height: 0. The fix requires changing
+min-h-dvh to h-dvh and ensuring every flex parent has min-h-0.
+
+--- Issues Found ---
+
+1. [BLOCKER] Scroll containment broken -- feed container grows unbounded
+   Steps: Navigate to /monitor, step simulation 2+ times, observe page body scrolls
+   Expected: Feed container constrains to viewport, cards scroll within container
+   Got: Container expands to fit content (3465px on 800px viewport), scrollHeight===clientHeight
+   Impact: Auto-scroll, manual pause, and Jump-to-latest are all non-functional
+
+--- Mobile and Gesture Report ---
+Viewport tested: 375px (iPhone 14 equivalent)
+Touch targets: All filter chips measure 44px+ height. All interactive elements pass.
+Gestures: Filter chips horizontally scrollable with hidden scrollbar -- works correctly.
+Scroll behavior: Same BLOCKER on mobile -- container grows to 3291px on 812px viewport.
+Jump to latest FAB: Never appears due to scroll containment bug.
+
+--- Atmosphere and Polish Notes ---
+- Narrative prose is genuinely atmospheric -- dark cards with subdued borders feel like
+  leafing through a mystery novel. Gold tick badge is the perfect accent.
+- Category pills (Discovery purple, Dialogue emerald, Movement blue) are thoughtful.
+- Empty state ("Waiting for the story to unfold...") sets the right mood.
+- Filtered-empty state with "Clear filters" in gold is a nice touch.
+
+--- What Worked ---
+- NarrativeCard rendering: tick badge, event pills, prose, event list -- all flawless
+- Filter logic: single-select, multi-select, clear all, filtered-empty -- all correct
+- WebSocket integration: connection status, tick counter, narrative data flow -- all work
+- Empty states: both no-data and filtered-empty handled gracefully
+- TypeScript: zero errors. Build: clean (303KB JS, 42KB CSS gzipped)
+- Touch targets: all >= 44px. Filter chip scroll works on mobile.
+- Card entrance animation (animate-card-in): smooth 300ms fade+slide
+- Zero console errors across all tests
+
+--- Recommended Fix Priority ---
+1. Fix scroll containment BLOCKER: change min-h-dvh to h-dvh, add min-h-0 to flex parents
+2. Verify auto-scroll, manual pause, Jump-to-latest once containment is fixed
+3. Consider sticky filter chips at top of feed during scroll
