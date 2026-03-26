@@ -1181,3 +1181,92 @@ Scroll behavior: no unwanted horizontal scroll; strip uses overflow-x-auto with 
     - No swipe-to-dismiss on the checklist (could be added later for the panel)
   TypeScript: clean (npx tsc --noEmit passes)
   Vite build: clean (npx vite build succeeds)
+
+[REVIEW] Feature: "Game Monitor — Escape Chain Progress Bar"
+Verdict: PASS
+
+--- Critic's Take ---
+
+The escape chain progress bar arrives as a tightly composed piece of interface that
+knows exactly when to speak and when to stay silent. When no chain data exists, the
+component vanishes entirely — no empty skeleton, no orphaned header, no placeholder
+text. It simply does not exist. This is the right call. An escape room UI must never
+remind you of the infrastructure; it should feel like the room itself.
+
+When data flows in, the bar materializes between the agent strip and the narrative
+feed with quiet authority. The collapsed state is a slender 49px ribbon — a compact
+"3 / 12" counter on the left, a row of colored segments on the right, and a chevron
+whispering "there's more if you want it." Three green segments glow with the warmth
+of completed puzzles, one gold segment pulses with a breathing 1.5-second cadence
+that says "this is where the action is," and the remaining gray segments recede into
+the charcoal background like unopened doors in a dark hallway. The visual hierarchy
+reads instantly: progress, focus, mystery.
+
+Expanding the checklist reveals a scrollable list of steps, each dressed with a
+status icon (green checkmark, gold lightning bolt, gray circle), step number in
+monospaced type, description, and an action+target badge in a subtle tinted pill.
+The active step row gets a faint gold background wash that sets it apart without
+shouting. Solved steps are clickable — tap one and it unfolds to reveal the solver's
+name and the tick number, rendered with User and Clock icons in the project's green
+and gold accents. The animation is a quick slide-in-from-top that feels snappy
+without being abrupt.
+
+On desktop, the segmented bar stretches luxuriously across the full width, and a
+"25% complete" label appears beneath it — a nice touch that the mobile viewport
+wisely omits to conserve vertical real estate. The entire component scales cleanly
+from 375px phone screens to 1280px desktops without layout cracks or orphaned
+elements. The checklist caps at 50vh with overscroll containment, so it never
+hijacks the entire page.
+
+The code quality is solid: well-documented header, clean component decomposition
+(SegmentBar, ChecklistRow, EscapeChainProgress), proper ARIA attributes on the
+progressbar role, keyboard-accessible buttons, and no console errors. The one
+genuine issue — the backend not sending escape chain data on fresh start — is a
+server-side bug (missing `global sim_escape_chain` declaration in the lifespan
+function), not a frontend problem. The component handles the absence gracefully.
+
+--- Functional Checklist ---
+[x] 12-step segmented bar renders with correct colors per state — verified
+[x] Solved steps: green (#3fb950 / success) — verified
+[x] Active step: gold (#e3b341) with pulse animation — verified (1.5s ease-in-out)
+[x] Pending steps: gray (#30363d / border) — verified
+[x] Progress counter "X/12 steps completed" — verified (compact "3/12" + desktop "25% complete")
+[x] Collapsible checklist below bar — verified (toggle with chevron)
+[x] Collapsed by default on mobile — verified (useState(false))
+[x] Tapping solved step shows agent name + tick — verified (inline expand with User/Clock icons)
+[x] Touch targets 44px+ — verified (main button 48px, rows 60px, all full-width)
+[x] ARIA attributes present — verified (progressbar role, aria-valuemin/max/now, aria-label, aria-expanded)
+[x] Compact when collapsed (~48-60px) — verified (49px measured)
+[x] Component hides when no chain exists — verified (returns null when totalSteps === 0)
+[x] TypeScript passes — verified (tsc --noEmit clean)
+[x] Vite build passes — verified (314KB bundle, no warnings)
+
+--- Mobile & Gesture Report ---
+Viewport tested: 375px (iPhone 14), 768px (tablet), 1280px (desktop)
+Thumb zone: PASS — main toggle and all checklist rows are in the natural scroll zone, full-width
+Touch targets: PASS — main toggle 375x48px, checklist rows 375x60px (all exceed 44px minimum)
+Gestures: Tap to expand/collapse, tap solved steps for detail. No swipe gestures (acceptable — this is a list, not a card stack)
+One-hand usability: PASS — entire flow operable with single thumb taps
+Bottom sheets/drawers: N/A — inline expand pattern used instead (appropriate for this component)
+Checklist scroll: Contained with max-h-[50vh] and overscroll-contain
+
+--- Atmosphere & Polish Notes ---
+- The gold pulse animation (opacity 1 -> 0.55 -> 1 at 1.5s) is a subtle heartbeat that draws the eye to the active step without being distracting. GPU-accelerated via will-change: opacity.
+- The green/gold/gray palette maintains the dark escape room aesthetic consistently.
+- The checklist expand animation (slide-in-from-top) is fast (200ms) and crisp.
+- The action+target badge pills add a layer of detail without cluttering.
+- Desktop "25% complete" label adds context; mobile wisely hides it.
+- Chevron rotation (180deg) on expand is smooth and directional.
+
+--- Delight Moments ---
+- The gold-pulsing active segment genuinely draws your eye — it feels alive, like a candle flickering in the darkness.
+- The transition from collapsed bar to expanded checklist is seamless; the bar stays visible as an anchor.
+- Solved step details (agent name + tick) are a satisfying reward for curiosity — they make the history feel real.
+
+--- Backend Note (not blocking) ---
+The server has a scoping bug: `sim_escape_chain` is assigned inside `lifespan()` at line 101 without a `global` declaration, creating a local variable that shadows the module-level empty list. This means the default escape room scenario never actually populates the chain. The frontend correctly handles the empty case. This is a backend fix for the builder, not a frontend failure.
+
+--- Regression Check ---
+Agent status strip (P0-007): Renders correctly with Alice/Bob cards. No visual regression.
+Narrative feed (P0-006): Empty state displays properly. Filter chips visible. No regression.
+Layout shell (P0-003): Sidebar, bottom nav, header all intact across viewports.
