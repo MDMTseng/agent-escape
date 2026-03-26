@@ -142,6 +142,17 @@ button, a, [role="button"] {
   animation: status-pulse 2s ease-in-out infinite;
 }
 
+/* Sidebar drawer slide-in animation (tablet) */
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+/* Safe area padding for iOS bottom bar (notch devices) */
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
