@@ -1270,3 +1270,55 @@ The server has a scoping bug: `sim_escape_chain` is assigned inside `lifespan()`
 Agent status strip (P0-007): Renders correctly with Alice/Bob cards. No visual regression.
 Narrative feed (P0-006): Empty state displays properly. Filter chips visible. No regression.
 Layout shell (P0-003): Sidebar, bottom nav, header all intact across viewports.
+
+[BUILD] P0-009: Game Monitor -- Simulation Controls — COMPLETE
+  Agent: ui-builder (Claude Code, Opus 4.6)
+  Date: 2026-03-26
+
+  What was done:
+    - Created SimulationControls component (frontend/src/components/monitor/SimulationControls.tsx)
+    - Integrated it into Monitor.tsx as a sticky bottom bar
+
+  Component features:
+    - Play/Pause toggle: round 48px button, calls POST /api/resume or POST /api/pause
+      - Gold background when playing, muted bg-tertiary when paused
+      - Filled Play (triangle) and Pause (two bars) icons
+      - Active:scale-95 press feedback
+    - Step button: 44px rounded-lg, calls POST /api/step
+      - Disabled when simulation is playing (only enabled when paused)
+      - Disabled when game is finished
+    - Tick counter: gold monospaced font, prominent display of current tick number
+    - Processing indicator: spinning Loader2 icon + "Thinking..." text when isProcessing is true
+    - Finished badge: red "Ended" pill when game is finished
+    - Quit to Library: pauses simulation first, resets game store, navigates to /library
+      - Icon-only on mobile, "Quit" label visible on sm+ screens
+
+  API integration:
+    - All three endpoints (POST /api/resume, /api/pause, /api/step) verified against server.py
+    - Local loading states disable buttons during in-flight requests
+    - Error handling: fetch failures are caught silently (UI remains usable)
+
+  Mobile-first layout:
+    - Bar height: 60px on mobile, 64px on desktop
+    - Play button: 48x48px circular touch target (exceeds 44px minimum)
+    - Step button: 44x44px touch target
+    - Quit button: 44px min-height, right-aligned
+    - Bar sits inside the flex column of Monitor page (above the mobile bottom nav's pb-16 padding)
+    - z-index 40 (below the z-50 mobile bottom nav)
+    - All controls reachable with one thumb in the bottom third of the screen
+
+  Files changed:
+    frontend/src/components/monitor/SimulationControls.tsx (new, 212 lines)
+    frontend/src/pages/Monitor.tsx (added import + replaced placeholder comment)
+
+  Gestures supported:
+    - Active:scale-95 press feedback on all buttons
+    - Focus-visible ring for keyboard accessibility
+    - All buttons have aria-labels and title attributes
+
+  Screenshots: screenshots/build-P0-009-{mobile,tablet,desktop}.png (gitignored)
+
+  Known considerations:
+    - The controls bar does not conflict with the mobile bottom nav (it sits above it in the flex flow)
+    - WebSocket messages (paused, processing, tick) update store state which the controls read reactively
+    - The "Quit" action resets the entire game store before navigating, so returning to Monitor will start fresh
