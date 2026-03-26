@@ -1,0 +1,225 @@
+{
+  "_meta": {
+    "description": "UI feature list for the AgentTown escape room UI rework. Features are ordered by priority (P0 first). The 'passes' field is set ONLY by the ui-reviewer agent.",
+    "branch": "uirework",
+    "created": "2026-03-26"
+  },
+  "features": [
+    {
+      "id": "P0-001",
+      "phase": "P0",
+      "name": "React + Vite scaffold",
+      "description": "Initialize a React + TypeScript + Vite project in frontend/. Install Tailwind CSS, shadcn/ui, Zustand, and React Router. Configure Vite to proxy API requests to localhost:8741. Add a minimal App.tsx with router shell and a health-check fetch to /api/state.",
+      "passes": true,
+      "notes": "Reviewed 2026-03-26. All criteria met. Build clean, theme correct, health check robust."
+    },
+    {
+      "id": "P0-002",
+      "phase": "P0",
+      "name": "FastAPI serves built frontend",
+      "description": "Update agenttown/server.py so that GET / serves the Vite-built index.html from frontend/dist/ (with static asset serving). Keep the existing /dashboard endpoint as a fallback to the old embedded UI. Add a dev note in README or CLAUDE.md about running both dev servers.",
+      "passes": false,
+      "notes": "Depends on P0-001"
+    },
+    {
+      "id": "P0-003",
+      "phase": "P0",
+      "name": "App layout shell + dark theme",
+      "description": "Create the app layout: sidebar navigation (collapsible), top bar with project title + status indicator, and main content area. Apply dark theme (bg #0d1117, gold accents #e3b341) using Tailwind config. Mobile responsive with sidebar as drawer on small screens.",
+      "passes": false,
+      "notes": "Depends on P0-001"
+    },
+    {
+      "id": "P0-004",
+      "phase": "P0",
+      "name": "Scene Library page",
+      "description": "Build the home/landing page that lists all saved scenes (stories). Fetch from GET /api/stories. Display as a grid of cards showing: title, theme badge, difficulty, room count, agent count, creation date, save count. Include a 'New Scene' button and delete action per card. Empty state when no scenes exist.",
+      "passes": false,
+      "notes": "Depends on P0-003"
+    },
+    {
+      "id": "P0-005",
+      "phase": "P0",
+      "name": "WebSocket connection + Zustand store",
+      "description": "Create a Zustand store for game state (world state, agents, rooms, escape chain, ticks, connection status). Implement a WebSocket hook that connects to ws://localhost:8741/ws and dispatches incoming messages to the store. Handle reconnection on disconnect. Export typed selectors for all state slices.",
+      "passes": false,
+      "notes": "Depends on P0-001"
+    },
+    {
+      "id": "P0-006",
+      "phase": "P0",
+      "name": "Game Monitor — Narrative Feed",
+      "description": "Build the narrative feed panel for the game monitor page. Renders narrator-generated prose as styled cards (one per tick). Supports auto-scroll (follow latest) and manual scroll. Filter by event type (puzzle, movement, dialogue, discovery). Show tick number on each card.",
+      "passes": false,
+      "notes": "Depends on P0-005"
+    },
+    {
+      "id": "P0-007",
+      "phase": "P0",
+      "name": "Game Monitor — Agent Status Strip",
+      "description": "Build a horizontal agent status strip showing each agent as a compact card: name, current room, inventory icons, emotional state indicator, current action. Updates in real-time from the Zustand store. Clicking an agent card expands to show more detail.",
+      "passes": false,
+      "notes": "Depends on P0-005"
+    },
+    {
+      "id": "P0-008",
+      "phase": "P0",
+      "name": "Game Monitor — Escape Chain Progress Bar",
+      "description": "Build a visual escape chain progress component. Show the 12-step chain as a horizontal segmented bar with solved (green), active (gold pulse), and pending (gray) states. Below the bar, show a collapsible checklist with step descriptions. Clicking a solved step shows which agent solved it and at what tick.",
+      "passes": false,
+      "notes": "Depends on P0-005"
+    },
+    {
+      "id": "P0-009",
+      "phase": "P0",
+      "name": "Game Monitor — Simulation Controls",
+      "description": "Build play/pause/step control bar. Play button calls POST /api/resume, pause calls POST /api/pause, step calls POST /api/step. Show current tick count and simulation speed. Disable step button when not paused. Add a 'Quit to Library' button that pauses and navigates home.",
+      "passes": false,
+      "notes": "Depends on P0-005"
+    },
+    {
+      "id": "P0-010",
+      "phase": "P0",
+      "name": "Quick Play flow",
+      "description": "Implement a 'Quick Play' button on the Scene Library that calls POST /api/stories/create with a random theme + default settings, then navigates to the Game Monitor page. Also wire up the 'Play' button on existing scene cards to call POST /api/stories/{id}/play and navigate to monitor.",
+      "passes": false,
+      "notes": "Depends on P0-004, P0-009"
+    },
+    {
+      "id": "P1-001",
+      "phase": "P1",
+      "name": "Scene Creator — Story tab",
+      "description": "Build the Scene Creator page with a tabbed layout (Story | Rooms | Puzzles | Agents | Validate). The Story tab has: theme selector (card-based, fetch from GET /api/themes), premise text area, difficulty slider (1-5), and a 'Generate World Bible' button that calls POST /api/generate-story and displays the result (setting, characters, inciting incident).",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "P1-002",
+      "phase": "P1",
+      "name": "Scene Creator — Room graph editor",
+      "description": "Build the Rooms tab with a visual graph editor (React Flow or similar). Users can: add rooms (click to create node), connect rooms with doors (drag edge), select a room to edit name/description/entities in a side panel. Show door status (locked/unlocked) on edges. Include an 'Auto-generate' button that uses the world bible to populate rooms.",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "P1-003",
+      "phase": "P1",
+      "name": "Scene Creator — Puzzle builder tab",
+      "description": "Build the Puzzles tab. List all puzzles in the scene with: name, type (dropdown: key_lock, combination_lock, password_door, pressure_plate, examine_reveal, sequential_levers), room assignment, required items/clues. Add/remove puzzles. Visual dependency chain showing which puzzles gate which others. AI-assist button: describe puzzle intent in natural language, Claude generates the mechanics.",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "P1-004",
+      "phase": "P1",
+      "name": "Scene Creator — Agent designer tab",
+      "description": "Build the Agents tab. Add/remove agents with: name, role, backstory textarea, personality traits (tag input from archetype library + free text), spawn room (dropdown from rooms), initial inventory, goal, and secret motivation. Show relationship matrix between agents (trust slider per pair). Preview how traits map to behavior.",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "P1-005",
+      "phase": "P1",
+      "name": "Scene Creator — Validate tab + save scene",
+      "description": "Build the Validate tab. Run solvability check (call a new POST /api/validate-scene endpoint or client-side BFS). Show pass/fail per puzzle with explanation. 'Save Scene' button persists to the story database. 'Play Scene' button saves + starts the game + navigates to monitor.",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "P1-006",
+      "phase": "P1",
+      "name": "Puzzle Progress Dashboard panel",
+      "description": "Add a collapsible panel to the Game Monitor showing all puzzles in a grid: puzzle name, type icon, room, status badge (unsolved/in-progress/solved), clues found vs required. Warmth indicator (cold/warm/hot) based on clue discovery ratio. Click a puzzle to see its clue list and which agents found which clues.",
+      "passes": false,
+      "notes": "Depends on P0-005"
+    },
+    {
+      "id": "P1-007",
+      "phase": "P1",
+      "name": "Interactive Map panel",
+      "description": "Add an interactive room map to the Game Monitor. Render room graph with React Flow (read-only mode). Show agent positions as animated markers on their current room. Color doors by status (locked red, unlocked green). Click a room to see entity list and current occupants. Optional heat map toggle (room visit frequency).",
+      "passes": false,
+      "notes": "Depends on P0-005"
+    },
+    {
+      "id": "P1-008",
+      "phase": "P1",
+      "name": "Save/Load UI in Game Monitor",
+      "description": "Add save/load controls to the Game Monitor. 'Save' button (with optional name input) calls POST /api/save. 'Load' dropdown lists saves for current story (GET /api/stories/{id}) with tick number and timestamp. Loading calls POST /api/load/{id} and refreshes the store. Show auto-save indicator.",
+      "passes": false,
+      "notes": "Depends on P0-005"
+    },
+    {
+      "id": "P2-001",
+      "phase": "P2",
+      "name": "Agent thought bubbles",
+      "description": "Show agent reasoning in the UI. When an agent makes a decision, display a thought bubble near their status card with a summarized version of the LLMBrain reasoning (key observation + chosen action + why). Thought bubbles fade after a few seconds or on next tick. Toggle on/off per agent.",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "P2-002",
+      "phase": "P2",
+      "name": "Agent memory inspector",
+      "description": "Add a slide-out panel per agent showing: working memory (always-visible key facts), memory stream (scrollable list sorted by recency, with importance score badges), and reflections (periodic summaries). Search within agent memory. Highlight which memories were retrieved for the latest decision.",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "P2-003",
+      "phase": "P2",
+      "name": "Agent perception overlay",
+      "description": "When viewing an agent's detail panel, show what the agent currently perceives: a filtered view of the room showing only visible entities (respecting HIDDEN state), available exits, other agents present, and the agent's own inventory. Contrast with the 'god view' (everything in the room) to show what the agent is missing.",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "P2-004",
+      "phase": "P2",
+      "name": "Nudge system",
+      "description": "Add spectator nudge controls: 'Hint' (suggest an agent examine a specific entity), 'Focus' (redirect an agent to a specific puzzle), 'Talk' (prompt two agents to discuss a topic). Nudges are sent as a new WebSocket message type or API call. Show nudge history in a collapsible log. Limit nudge frequency (cooldown timer).",
+      "passes": false,
+      "notes": "Requires backend endpoint additions"
+    },
+    {
+      "id": "P2-005",
+      "phase": "P2",
+      "name": "Agent conversation log",
+      "description": "Dedicated panel showing all agent-to-agent conversations (talk actions). Display as a chat-style UI with agent avatars and speech bubbles. Filter by agent pair. Highlight conversations where clues were shared or puzzle information was exchanged.",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "P3-001",
+      "phase": "P3",
+      "name": "Timeline scrubber + replay",
+      "description": "Add a timeline bar to the Game Monitor showing all ticks. Event markers on the timeline for: puzzle solves (star), discoveries (magnifying glass), conversations (speech bubble). Click a marker to jump to that tick's narrative card. Scrub backward through saved state (requires auto-saves at interval).",
+      "passes": false,
+      "notes": "Depends on auto-save being implemented"
+    },
+    {
+      "id": "P3-002",
+      "phase": "P3",
+      "name": "Save branching",
+      "description": "When loading a mid-game save, create a named branch. Show a branch tree visualization in the save/load UI. Each branch tracks its own escape chain progress independently. Allow switching between branches.",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "P3-003",
+      "phase": "P3",
+      "name": "Scene export/import",
+      "description": "Export a scene definition as a JSON file (download). Import a scene from a JSON file (upload + validate + create story). Include all scene data: rooms, entities, puzzles, agents, escape chain, world bible. Validate imported JSON schema before accepting.",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "P3-004",
+      "phase": "P3",
+      "name": "Scene duplicate + version history",
+      "description": "Add a 'Duplicate' button on scene cards in the library. Track scene edits as versions (store diffs or snapshots). Show version history in the scene creator. Revert to a previous version.",
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

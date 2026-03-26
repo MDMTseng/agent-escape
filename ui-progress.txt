@@ -50,6 +50,79 @@ Started: 2026-03-26
     - Health check uses AbortSignal.timeout(5000) for fetch timeout
     - All shadcn semantic colors (background, foreground, card, primary, etc.) are mapped to our dark palette
 
+[REVIEW] P0-001: React + Vite scaffold — PASS
+  Agent: ui-reviewer (Claude Code)
+  Date: 2026-03-26
+
+  Critic's Take:
+
+  The scaffold lands with the quiet confidence of a well-packed suitcase. Open the
+  frontend/ directory and you find nothing extraneous — no leftover Vite counter demo,
+  no stray CSS files with purple gradients and spinning logos. The builder cleaned house
+  before handing over the keys. That alone earns respect; most scaffolds arrive with the
+  construction debris still on the floor.
+
+  The dark theme is genuinely atmospheric. Background #0d1117 — that deep GitHub-dark
+  charcoal — paired with gold #e3b341 accents creates an immediate sense of place: you
+  are entering an escape room, not a SaaS dashboard. The shadcn CSS variables are
+  comprehensively mapped, with every semantic token (card, popover, muted, destructive)
+  assigned a value from the dark palette. The Geist font import via @fontsource-variable
+  is a thoughtful touch — variable font axes mean we get weight flexibility without
+  multiple network requests. The always-dark approach (values on :root directly rather
+  than behind a .dark class toggle) is the right call for an escape room aesthetic.
+
+  The health check implementation is more robust than expected for a scaffold. The
+  useHealthCheck hook manages four discrete states (connecting, connected, disconnected,
+  error), uses AbortSignal.timeout(5000) to prevent dangling fetches, and auto-polls at
+  10-second intervals. The ConnectionStatus component surfaces this as a tappable button
+  with color-coded dot indicators and a manual retry — accessible, informative, and
+  unobtrusive. This is infrastructure that future features (WebSocket store, game
+  monitor) can lean on without reimplementing.
+
+  The build tooling is sharp. TypeScript strict mode with noUnusedLocals, noUnusedParameters,
+  and erasableSyntaxOnly — this is a codebase that will reject sloppiness early. Vite 8
+  produces a 262KB JS bundle (83KB gzipped) and 24KB CSS bundle — lean for a React app
+  with a full component library. The proxy config cleanly separates /api (HTTP) and /ws
+  (WebSocket) concerns, both targeting port 8741 as specified.
+
+  One minor observation: the shadcn Button component uses base-ui primitives rather than
+  Radix directly, which is the correct v4 approach. The component is auto-generated and
+  untouched — exactly as it should be at this stage.
+
+  Functional Checklist:
+    [x] React + TypeScript + Vite project in frontend/
+    [x] Tailwind CSS installed and configured (v4 with @tailwindcss/vite plugin)
+    [x] shadcn/ui installed and configured (v4, base-nova, components.json present)
+    [x] Zustand installed (v5.0.12 in dependencies)
+    [x] React Router installed and configured (v7.13.2, BrowserRouter, Routes)
+    [x] Vite proxy: /api -> http://localhost:8741
+    [x] Vite proxy: /ws -> ws://localhost:8741 (with ws: true)
+    [x] App.tsx has router shell with routes (/, /library, /monitor, 404)
+    [x] Health-check fetch to /api/state (useHealthCheck hook, 10s poll interval)
+    [x] tsc --noEmit passes with zero errors
+    [x] vite build succeeds (196ms, 33 modules)
+    [x] Dark theme: bg #0d1117, gold #e3b341 as CSS custom properties
+    [x] All shadcn semantic tokens mapped to dark palette
+
+  Mobile & Gesture Report:
+    [x] 44px minimum touch targets on button, a, [role="button"]
+    [x] clamp() fluid typography on h1, h2, h3
+    [x] 100dvh layout (min-h-dvh on root container)
+    [x] sm: breakpoint used in Home.tsx for flex direction (mobile-first)
+    [x] Footer positioned for thumb-zone accessibility
+    [ ] No gesture handlers yet (expected — this is scaffold only)
+
+  Atmosphere & Polish:
+    - Color palette evokes a midnight command center: dark charcoal, muted grays, gold
+      highlights that feel like lantern light in a dungeon corridor
+    - GPU animation utilities (.animate-gpu, .animate-status-pulse) pre-staged for
+      future use — no premature animation, but the infrastructure is ready
+    - Font smoothing enabled (webkit + moz) for crisp text rendering
+    - Border color (#30363d) provides subtle separation without breaking the darkness
+
+  Verdict: PASS — All acceptance criteria met. Clean scaffold, correct dependencies,
+  working build pipeline, thoughtful theme implementation.
+
 Phase Summary:
   P0 (10 features): React scaffold, layout, scene library, game monitor basics, quick play
   P1 (8 features):  Scene creator tabs, puzzle dashboard, interactive map, save/load UI
