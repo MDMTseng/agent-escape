@@ -148,6 +148,31 @@ button, a, [role="button"] {
   to { transform: translateX(0); }
 }
 
+/* Narrative card entrance animation (fade-in + slide-up) */
+@keyframes cardIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-card-in {
+  animation: cardIn 300ms ease-out both;
+}
+
+/* Hide scrollbar but keep scroll functionality (for filter chips) */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 /* Safe area padding for iOS bottom bar (notch devices) */
 .safe-area-pb {
   padding-bottom: env(safe-area-inset-bottom, 0px);
