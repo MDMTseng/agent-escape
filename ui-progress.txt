@@ -1451,3 +1451,31 @@ No horizontal scroll issues detected.
    concept, so this is arguably N/A. If desired, compute observed tick rate from
    recent tick timestamps.
 3. Issue #3 resolves automatically when issue #1 is fixed.
+
+[FIX] P0-009: Game Monitor — Simulation Controls (review failure fix)
+  Date: 2026-03-26
+  Agent: ui-builder (Claude Code, Opus 4.6)
+  What was fixed:
+    MAJOR — Play/Pause toggle state never updates after clicking Play:
+      - Added `setIsPlaying(playing: boolean)` action to the Zustand store in gameStore.ts
+      - In SimulationControls `handlePlayPause`, after a successful POST to /api/resume
+        or /api/pause, optimistically call `useGameStore.getState().setIsPlaying(!isPlaying)`
+        so the button icon and styling update immediately without waiting for a WS snapshot.
+      - The Step button now correctly disables while playing, since `isPlaying` is true.
+    MINOR — Quit doesn't pause a running simulation:
+      - Updated `handleQuit` to check the API response from /api/pause and optimistically
+        set `isPlaying = false` before resetting and navigating. Because `isPlaying` is now
+        correctly tracked, the `if (isPlaying)` guard in handleQuit works as intended.
+  Files modified:
+    frontend/src/stores/gameStore.ts — added setIsPlaying action to interface + implementation
+    frontend/src/components/monitor/SimulationControls.tsx — optimistic state updates in
+      handlePlayPause and handleQuit
+  Build verification:
+    - tsc --noEmit: zero errors
+    - vite build: success (318KB JS, 48KB CSS gzipped)
+  Mobile/gesture notes: No mobile changes needed — the fix is purely state management logic.
+  Known considerations:
+    - If the API call succeeds but the server state diverges (unlikely), the next WS
+      snapshot or paused message will correct the store to match the server truth.
+    - Simulation speed display (issue #2 from review) remains unaddressed — the backend
+      does not expose a speed concept, so this is arguably N/A.
