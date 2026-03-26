@@ -899,3 +899,29 @@ Jump to latest FAB: Never appears due to scroll containment bug.
 1. Fix scroll containment BLOCKER: change min-h-dvh to h-dvh, add min-h-0 to flex parents
 2. Verify auto-scroll, manual pause, Jump-to-latest once containment is fixed
 3. Consider sticky filter chips at top of feed during scroll
+
+[FIX] P0-006: Narrative Feed scroll containment — 2026-03-26
+  Agent: ui-builder (Claude Code, Opus 4.6)
+  Issue: BLOCKER — scroll containment broken. NarrativeFeed scroll container grew to
+    fit all content (scrollHeight === clientHeight). Auto-scroll, manual scroll pause,
+    and Jump-to-latest were all non-functional because the page body scrolled instead
+    of the feed panel.
+  Root cause: Broken CSS height chain starting from AppLayout.
+  What was fixed (1 file changed):
+    frontend/src/components/AppLayout.tsx:
+    - Root layout div: changed min-h-dvh to h-dvh + added overflow-hidden
+      (fixed viewport height instead of minimum, prevents body from growing)
+    - Body flex container (sidebar + main): added min-h-0 to allow flex shrinking
+    - <main> element: added min-h-0 to allow flex shrinking within the row
+  Verified:
+    - Puppeteer test with 30 injected cards: feed scrollHeight=3640 > clientHeight=611 (PASS)
+    - Body scrollHeight === bodyClientHeight (body does NOT scroll) (PASS)
+    - Monitor page: header + filter chips stay fixed, feed scrolls internally
+    - Library page: cards scroll normally within <main> overflow-y-auto (not broken)
+    - Home page: centered content displays correctly
+    - Desktop layout: sidebar + monitor both render correctly
+    - Build passes: tsc --noEmit clean, vite build clean
+  Pages verified not broken: Home, Library, Monitor (mobile + desktop)
+  Mobile/gesture notes: No gesture changes. The fix is CSS-only (height constraints).
+    Once real WebSocket events arrive, auto-scroll and Jump-to-latest should now work
+    because the scroll container is properly constrained.
