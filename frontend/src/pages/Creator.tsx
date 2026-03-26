@@ -6,6 +6,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { RoomsTab } from '@/components/creator/RoomsTab'
+import { PuzzlesTab } from '@/components/creator/PuzzlesTab'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -534,7 +535,9 @@ export default function Creator() {
         {activeTab === 'Rooms' && (
           <RoomsTab sceneState={sceneState} setSceneState={setSceneState} />
         )}
-        {activeTab === 'Puzzles' && <PlaceholderTab name="Puzzles" />}
+        {activeTab === 'Puzzles' && (
+          <PuzzlesTab sceneState={sceneState} setSceneState={setSceneState} />
+        )}
         {activeTab === 'Agents' && <PlaceholderTab name="Agents" />}
         {activeTab === 'Validate' && <PlaceholderTab name="Validate" />}
       </div>
