@@ -336,3 +336,105 @@ of returning a 404. This is a mobile reliability win even though it's backend co
     - The drawer does not animate out on close (instant removal) — could add slideOutLeft in future
     - Desktop sidebar collapse animation uses transition-[width] which may cause layout reflow
       on slower devices — acceptable for desktop-only feature
+
+[REVIEW] Feature: "App layout shell + dark theme"
+Verdict: PASS
+
+--- Critic's Take ---
+
+The layout shell lands with the quiet authority of a well-designed nightclub entrance:
+dark, deliberate, and immediately orienting. The moment the page loads at 375px, your
+eyes find the gold "AgentTown" title in the top-left corner, and a sticky bottom nav
+bar anchors the four cardinal directions of the app -- Home, Library, Monitor, Settings
+-- each with a lucide icon and a 10px label beneath. The active route glows in gold
+(#e3b341) while the inactive items recede into muted gray (#484f58), creating an
+unmistakable visual hierarchy. This is not a bottom nav that was bolted on as a
+mobile afterthought; it was designed as the primary navigation for the primary viewport.
+
+Scale up to tablet (768px) and the bottom nav vanishes, replaced by a hamburger
+button in the top bar -- the transformation is clean, no awkward in-between state
+where both are visible. Tap the hamburger and a sidebar drawer slides in from the
+left with a 200ms ease-out animation, accompanied by a semi-transparent black
+overlay that dims the content behind it. The drawer shows the same four nav items,
+now as full-width rows with 48px minimum height -- generous touch targets for
+thumb navigation. Tap the overlay to dismiss, or swipe left with an 80px threshold.
+The X icon replaces the hamburger in the top bar, providing clear affordance that
+this is closable. When you navigate to a new page, the drawer auto-closes -- a
+small but essential behavioral detail that prevents the user from having to manually
+dismiss it after every navigation.
+
+At desktop (1280px), the sidebar becomes a permanent fixture on the left: 224px wide
+when expanded, collapsing to a 64px icon-only strip via a chevron toggle at the
+bottom. The active route gets the gold treatment -- gold text plus a subtle gold/10
+background tint that reads like a warm glow behind the selected item. The collapse
+animation uses transition-[width] with a 200ms ease-in-out, and the content area
+reflows smoothly to fill the reclaimed space. The collapsed state shows title
+tooltips on hover, maintaining discoverability even in icon-only mode.
+
+The dark theme is consistent and atmospheric throughout. Background #0d1117 is the
+canvas, #161b22 provides the secondary surfaces (sidebar, top bar, bottom nav), and
+#30363d draws the borders -- subtle enough to define boundaries without fragmenting
+the darkness. The gold accent appears only where it earns its place: the active nav
+item, the page title, and the ConnectionStatus indicator. There is no gratuitous
+use of color. The result feels like a command center in a dimly lit room, which is
+exactly the mood an escape room monitor should evoke.
+
+What earned particular respect: the 404 page works correctly at all viewports with
+the bottom nav still visible on mobile, the page title reads "AgentTown" (not
+"frontend"), zero console errors across all five routes, and the build produces a
+clean 268KB JS / 28KB CSS bundle. TypeScript strict mode passes with no complaints.
+This is infrastructure that future features can confidently build on.
+
+--- Functional Checklist ---
+[x] Top bar with "AgentTown" title (gold, links to /) -- verified at all viewports
+[x] ConnectionStatus in top bar right side -- verified (shows "Connected" with green dot)
+[x] Sidebar navigation with Home, Library, Monitor, Settings -- verified
+[x] Desktop (>1024px): persistent collapsible sidebar (224px -> 64px) -- verified with screenshots
+[x] Tablet (640-1024px): hamburger-triggered overlay drawer -- verified (opens/closes, X icon)
+[x] Mobile (<640px): bottom navigation bar (no sidebar) -- verified at 375px
+[x] Dark theme: bg #0d1117, sidebar #161b22, borders #30363d, gold #e3b341 -- verified visually
+[x] Active nav item highlighted with gold text + gold/10 background -- verified on all routes
+[x] 44px+ touch targets on all nav items -- verified (desktop 44px, tablet 48px, mobile 56x48px)
+[x] Bottom nav sticky in thumb zone -- verified (fixed bottom-0, z-50)
+[x] HTML title is "AgentTown" -- verified programmatically
+[x] Settings page added (/settings route) -- verified
+[x] Drawer auto-closes on route change -- verified (useEffect on location.pathname)
+[x] Drawer dismissible by overlay tap -- verified (onClick={closeDrawer})
+[x] Drawer dismissible by swipe left -- verified (80px threshold)
+[x] Main content bottom padding on mobile for nav clearance (pb-16) -- verified
+[x] Safe area padding for iOS notch devices -- verified (.safe-area-pb class)
+[x] tsc --noEmit passes -- verified (0 errors)
+[x] vite build succeeds -- verified (246ms, 268KB JS / 28KB CSS gzipped)
+[x] Zero console errors across all routes -- verified programmatically
+
+--- Mobile & Gesture Report ---
+Viewport tested: 375x812 (iPhone 14), 768x1024 (iPad)
+Thumb zone: PASS -- bottom nav places all 4 items in the thumb zone (56x48px per item)
+Touch targets: PASS -- all exceed 44px (mobile 56x48, tablet 48px, desktop 44px, hamburger 44x44)
+Gestures: Swipe-left-to-dismiss on tablet drawer (80px threshold, manual touch events)
+One-hand usability: PASS -- all primary nav reachable with right thumb on mobile
+Bottom sheets/drawers: Tablet drawer slides from left as expected
+
+--- Atmosphere & Polish Notes ---
+- Three-tier responsive strategy (bottom nav / drawer / persistent sidebar) is exactly
+  right for each device class -- no compromises
+- Gold accent restraint: only active items and the title glow, preserving preciousness
+- Drawer lacks slide-out animation on close (instant removal) -- future polish item
+- Desktop sidebar collapse transition smooth but causes layout reflow -- acceptable
+
+--- Delight Moments ---
+- Bottom nav on mobile feels native -- icon sizing, label sizing, gold active state
+- Collapsed sidebar with icon-only mode and title tooltips shows genuine UX attention
+- Drawer overlay (50% opacity black) dims content precisely right
+
+--- Screenshots ---
+  screenshots/review-P0-003-mobile.png -- 375x812, Home, bottom nav active
+  screenshots/review-P0-003-tablet.png -- 768x1024, Home, hamburger visible
+  screenshots/review-P0-003-tablet-drawer-open.png -- 768x1024, drawer open with overlay
+  screenshots/review-P0-003-desktop.png -- 1280x800, sidebar expanded, Home active
+  screenshots/review-P0-003-desktop-collapsed.png -- 1280x800, sidebar collapsed
+  screenshots/review-P0-003-library-desktop.png -- Library page, Library active
+  screenshots/review-P0-003-library-mobile.png -- Library on mobile, bottom nav active
+  screenshots/review-P0-003-settings-desktop.png -- Settings page, Settings active
+  screenshots/review-P0-003-monitor-mobile.png -- Monitor on mobile, bottom nav active
+  screenshots/review-P0-003-404-mobile.png -- 404 page, bottom nav visible
