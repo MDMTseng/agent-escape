@@ -1752,3 +1752,84 @@ Bottom sheets/drawers: Delete confirm sheet still works (no regression)
 P0-001 through P0-009: No regressions detected. Library loads, cards display, swipe
 delete works, monitor components (agents, chain, controls, narrative) all render correctly.
 Navigation between pages is clean. WebSocket connects. Build passes.
+
+--- 2026-03-27 ---
+
+[BUILD] P1-001: Scene Creator — Story tab — COMPLETE
+  Agent: ui-builder (Claude Code / Opus 4.6)
+  What was done:
+    - Created new page at /creator route with tabbed layout (Story | Rooms | Puzzles | Agents | Validate)
+    - Story tab: theme selector (card-based, fetches from GET /api/themes), premise textarea,
+      difficulty slider (1-5 with visual markers and labels), "Generate World Bible" button
+      (calls POST /api/generate-story), displays result in atmospheric card
+    - Added "Create" nav item to AppLayout (bottom nav, sidebar, drawer)
+    - Library "New Scene" button now navigates to /creator instead of Quick Play
+    - Loading state with cycling atmospheric messages during generation
+    - Error handling for missing premise, API errors
+  Files created/modified:
+    frontend/src/pages/Creator.tsx — NEW: full Scene Creator page with Story tab
+    frontend/src/App.tsx — added /creator route
+    frontend/src/components/AppLayout.tsx — added "Create" nav item with PenTool icon
+    frontend/src/pages/Library.tsx — handleNewScene navigates to /creator
+  Mobile/gesture notes:
+    - Theme cards stack vertically on mobile, 3-col on desktop
+    - Difficulty slider has 28px thumb for comfortable dragging
+    - All touch targets 44px+
+    - Tab bar scrollable horizontally on mobile with auto-scroll to active tab
+  Screenshots: screenshots/build-P1-batch-mobile.png, screenshots/build-P1-batch-desktop.png
+
+[BUILD] P1-002: Scene Creator — Room graph editor — COMPLETE
+  Agent: ui-builder (Claude Code / Opus 4.6)
+  What was done:
+    - Installed @xyflow/react for visual room graph editing
+    - Built Rooms tab with React Flow canvas: custom RoomNode and DoorEdge components
+    - Add room button creates new nodes with auto-positioning (grid layout)
+    - Connect rooms by dragging edges between handles (4 per node: top, bottom, left, right)
+    - Click edge label to toggle locked/unlocked (red dashed vs green solid)
+    - Select room node to open detail panel (desktop: 320px side panel, mobile: bottom sheet)
+    - Room form: edit name, description, entities (tag input)
+    - Delete room button removes node and all connected edges
+    - Auto-generate: fetches theme rooms from /api/themes and creates a connected chain
+      (first door open, rest locked) based on difficulty setting
+    - Added doors[] to SceneCreatorState for cross-tab persistence
+    - Empty state with guidance text when no rooms exist
+  Files created/modified:
+    frontend/src/components/creator/RoomsTab.tsx — NEW: room graph editor component
+    frontend/src/pages/Creator.tsx — added doors to state, imported and rendered RoomsTab
+    frontend/package.json — added @xyflow/react dependency
+  Mobile/gesture notes:
+    - React Flow has built-in pinch-to-zoom and two-finger pan
+    - Bottom sheet for room editing (swipe-to-dismiss)
+    - Controls panel buttons sized at 44px for touch
+    - Canvas takes full available height
+  Known issues:
+    - Bundle size increased to ~541KB due to React Flow (~186KB). Consider lazy loading.
+    - Edge click to toggle lock requires tapping the label area (small target on mobile)
+
+[BUILD] P1-003: Scene Creator — Puzzle builder tab — COMPLETE
+  Agent: ui-builder (Claude Code / Opus 4.6)
+  What was done:
+    - Built Puzzles tab with expandable puzzle cards (not table rows)
+    - Six puzzle types with icons: key_lock, combination_lock, password_door,
+      pressure_plate, examine_reveal, sequential_levers
+    - Each card shows: editable name, type dropdown, room dropdown (from Rooms tab),
+      description textarea, required items/clues (tag input), dependency links
+    - Dependencies: toggle which puzzles gate which, stored as dependsOn[] per puzzle
+    - Visual dependency chain: indented tree showing puzzle ordering
+    - AI Assist: bottom sheet with textarea, user describes intent in natural language,
+      mock generation with keyword-based type detection (no backend endpoint yet)
+    - Swipe-to-delete on mobile with 72px delete action zone
+    - Desktop: inline delete button per card
+    - Empty state with both "Add Manually" and "AI Assist" buttons
+  Files created/modified:
+    frontend/src/components/creator/PuzzlesTab.tsx — NEW: puzzle builder component
+    frontend/src/pages/Creator.tsx — imported and rendered PuzzlesTab
+  Mobile/gesture notes:
+    - Cards expand on tap (chevron toggle), not a table layout
+    - Swipe-to-delete matches Library card pattern
+    - AI Assist as bottom sheet with swipe-to-dismiss
+    - All form elements have min-h-[44px] for touch
+    - Tag inputs work with Enter key and + button
+  Known issues:
+    - AI Assist is mocked (no backend endpoint for puzzle generation yet)
+    - Dependency visualization is a simple indented list, not a full graph
