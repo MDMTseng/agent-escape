@@ -16,6 +16,7 @@ import { useConnectionStatus, useTick, useIsFinished, useFinishReason } from '@/
 import { NarrativeFeed } from '@/components/monitor/NarrativeFeed'
 import { AgentStatusStrip } from '@/components/monitor/AgentStatusStrip'
 import { EscapeChainProgress } from '@/components/monitor/EscapeChainProgress'
+import { SimulationControls } from '@/components/monitor/SimulationControls'
 import { Wifi, WifiOff, Loader2, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -91,7 +92,8 @@ export default function Monitor() {
         </div>
       </div>
 
-      {/* Placeholder: Simulation controls bar will go here (P0-009) */}
+      {/* Simulation controls — sticky bottom bar (P0-009) */}
+      <SimulationControls />
     </div>
   )
 }
