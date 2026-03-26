@@ -159,3 +159,80 @@ Phase Summary:
   P1 (8 features):  Scene creator tabs, puzzle dashboard, interactive map, save/load UI
   P2 (5 features):  Agent thought bubbles, memory inspector, perception, nudge system, conversations
   P3 (4 features):  Timeline replay, save branching, export/import, versioning
+
+[REVIEW] Feature: "FastAPI serves built frontend"
+Verdict: PASS
+
+--- Critic's Take ---
+
+This is infrastructure work, and infrastructure has a particular kind of beauty when
+done right: it should be invisible. The builder delivered exactly that. Hit
+http://localhost:8741/ and you get the React app's index.html — clean, immediate,
+no redirect, no flash of wrong content. The Vite-built assets (262KB JS, 24KB CSS,
+three Geist font files) all serve with correct MIME types and full content. The SPA
+catch-all does its job with quiet competence: /library, /monitor, /some/deep/nested/route
+all return the same index.html, letting React Router sort out what to render.
+
+What earns particular respect is the priority discipline. The builder understood that
+a catch-all route is a loaded weapon — it can swallow API routes, WebSocket endpoints,
+and legacy UIs if placed carelessly. Here, every specific route (/api/state, /ws,
+/dashboard, /narrative, /log) registers before the catch-all and takes precedence.
+I verified /api/state returns JSON (not HTML), /dashboard returns the old embedded
+dashboard, and /narrative returns the old narrative UI. No collisions, no surprises.
+
+The fallback behavior is a thoughtful touch: if frontend/dist/ doesn't exist (say,
+on a fresh clone before running npm run build), the catch-all gracefully serves the
+old narrative HTML instead of a blank 500 error. The /assets mount is similarly
+conditional — it only registers if the assets directory exists. This means the server
+never crashes due to missing build artifacts, which is exactly the kind of defensive
+engineering that prevents 3 AM debugging sessions.
+
+The CLAUDE.md documentation is clear and practical: production mode (build then serve)
+and development mode (two terminals, Vite proxies to FastAPI) are both explained with
+copy-paste commands. The Stack section was updated to reflect the frontend is now
+implemented rather than "planned." Small detail, but it prevents future confusion.
+
+One cosmetic note for a future pass: the <title> in the built index.html says "frontend"
+(Vite's default) rather than "AgentTown." This is a scaffold artifact from P0-001 that
+should be fixed in a later feature — not a blocker for this infrastructure feature.
+
+--- Functional Checklist ---
+[x] GET / serves frontend/dist/index.html — verified (returns React app HTML)
+[x] Static assets from /assets/* served correctly — verified (JS: 261922 bytes, CSS: 24512 bytes, fonts: 3 woff2 files)
+[x] /favicon.svg served with image/svg+xml content type — verified
+[x] /dashboard still works (old embedded dashboard UI) — verified
+[x] /narrative works (old narrative UI, previously at /) — verified
+[x] /api/state returns JSON, not caught by SPA catch-all — verified (200, returns dict with rooms/agents/doors/tick/finished)
+[x] SPA catch-all serves index.html for unknown paths (/library, /some/deep/nested/route) — verified
+[x] Missing static assets return 404 (not caught by SPA) — verified (/assets/nonexistent.js returns 404)
+[x] CLAUDE.md has "Frontend Dev Servers" section with production and dev mode instructions — verified
+[x] CLAUDE.md Stack section updated to reflect frontend is implemented — verified
+[x] Graceful fallback to narrative UI if frontend/dist/ is missing — verified (code path present)
+
+--- Mobile & Gesture Report ---
+Viewport tested: N/A (backend-only feature, no new UI components)
+Thumb zone: N/A
+Touch targets: N/A
+Gestures: N/A
+One-hand usability: N/A
+Bottom sheets/drawers: N/A
+Note: The SPA catch-all is critical for mobile — mobile browsers that reload after
+backgrounding will now correctly serve index.html at any React Router path instead
+of returning a 404. This is a mobile reliability win even though it's backend code.
+
+--- Atmosphere & Polish Notes ---
+- The conditional mounts (assets dir check, favicon file check) prevent server crashes
+  on fresh clones — invisible but important resilience
+- Route priority is explicitly documented in a comment block listing all 7 priority levels
+- The /narrative endpoint preserves history — the old UI that lived at / wasn't deleted,
+  just moved to a named route. Respectful of the existing codebase.
+
+--- Delight Moments ---
+- The fallback behavior: if you somehow don't have the built frontend, you still get
+  a working UI. The server is never in a broken state. That's the kind of detail that
+  separates craft from checkbox-checking.
+
+--- Cosmetic Note (non-blocking) ---
+- <title>frontend</title> in index.html should become <title>AgentTown</title> — fix
+  in frontend/index.html source and rebuild. Not a P0-002 issue; belongs in a future
+  polish pass or P0-003.
