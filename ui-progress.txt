@@ -278,3 +278,61 @@ of returning a 404. This is a mobile reliability win even though it's backend co
     - Port 5173 may be occupied by other dev servers; check Vite output for actual port
     - The .mjs extension is used so scripts run as ESM regardless of root package.json type
     - Screenshots are gitignored — they are ephemeral build/review artifacts
+
+[BUILD] P0-003: App layout shell + dark theme — COMPLETE
+  Agent: ui-builder (Claude Code)
+  Date: 2026-03-26
+  What was done:
+    - Created AppLayout component with three responsive zones: top bar, sidebar/bottom nav, main content
+    - Mobile (<640px): sticky bottom navigation bar (56px height, 44px+ touch targets, icons + labels)
+      Active route highlighted in gold. No sidebar — bottom nav is the primary navigation.
+    - Tablet (640-1024px): top bar with hamburger menu (44x44px). Tapping hamburger opens
+      overlay drawer sidebar with semi-transparent backdrop. Drawer dismissible by tapping
+      overlay or swiping left (80px threshold). Drawer auto-closes on route change.
+    - Desktop (>1024px): persistent left sidebar (224px expanded, 64px collapsed icon-only).
+      Collapse/expand toggle at bottom of sidebar. Active nav item has gold text + gold/10 bg.
+    - Top bar: "AgentTown" title (gold, links to /), ConnectionStatus component (right side),
+      hamburger button (tablet only, hidden on mobile and desktop)
+    - Navigation items: Home (/), Library (/library), Monitor (/monitor), Settings (/settings)
+      All use lucide-react icons (Home, Library, Play, Settings)
+    - Dark theme colors enforced throughout:
+      bg-primary #0d1117 (main background), bg-secondary #161b22 (sidebar, top bar, bottom nav),
+      bg-tertiary #21262d (hover states), gold #e3b341 (active items), border #30363d,
+      text-primary #e6edf3, text-secondary #8b949e, text-muted #484f58
+    - Created Settings placeholder page (/settings route)
+    - Changed HTML <title> from "frontend" to "AgentTown" in index.html
+    - Added slideInLeft keyframe animation for tablet drawer entrance
+    - Added safe-area-pb utility class for iOS notch device bottom padding
+    - Main content area has pb-16 on mobile to account for fixed bottom nav height
+    - Updated App.tsx: removed old inline header/footer, wraps Routes in AppLayout
+  Files created:
+    frontend/src/components/AppLayout.tsx — main layout shell component (197 lines)
+    frontend/src/pages/Settings.tsx — settings placeholder page
+  Files modified:
+    frontend/index.html — changed <title> from "frontend" to "AgentTown"
+    frontend/src/App.tsx — replaced inline layout with AppLayout wrapper, added Settings route
+    frontend/src/index.css — added slideInLeft keyframe, safe-area-pb utility
+  Build verification:
+    - tsc --noEmit: passes (0 errors)
+    - vite build: passes (239ms, 1740 modules, 268KB JS / 27KB CSS gzipped)
+  Screenshots taken:
+    screenshots/build-P0-003-mobile.png — 375x812, bottom nav visible, Home active (gold)
+    screenshots/build-P0-003-tablet.png — 768x1024, hamburger visible, no drawer (closed state)
+    screenshots/build-P0-003-desktop.png — 1280x800, persistent sidebar, Home active (gold), collapse toggle visible
+    screenshots/build-P0-003-library-mobile.png — Library page, Library nav item active in bottom nav
+    screenshots/build-P0-003-settings-desktop.png — Settings page, Settings nav item active in sidebar
+  Mobile & gesture notes:
+    - Bottom nav bar: 56px height, each item 56x48px minimum (exceeds 44px requirement)
+    - Hamburger button: 44x44px (w-11 h-11)
+    - Tablet drawer: swipe-left-to-dismiss (80px threshold on both overlay and drawer panel)
+    - Drawer auto-closes on navigation (useEffect on location.pathname)
+    - Main content has overflow-y-auto for scrollable pages, pb-16 on mobile for bottom nav clearance
+    - Safe area padding for iOS bottom bar (env(safe-area-inset-bottom))
+    - All nav links meet 44px minimum touch target via min-h-[44px] or min-h-[48px]
+  Known considerations:
+    - Tablet drawer uses CSS animation (slideInLeft) not spring physics — adequate but not premium
+    - No gesture library used yet (swipe is manual touchstart/touchend) — works but could be
+      upgraded to @use-gesture/react for more polished feel in a future pass
+    - The drawer does not animate out on close (instant removal) — could add slideOutLeft in future
+    - Desktop sidebar collapse animation uses transition-[width] which may cause layout reflow
+      on slower devices — acceptable for desktop-only feature
