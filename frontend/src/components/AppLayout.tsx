@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { Home, Library, Play, Settings, Menu, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Home, Library, Play, Settings, Menu, X, ChevronLeft, ChevronRight, PenTool } from 'lucide-react'
 import { ConnectionStatus } from '@/components/ConnectionStatus'
 import { cn } from '@/lib/utils'
 
@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils'
 const navItems = [
   { path: '/', label: 'Home', icon: Home },
   { path: '/library', label: 'Library', icon: Library },
+  { path: '/creator', label: 'Create', icon: PenTool },
   { path: '/monitor', label: 'Monitor', icon: Play },
   { path: '/settings', label: 'Settings', icon: Settings },
 ] as const

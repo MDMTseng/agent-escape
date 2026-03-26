@@ -738,8 +738,7 @@ export default function Library() {
   }, [playingStoryId, navigate, resetGameStore, setStoryContext])
 
   const handleNewScene = () => {
-    // Scene creator is a future feature (P1). For now, trigger Quick Play.
-    handleQuickPlay()
+    navigate('/creator')
   }
 
   return (
