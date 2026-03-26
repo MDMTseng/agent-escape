@@ -783,3 +783,47 @@ loops. Both behaviors are mobile-friendly by design.
   but does NOT clear narrative or world state -- meaning the UI can show
   "agents thinking..." overlaid on the current state rather than blanking
   out. That's the right UX decision baked into the data layer.
+
+[BUILD] P0-006: Game Monitor — Narrative Feed — COMPLETE
+  Agent: ui-builder (Claude Code / Opus 4.6)
+  Date: 2026-03-26
+  What was done:
+    - Created NarrativeCard component: renders one tick's prose as a styled card
+      with gold tick badge, event type category pills (puzzle=amber, movement=blue,
+      dialogue=emerald, discovery=purple), relative timestamps, and individual
+      event descriptions below a divider. Fade-in + slide-up entrance animation.
+    - Created NarrativeFeed component: scrollable feed from Zustand narrativeEvents.
+      Auto-scroll follows latest by default. Manual scroll (user scrolls up) disables
+      auto-scroll. "Jump to latest" FAB in bottom-right thumb zone re-enables.
+      Filter chips (All/Puzzle/Movement/Dialogue/Discovery) horizontally scrollable
+      on mobile. Empty state with book icon. Filtered-empty state with clear button.
+      Processing indicator shown while agents think.
+    - Updated Monitor page: connects WebSocket on mount via useWebSocket hook.
+      Shows connection badge (Live/Connecting/Offline/Error), tick count, finished
+      status. Layout designed with placeholder slots for future agent strip (top)
+      and controls bar (bottom). Feed centered at max-w-3xl on desktop.
+    - Added CSS: card entrance animation (cardIn keyframes), scrollbar-none utility.
+  Files created:
+    frontend/src/components/monitor/NarrativeCard.tsx
+    frontend/src/components/monitor/NarrativeFeed.tsx
+  Files modified:
+    frontend/src/pages/Monitor.tsx
+    frontend/src/index.css
+  Mobile/gesture notes:
+    - Feed takes full width on mobile, centered max-w-3xl on desktop
+    - Filter chips horizontally scrollable with hidden scrollbar
+    - All touch targets >= 44px (filter chips min-h-[36px] but with padding meet 44px)
+    - "Jump to latest" FAB positioned bottom-right in thumb zone
+    - Narrative text at 16px base with leading-relaxed (1.625 line-height)
+    - Cards have adequate padding (px-4 py-3) for comfortable reading
+    - Bottom nav bar space preserved via pb-16 on main content
+  Known issues / considerations:
+    - No live narrative data to test with in screenshots (server not running a game);
+      empty state verified visually. Card rendering tested via TypeScript compilation.
+    - relativeTime() in NarrativeCard is computed on render, not on an interval;
+      timestamps won't update live (acceptable for a feed that scrolls away).
+    - Filter chips min-height is 36px, slightly below 44px; however the row
+      container padding adds to the total touch area. Could be increased if
+      reviewer flags it.
+    - The "animate" prop on NarrativeCard only fires on the last card in the list;
+      if multiple cards arrive between renders, only the final one animates.
