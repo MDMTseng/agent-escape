@@ -683,3 +683,103 @@ Bottom sheets/drawers: Delete confirmation as bottom sheet
     - The escapeChain step shape varies slightly between builder.py,
       storyteller.py, and architect.py; the TS type captures the common
       fields. Some steps may have additional properties.
+
+[REVIEW] Feature: "WebSocket connection + Zustand store"
+Verdict: PASS
+
+--- Critic's Take ---
+This is infrastructure work -- plumbing, not paint -- and the quality of
+plumbing determines whether the house stands or floods. What the builder
+delivered here is tight, well-structured plumbing.
+
+The type definitions in game.ts read like a faithful translation of the
+backend Pydantic models. Every field on Entity, Door, Room, AgentState,
+and WorldState maps one-to-one to the Python originals. The EntityState
+union covers all 8 enum values. The Door type correctly inherits Entity
+fields (portable, usable_on, properties) rather than inventing its own
+shape. The EscapeChainStep captures the common denominator across the
+three backend scenario generators (escape_room_chain, builder, storyteller,
+architect) with optional solved_by/solved_at fields for runtime enrichment.
+The discriminated union of ServerMessage types covers all 6 message types
+the server actually broadcasts -- I traced each one through server.py and
+confirmed nothing is missing.
+
+The Zustand store is architected with discipline. The updateFromMessage
+dispatcher handles every message type with a switch statement that updates
+precisely the right slices. The snapshot handler resets processing state
+and conditionally updates escape chain (only if present). The tick handler
+appends narrative entries with a 500-entry cap -- a sensible memory bound.
+The finished handler creates a final narrative entry from the finish
+message. The convenience slices (rooms, agents, doors extracted from
+worldState on write) mean downstream components can subscribe to exactly
+the data they need without triggering unnecessary re-renders.
+
+The WebSocket hook is the most architecturally nuanced piece. The
+exponential backoff (1s base, 2x growth, 30s cap) is textbook. The
+connect timeout (10s) prevents hanging connections from blocking reconnect.
+The intentionalCloseRef pattern cleanly separates "the network dropped"
+from "the user navigated away." The useEffect cleanup on unmount sets
+the intentional flag before closing, preventing reconnect storms. The
+closure pattern between scheduleReconnect and connect (where
+scheduleReconnect calls connect inside a setTimeout, relying on the
+stable reference captured at function scope) is correct but subtle --
+it works because both useCallback dependencies are stable ([]).
+
+The 22 typed selectors are comprehensive and well-named. The parameterized
+selectors (useAgent(id), useRoom(id), useAgentsInRoom(id)) return null
+or empty arrays for missing IDs rather than throwing. useSolvedStepCount
+is a derived selector that will save downstream components from filtering
+the chain on every render.
+
+One note for the future: the selector hooks create new closures on every
+call (e.g., useAgentsInRoom returns a new filtered array reference each
+time), which means components using them will re-render on every store
+update unless they use React.memo or the component is otherwise guarded.
+This is the standard Zustand pattern and acceptable for now, but for
+performance-critical components (the narrative feed, the agent strip),
+the team may want shallow equality selectors later. Not blocking.
+
+--- Functional Checklist ---
+[x] Zustand store with all required state slices -- verified (connectionStatus, worldState, rooms, agents, doors, escapeChain, narrativeEvents, tick, isPlaying, isProcessing, isFinished, storyId, storyContext, tokenUsage)
+[x] updateFromMessage dispatcher handles all 6 server message types -- verified (snapshot, tick, processing, finished, finished_idle, paused)
+[x] WebSocket hook connects to /ws via Vite proxy -- verified (getWsUrl builds protocol-relative URL)
+[x] Incoming messages parsed and dispatched to store -- verified (onmessage -> JSON.parse -> updateFromMessage)
+[x] Reconnection with exponential backoff -- verified (1s/2s/4s/8s/16s/30s max, resets on successful connect)
+[x] Clean disconnect suppresses auto-reconnect -- verified (intentionalCloseRef pattern)
+[x] Connect timeout (10s) -- verified (closes socket if still CONNECTING after timeout)
+[x] Typed selectors exported -- verified (22 hooks: useRooms, useAgents, useEscapeChain, useTick, useConnectionStatus, useIsPlaying, useIsProcessing, useIsFinished, useWorldState, useStoryId, useStoryContext, useTokenUsage, useAgent, useRoom, useAgentsInRoom, useRoomList, useAgentList, useDoors, useSolvedStepCount, useNarrativeEvents, useFinishReason, useProcessingMessage)
+[x] TS types match backend Pydantic models -- verified (cross-referenced Entity, Door, Room, AgentState, WorldState, EntityState enum against agenttown/world/models.py)
+[x] TS message types match server broadcast formats -- verified (traced all 6 message types through agenttown/server.py)
+[x] TypeScript compiles: npx tsc --noEmit -- PASS (zero errors)
+[x] Vite build succeeds: npx vite build -- PASS (291 KB JS bundle)
+[x] No regressions in P0-001 through P0-004 -- verified (new files are self-contained, no existing imports modified, build clean)
+
+--- Mobile & Gesture Report ---
+Viewport tested: N/A (pure data layer -- no UI components)
+Thumb zone: N/A
+Touch targets: N/A
+Gestures: N/A
+One-hand usability: N/A
+Bottom sheets/drawers: N/A
+Note: The WebSocket hook auto-connects on mount and reconnects on disconnect,
+which is critical for mobile browsers that aggressively kill background WebSocket
+connections. The reconnect backoff prevents battery drain from rapid reconnect
+loops. Both behaviors are mobile-friendly by design.
+
+--- Atmosphere & Polish Notes ---
+- The code is well-documented with JSDoc comments on every interface and
+  export. Future contributors will understand the shape of data flowing
+  through the system without reading the backend.
+- The narrative cap at 500 entries is a pragmatic choice. For escape rooms
+  that typically run 50-200 ticks, this is more than sufficient.
+- The sendMessage function is forward-looking infrastructure for when the
+  server accepts client messages via WebSocket.
+
+--- Delight Moments ---
+- The useSolvedStepCount derived selector is a small but thoughtful touch --
+  it saves every component that wants to show "3/12 solved" from independently
+  filtering the chain.
+- The processing message handler updates isProcessing and processingMessage
+  but does NOT clear narrative or world state -- meaning the UI can show
+  "agents thinking..." overlaid on the current state rather than blanking
+  out. That's the right UX decision baked into the data layer.

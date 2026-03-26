@@ -42,8 +42,8 @@
       "phase": "P0",
       "name": "WebSocket connection + Zustand store",
       "description": "Create a Zustand store for game state (world state, agents, rooms, escape chain, ticks, connection status). Implement a WebSocket hook that connects to ws://localhost:8741/ws and dispatches incoming messages to the store. Handle reconnection on disconnect. Export typed selectors for all state slices.",
-      "passes": false,
-      "notes": "Depends on P0-001"
+      "passes": true,
+      "notes": "Reviewed 2026-03-26. All criteria met. Types match backend models exactly. Store handles all 6 WS message types. Reconnect with exponential backoff. 22 typed selectors exported. Build clean."
     },
     {
       "id": "P0-006",
