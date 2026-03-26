@@ -438,3 +438,60 @@ Bottom sheets/drawers: Tablet drawer slides from left as expected
   screenshots/review-P0-003-settings-desktop.png -- Settings page, Settings active
   screenshots/review-P0-003-monitor-mobile.png -- Monitor on mobile, bottom nav active
   screenshots/review-P0-003-404-mobile.png -- 404 page, bottom nav visible
+
+[BUILD] P0-004: Scene Library page — COMPLETE
+  Agent: ui-builder (Claude Code)
+  Date: 2026-03-26
+  What was done:
+    - Rebuilt Library.tsx from placeholder into a full Scene Library page
+    - Fetches stories from GET /api/stories on mount, displays as responsive card grid
+    - Each story card shows: title, theme badge (color-coded by theme), difficulty (1-5 stars),
+      premise (truncated to 2 lines), creation date (relative via timeAgo util), save count, max tick
+    - Responsive grid: 1 column on mobile (<640px), 2 columns on tablet (md), 3 columns on desktop (lg)
+    - "New Scene" button: gold FAB (56px, bottom-right) on mobile; header button on md+ screens
+    - Swipe-left to delete on mobile: card slides left to reveal 80px red delete zone with Trash2 icon
+    - Desktop delete: hover-reveal trash icon in card header (opacity-0 -> group-hover opacity-100)
+    - Delete confirmation: bottom sheet dialog with drag handle, swipe-down to dismiss (80px threshold),
+      Escape key to close, backdrop click to close. Shows story title, destructive red confirm button.
+    - Deleting overlay with spinner while DELETE /api/stories/{id} is in flight
+    - Loading state: 6 skeleton cards with pulse animation matching card layout structure
+    - Error state: danger icon, error message, retry button that re-fetches
+    - Empty state: atmospheric BookOpen icon with gold glow, encouraging copy, "Create Your First Scene" CTA
+    - Created timeAgo utility (frontend/src/lib/timeago.ts) for relative date formatting
+    - Theme badge colors: gothic_manor (purple), haunted_house (violet), space_station (blue),
+      pirate_ship (amber), ancient_temple (yellow), cyber_noir (cyan), fairy_tale (pink),
+      underwater (teal), fallback (bg-tertiary)
+  Files created:
+    frontend/src/lib/timeago.ts — relative date formatter (just now, Xm ago, Xh ago, Xd ago, short date)
+  Files modified:
+    frontend/src/pages/Library.tsx — complete rewrite from placeholder to full Scene Library page
+  Build verification:
+    - tsc --noEmit: passes (0 errors)
+    - vite build: passes (253ms, 1768 modules, 291KB JS / 38KB CSS gzipped)
+  Screenshots taken:
+    screenshots/build-P0-004-mobile.png — 375x812, single column cards, gold FAB visible, bottom nav
+    screenshots/build-P0-004-tablet.png — 768x1024, two-column grid, "New Scene" header button
+    screenshots/build-P0-004-desktop.png — 1280x800, two-column grid with sidebar, header button
+    screenshots/build-P0-004-home-mobile.png — Home page unchanged, links to Library and Monitor
+  Mobile & gesture notes:
+    - Swipe-left on cards: manual touch events (touchstart/touchmove/touchend), 80px delete zone
+    - Swipe detects horizontal vs vertical movement; does not intercept vertical scroll
+    - Cards snap to revealed or closed state on touch end (threshold: half of delete width)
+    - Tapping a revealed card closes it (does not navigate)
+    - Document click listener closes revealed swipe when clicking outside card
+    - FAB: 56px (size-14), fixed bottom-20 right-4, gold bg, active:scale-95 feedback
+    - Delete confirmation sheet: swipe-down to dismiss (80px threshold), drag handle visible
+    - All touch targets exceed 44px: FAB (56px), delete zone (80px wide, full card height),
+      confirm/cancel buttons (h-12 = 48px), retry button (h-11 = 44px)
+    - Cards have active:scale-[0.98] for press feedback
+    - Bottom padding pb-24 on mobile content to clear bottom nav + FAB
+  Known considerations:
+    - "New Scene" currently navigates to /monitor as placeholder — the scene creator UI
+      is a future feature (not in P0-004 scope)
+    - No long-press context menu implemented yet — could be added in a future polish pass
+    - Swipe uses manual touch events, not @use-gesture/react (consistent with P0-003 approach)
+    - The API does not return room_count or agent_count in list_stories — those fields are
+      in world_bible (a JSON blob). Cards show save_count and max_tick instead, which are
+      available from the list endpoint. Room/agent counts could be added if the API is extended.
+    - Card delete animation is instant removal from state (no exit animation) — could add
+      a slide-out or fade-out in a future pass
