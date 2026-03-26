@@ -1590,3 +1590,69 @@ Responsive: "Quit" label hidden on mobile (icon only), "ticks" label hidden on x
   screenshots/P0-009-v2-stepped.png -- desktop after step (tick incremented)
   screenshots/P0-009-v2-quit.png -- navigated to library after quit
   screenshots/P0-009-mobile-initial.png -- mobile initial state (thumb zone verified)
+
+--- 2026-03-27 ---
+[BUILD] P0-010: Quick Play flow — COMPLETE
+  Agent: ui-builder (Claude Code / Opus 4.6)
+  What was done:
+    - Added Quick Play button to Scene Library that calls POST /api/stories/create
+      with a random theme + premise from a curated set (gothic_manor, sci_fi_lab,
+      ancient_tomb themes with matching inciting-incident premises)
+    - Added Play button (gold triangle icon) to each scene card that calls
+      POST /api/stories/{id}/play to load an existing story into the sim
+    - Both flows reset the Zustand game store, set storyContext (storyId + metadata),
+      then navigate to /monitor. The Monitor page connects via WebSocket and receives
+      the snapshot broadcast from the backend.
+    - Built atmospheric GenerationOverlay component for the multi-second AI world
+      generation process — animated glow rings, cycling messages ("Conjuring the
+      mystery...", "Building rooms and corridors...", etc.), indeterminate progress bar
+    - Updated EmptyState "Create Your First Scene" button to trigger Quick Play
+      (since Scene Creator is a P1 feature)
+    - Fixed pre-existing unused import warnings in AgentStatusStrip.tsx and
+      SimulationControls.tsx that caused tsc build failures (separate commit)
+
+  Files modified:
+    frontend/src/pages/Library.tsx — main changes: Quick Play flow, Play button on
+      cards, GenerationOverlay, API helpers (createStory, playStory), random theme
+      picker, Zustand store integration
+    frontend/src/components/monitor/AgentStatusStrip.tsx — removed unused imports
+    frontend/src/components/monitor/SimulationControls.tsx — removed unused variable
+
+  Mobile / gesture notes:
+    - Quick Play: full-width banner (56px tall) below header on mobile, gradient
+      border, in thumb zone. Desktop: gold button in header row.
+    - Play button on cards: 44x44px touch target, always visible (not hover-only),
+      gold background with play triangle icon. Loading spinner when in-flight.
+    - GenerationOverlay: fullscreen, dismissible via Cancel button (44px touch target)
+    - Card tapping still triggers play (via SwipeableCard onTap), swipe-left still
+      reveals delete action — no regression to existing gestures
+    - FAB (+) button remains in bottom-right for "New Scene" on mobile
+
+  API integration:
+    - POST /api/stories/create: sends { theme, premise, difficulty: 3, num_characters: 3 }
+      Backend requires premise (non-empty). Returns { story_id, title, world_bible, ... }
+    - POST /api/stories/{id}/play: sends empty POST body.
+      Backend loads story initial state, broadcasts snapshot via WS. Returns { story_id, tick, title }
+    - Both endpoints broadcast a 'snapshot' WS message that the Monitor page's
+      useWebSocket hook picks up automatically
+
+  Navigation flow:
+    - Library -> Quick Play -> GenerationOverlay (loading) -> /monitor (snapshot received)
+    - Library -> Card Play button -> /monitor (snapshot received)
+    - Monitor -> Quit button -> /library (already implemented in P0-009)
+
+  Screenshots:
+    screenshots/build-P0-010-mobile.png — mobile library with Quick Play banner + card play buttons
+    screenshots/build-P0-010-tablet.png — tablet library with header buttons + 2-col grid
+    screenshots/build-P0-010-desktop.png — desktop library with header buttons + 3-col grid
+
+  Known issues / considerations:
+    - Quick Play random theme selection is client-side from a hardcoded list of 6
+      theme/premise combos. This could be extended to call GET /api/themes for dynamic
+      options, but the curated set matches the backend's valid themes exactly.
+    - The GenerationOverlay cannot be tested end-to-end without the backend running
+      and AGENTTOWN_CLAUDE=true (for AI story generation). Without the backend, the
+      fetch will fail and show an error message.
+    - The Monitor page does not yet display story context (title, theme) in its header.
+      The Zustand store has storyContext set, but the Monitor header does not read it.
+      This could be a follow-up enhancement.
