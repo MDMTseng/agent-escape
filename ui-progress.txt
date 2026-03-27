@@ -2768,3 +2768,146 @@ Known issues:
   - Nudges are not actually sent to the backend. Local store only. Backend needs POST /api/nudge endpoint.
   - Nudge history is lost on page refresh (in-memory, not persisted).
   - No real-time feedback from agents acknowledging the nudge.
+
+--- 2026-03-27 ---
+
+[BUILD-ELEVATION] P1-007: Interactive Map — elevated to exhibition-grade
+  Agent: ui-builder (Claude Code / Opus 4.6)
+  Date: 2026-03-27
+  Commit: feat(ui): elevate Interactive Map to exhibition-grade (curator feedback)
+
+  What was done (curator brief items):
+    1. ROOM NODE REDESIGN:
+       - Replaced flat bg-bg-secondary rectangle with layered radial gradient
+         background (from #1c2128 center through #13171e to #0d1117 edges)
+       - Added inner glow via inset box-shadow (subtle white 0.02 opacity glow)
+       - Selected rooms get a gold inner glow (0.05 opacity)
+       - Agent markers redesigned from flat 1.5px dots to 2px glowing orbs with
+         radial gradient (#f0c95c -> #e3b341 -> transparent) and dual box-shadow
+         (6px + 12px gold glow)
+    2. ENTRANCE ANIMATION:
+       - Rooms fade in with staggered 50ms delay per room via animationDelay style
+       - roomFadeIn keyframes: opacity 0->1, translateY(16px)->0, scale(0.92)->1
+       - Edges use ink-draw animation: stroke-dasharray 1000 with stroke-dashoffset
+         animating from 1000 to 0 over 1200ms
+       - Wrapped edge SVG in a <g class="animate-ink-draw"> element
+    3. ATMOSPHERIC BACKGROUND:
+       - Removed React Flow BackgroundVariant.Dots grid entirely
+       - Replaced with AtmosphericBackground component: three overlapping radial
+         gradients creating subtle gold fog wisps and a darkened-edge vignette
+       - ReactFlow container uses radial-gradient bg (#111820 center -> #0d1117 edge)
+       - Result: parchment-archive feel rather than network diagram
+    4. ROOM HOVER DEPTH:
+       - map-room-node CSS class with transition on transform + box-shadow
+       - Hover: scale(1.02) + translateY(-2px) lift
+       - Hover shadow: 8px/24px black blur + 12px gold glow underneath
+
+  Files modified:
+    frontend/src/components/monitor/InteractiveMap.tsx
+    frontend/src/index.css (new keyframes + animation classes)
+
+  Mobile/gesture notes:
+    - Hover effects degrade gracefully on touch (no hover state on mobile)
+    - Entrance animations are GPU-accelerated (transform + opacity only)
+    - All animations disabled via prefers-reduced-motion media query
+
+  Known issues:
+    - Ink-draw animation uses a fixed stroke-dasharray of 1000 which may not
+      perfectly match shorter edges (animation still looks good, just completes
+      early on short edges)
+
+[BUILD-ELEVATION] P1-008: Save/Load UI — elevated to exhibition-grade
+  Agent: ui-builder (Claude Code / Opus 4.6)
+  Date: 2026-03-27
+  Commit: feat(ui): elevate Save/Load UI to exhibition-grade (curator feedback)
+
+  What was done (curator brief items):
+    1. SAVE CEREMONY:
+       - Added three-phase save flow: idle -> sealing -> sealed
+       - Sealing phase: circular clip-path reveal wipe in gold (sealReveal
+         keyframes: circle(0%) -> circle(70%) -> circle(100%) over 700ms)
+       - During sealing: button shows a radial-gradient gold orb with glow
+         and "Sealing..." text
+       - Sealed phase: button becomes "Saved at Tick N" badge
+       - Persistent toolbar badge: "Tick N" with check icon stays visible
+         after dialog closes (replaces the old "Saved Xm ago" text)
+    2. LOAD LIST AS CASE FILES:
+       - Each save rendered as a dossier-card with alternating rotation
+         (-0.8deg and +0.6deg) for rifling-through-files feel
+       - Paper-fold corner effect via CSS ::after pseudo-element (border
+         triangle in top-right corner)
+       - "LATEST" classified stamp on most recent save (red badge with
+         Stamp icon, rotated 3 degrees)
+       - Tick number in typewriter-style monospace with wide tracking and
+         zero-padded format: "TICK 042"
+       - Header renamed from "Load Save" to "Case Files"
+    3. LOAD TRANSITION:
+       - Full-screen z-[55] overlay with animate-load-glitch class
+       - loadGlitch keyframes: skewX oscillation (-3deg to +2deg to -1deg),
+         opacity drops (1 -> 0.3 -> 1), blur pulses (0 -> 2px -> 0)
+       - Duration: 800ms, triggered by onLoadStart callback from LoadPanel
+
+  Files modified:
+    frontend/src/components/monitor/SaveLoadControls.tsx
+    frontend/src/index.css (sealReveal, loadGlitch, dossier-card CSS)
+
+  Mobile/gesture notes:
+    - Dossier card rotation is subtle enough to not affect touch targeting
+    - Glitch overlay is pointer-events-none (does not block interaction)
+    - All new animations have prefers-reduced-motion disabled
+
+  Known issues:
+    - onSaved callback signature changed from () => void to (tick: number) => void
+      to pass tick number to the toolbar badge. Parent components calling
+      SaveLoadControls should not be affected (onSaved is internal).
+    - Lucide Stamp icon used for classified badge — verified it exists in
+      the installed version.
+
+[BUILD-ELEVATION] P2-001: Agent Thought Bubbles — elevated to exhibition-grade
+  Agent: ui-builder (Claude Code / Opus 4.6)
+  Date: 2026-03-27
+  Commit: feat(ui): elevate Thought Bubbles to exhibition-grade (curator feedback)
+
+  What was done (curator brief items):
+    1. TYPEWRITER REVEAL:
+       - Custom useTypewriter hook: accepts text, enabled flag, delay (ms
+         before typing starts), and speed (ms per character)
+       - Observation line: 200ms initial delay, 20ms/char
+       - Action line: starts after observation finishes + 100ms gap, 15ms/char
+       - Reasoning line: starts after action finishes + 200ms gap, 18ms/char
+       - Blinking gold cursor (#e3b341, 2px wide) follows active line using
+         cursorBlink keyframes (500ms step-end infinite)
+       - cursorLine state tracks which line is currently typing
+       - Min-height on each row prevents layout shift during typewriter reveal
+    2. BREATHING BORDER:
+       - Border increased from 1px to 2px for visibility
+       - breathingBorder keyframes: border-color oscillates between
+         rgba(227,179,65,0.25) and rgba(227,179,65,0.65) on 3s ease-in-out cycle
+       - Applied via animate-breathing-border class when isVisible && !isExiting
+    3. EXIT ANIMATION:
+       - Border extinguishes first: borderExtinguish keyframes fade border-color
+         to transparent over 200ms when isExiting becomes true
+       - Content dissolve follows: thoughtDissolve keyframes apply blur(1px),
+         scaleY(0.95), translateY(2px), opacity 0 over 500ms
+       - isExiting state tracked via prevVisible ref, set when isVisible
+         transitions from true to false
+
+  Files modified:
+    frontend/src/components/monitor/ThoughtBubble.tsx
+    frontend/src/index.css (cursorBlink, breathingBorder, thoughtDissolve,
+      borderExtinguish keyframes)
+
+  Mobile/gesture notes:
+    - prefers-reduced-motion check: when reduced motion preferred, typewriter
+      is disabled and all text appears instantly (charIndex set to text.length)
+    - Dismiss button kept at 24px (not 44px) since it is a secondary micro-
+      action on the bubble itself — primary dismiss is via timeout
+    - Breathing border uses will-change: border-color for GPU acceleration
+
+  Known issues:
+    - Typewriter timing is approximate — very long action descriptions may
+      take several seconds to fully type out, which could overlap with the
+      6-second auto-dismiss timer. In practice, most event descriptions are
+      short enough to complete well within the window.
+    - The borderColor inheritance on the speech bubble tail uses CSS inherit
+      which may not perfectly track the breathing animation in all browsers.
