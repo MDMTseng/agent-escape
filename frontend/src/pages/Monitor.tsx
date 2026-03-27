@@ -18,6 +18,7 @@ import { AgentStatusStrip } from '@/components/monitor/AgentStatusStrip'
 import { EscapeChainProgress } from '@/components/monitor/EscapeChainProgress'
 import { SimulationControls } from '@/components/monitor/SimulationControls'
 import { PuzzleProgressDashboard } from '@/components/monitor/PuzzleProgressDashboard'
+import { InteractiveMap } from '@/components/monitor/InteractiveMap'
 import { Wifi, WifiOff, Loader2, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -87,6 +88,9 @@ export default function Monitor() {
 
       {/* Puzzle progress dashboard — collapsible panel (P1-006) */}
       <PuzzleProgressDashboard />
+
+      {/* Interactive room map — collapsible panel (desktop) / FAB overlay (mobile) (P1-007) */}
+      <InteractiveMap />
 
       {/* Main content area — narrative feed */}
       <div className="flex-1 min-h-0 relative">
