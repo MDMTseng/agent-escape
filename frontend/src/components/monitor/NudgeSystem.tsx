@@ -449,7 +449,7 @@ function SendCeremony({
   if (!isActive) return null
 
   return (
-    <div className="relative pointer-events-none overflow-hidden h-0">
+    <div className="relative pointer-events-none overflow-visible h-0">
       {/* Floating whisper text */}
       <div className="absolute bottom-0 left-1/2 -translate-x-1/2 animate-whisper-float">
         <span className="text-xs text-gold/60 italic whitespace-nowrap">
