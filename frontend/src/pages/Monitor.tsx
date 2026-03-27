@@ -21,6 +21,7 @@ import { PuzzleProgressDashboard } from '@/components/monitor/PuzzleProgressDash
 import { InteractiveMap } from '@/components/monitor/InteractiveMap'
 import { ThoughtBubbles } from '@/components/monitor/ThoughtBubble'
 import { NudgeSystem } from '@/components/monitor/NudgeSystem'
+import { ConversationLog } from '@/components/monitor/ConversationLog'
 import { Wifi, WifiOff, Loader2, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -104,6 +105,9 @@ export default function Monitor() {
           <NarrativeFeed />
         </div>
       </div>
+
+      {/* Agent conversation log — collapsible chat panel (P2-005) */}
+      <ConversationLog />
 
       {/* Spectator nudge system — collapsible panel (P2-004) */}
       <NudgeSystem />
