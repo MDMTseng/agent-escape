@@ -20,7 +20,11 @@ import {
   X,
   User,
   Backpack,
+  Brain,
+  Eye,
 } from 'lucide-react'
+import { AgentMemoryInspector } from './AgentMemoryInspector'
+import { AgentPerceptionOverlay } from './AgentPerceptionOverlay'
 
 // ---------------------------------------------------------------------------
 // Agent card — compact representation in the strip
@@ -99,9 +103,11 @@ interface AgentDetailProps {
   agent: AgentState
   roomName: string
   onClose: () => void
+  onOpenMemory: () => void
+  onOpenPerception: () => void
 }
 
-function AgentDetail({ agent, roomName, onClose }: AgentDetailProps) {
+function AgentDetail({ agent, roomName, onClose, onOpenMemory, onOpenPerception }: AgentDetailProps) {
   const sheetRef = useRef<HTMLDivElement>(null)
   const dragStartY = useRef<number | null>(null)
   const currentTranslateY = useRef(0)
@@ -251,6 +257,34 @@ function AgentDetail({ agent, roomName, onClose }: AgentDetailProps) {
               </ul>
             )}
           </div>
+
+          {/* Deep inspection buttons — Memory and Perception (P2-002, P2-003) */}
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={onOpenMemory}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg',
+                'bg-gold/[0.06] border border-gold/20 text-gold',
+                'hover:bg-gold/10 active:scale-[0.97] transition-all duration-150',
+                'text-sm font-medium',
+              )}
+            >
+              <Brain size={15} />
+              Memory
+            </button>
+            <button
+              onClick={onOpenPerception}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg',
+                'bg-blue-500/[0.06] border border-blue-500/20 text-blue-400',
+                'hover:bg-blue-500/10 active:scale-[0.97] transition-all duration-150',
+                'text-sm font-medium',
+              )}
+            >
+              <Eye size={15} />
+              Perception
+            </button>
+          </div>
         </div>
       </div>
     </>
@@ -282,6 +316,8 @@ export function AgentStatusStrip() {
   const rooms = useRooms()
   const isProcessing = useIsProcessing()
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
+  const [memoryAgentId, setMemoryAgentId] = useState<string | null>(null)
+  const [perceptionAgentId, setPerceptionAgentId] = useState<string | null>(null)
 
   const getRoomName = useCallback((roomId: string) => {
     return rooms[roomId]?.name ?? roomId
@@ -291,6 +327,14 @@ export function AgentStatusStrip() {
     ? agents.find((a) => a.id === selectedAgentId) ?? null
     : null
 
+  const memoryAgent = memoryAgentId
+    ? agents.find((a) => a.id === memoryAgentId) ?? null
+    : null
+
+  const perceptionAgent = perceptionAgentId
+    ? agents.find((a) => a.id === perceptionAgentId) ?? null
+    : null
+
   const handleSelect = useCallback((agentId: string) => {
     setSelectedAgentId((prev) => (prev === agentId ? null : agentId))
   }, [])
@@ -298,6 +342,20 @@ export function AgentStatusStrip() {
   const handleCloseDetail = useCallback(() => {
     setSelectedAgentId(null)
   }, [])
+
+  const handleOpenMemory = useCallback(() => {
+    if (selectedAgentId) {
+      setMemoryAgentId(selectedAgentId)
+      setSelectedAgentId(null) // Close detail panel
+    }
+  }, [selectedAgentId])
+
+  const handleOpenPerception = useCallback(() => {
+    if (selectedAgentId) {
+      setPerceptionAgentId(selectedAgentId)
+      setSelectedAgentId(null) // Close detail panel
+    }
+  }, [selectedAgentId])
 
   if (agents.length === 0) {
     return <EmptyStrip />
@@ -342,6 +400,24 @@ export function AgentStatusStrip() {
           agent={selectedAgent}
           roomName={getRoomName(selectedAgent.room_id)}
           onClose={handleCloseDetail}
+          onOpenMemory={handleOpenMemory}
+          onOpenPerception={handleOpenPerception}
+        />
+      )}
+
+      {/* Memory inspector panel (P2-002) */}
+      {memoryAgent && (
+        <AgentMemoryInspector
+          agent={memoryAgent}
+          onClose={() => setMemoryAgentId(null)}
+        />
+      )}
+
+      {/* Perception overlay panel (P2-003) */}
+      {perceptionAgent && (
+        <AgentPerceptionOverlay
+          agent={perceptionAgent}
+          onClose={() => setPerceptionAgentId(null)}
         />
       )}
     </>
