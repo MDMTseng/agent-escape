@@ -1,12 +1,12 @@
 /**
- * SaveBranching — branch tree visualization for the save/load system.
+ * SaveBranching -- branch tree visualization for the save/load system.
  *
- * When loading a mid-game save, create a named branch. Show a branch tree
- * visualization. Each branch tracks its own escape chain progress
- * independently. Allow switching between branches.
- *
- * Since the backend doesn't have native branch support, branches are tracked
- * in client-side state (localStorage) as metadata overlaying existing saves.
+ * Exhibition-grade enhancements (curator feedback):
+ *   1. Auto-load on branch switch -- loads latest save from switched branch
+ *   2. Tick divergence counts -- "N ticks from fork" per branch
+ *   3. Animated vine growth -- stroke-dasharray on new branches (500ms)
+ *   4. Save node tooltips -- tick, timestamp, branch name on hover/tap
+ *   5. Delete branch -- with confirmation dialog
  *
  * Visual aesthetic: organic vine/root tree growing from left to right,
  * with save nodes as glowing orbs at branch points.
@@ -23,13 +23,14 @@ import {
   Circle,
   ChevronRight,
   Sprout,
-  Zap,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useStoryId, useTick } from '@/stores/gameStore'
 
 // ---------------------------------------------------------------------------
-// Types — branch metadata stored in localStorage
+// Types -- branch metadata stored in localStorage
 // ---------------------------------------------------------------------------
 
 interface BranchNode {
@@ -131,21 +132,204 @@ async function apiLoad(saveId: number): Promise<boolean> {
 }
 
 // ---------------------------------------------------------------------------
-// Branch colors — organic vine palette
+// Branch colors -- organic vine palette
 // ---------------------------------------------------------------------------
 
 const BRANCH_COLORS = [
-  { vine: 'bg-emerald-500', glow: 'shadow-emerald-500/30', text: 'text-emerald-400', border: 'border-emerald-500/40' },
-  { vine: 'bg-amber-500', glow: 'shadow-amber-500/30', text: 'text-amber-400', border: 'border-amber-500/40' },
-  { vine: 'bg-blue-500', glow: 'shadow-blue-500/30', text: 'text-blue-400', border: 'border-blue-500/40' },
-  { vine: 'bg-purple-500', glow: 'shadow-purple-500/30', text: 'text-purple-400', border: 'border-purple-500/40' },
-  { vine: 'bg-rose-500', glow: 'shadow-rose-500/30', text: 'text-rose-400', border: 'border-rose-500/40' },
-  { vine: 'bg-cyan-500', glow: 'shadow-cyan-500/30', text: 'text-cyan-400', border: 'border-cyan-500/40' },
-  { vine: 'bg-orange-500', glow: 'shadow-orange-500/30', text: 'text-orange-400', border: 'border-orange-500/40' },
+  { vine: 'bg-emerald-500', glow: 'shadow-emerald-500/30', text: 'text-emerald-400', border: 'border-emerald-500/40', hex: '#10b981' },
+  { vine: 'bg-amber-500', glow: 'shadow-amber-500/30', text: 'text-amber-400', border: 'border-amber-500/40', hex: '#f59e0b' },
+  { vine: 'bg-blue-500', glow: 'shadow-blue-500/30', text: 'text-blue-400', border: 'border-blue-500/40', hex: '#3b82f6' },
+  { vine: 'bg-purple-500', glow: 'shadow-purple-500/30', text: 'text-purple-400', border: 'border-purple-500/40', hex: '#a855f7' },
+  { vine: 'bg-rose-500', glow: 'shadow-rose-500/30', text: 'text-rose-400', border: 'border-rose-500/40', hex: '#f43f5e' },
+  { vine: 'bg-cyan-500', glow: 'shadow-cyan-500/30', text: 'text-cyan-400', border: 'border-cyan-500/40', hex: '#06b6d4' },
+  { vine: 'bg-orange-500', glow: 'shadow-orange-500/30', text: 'text-orange-400', border: 'border-orange-500/40', hex: '#f97316' },
 ]
 
 // ---------------------------------------------------------------------------
-// Branch name prompt — inline input overlay
+// Vine growth animation styles (injected once)
+// ---------------------------------------------------------------------------
+
+const VINE_STYLE_ID = 'save-branching-vine-styles'
+
+function ensureVineStyles() {
+  if (typeof document === 'undefined') return
+  if (document.getElementById(VINE_STYLE_ID)) return
+  const style = document.createElement('style')
+  style.id = VINE_STYLE_ID
+  style.textContent = `
+    @keyframes vine-grow {
+      from { stroke-dashoffset: 100; }
+      to { stroke-dashoffset: 0; }
+    }
+    .vine-grow-anim {
+      stroke-dasharray: 100;
+      stroke-dashoffset: 100;
+      animation: vine-grow 500ms ease-out forwards;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .vine-grow-anim {
+        animation: none;
+        stroke-dashoffset: 0;
+      }
+    }
+  `
+  document.head.appendChild(style)
+}
+
+// ---------------------------------------------------------------------------
+// Format helpers
+// ---------------------------------------------------------------------------
+
+function formatTimestamp(isoStr: string): string {
+  try {
+    const d = new Date(isoStr)
+    return d.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  } catch {
+    return isoStr
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Save node tooltip -- appears on hover/tap
+// ---------------------------------------------------------------------------
+
+function SaveNodeTooltip({
+  save,
+  branchName,
+  position,
+  onClose,
+}: {
+  save: SaveEntry
+  branchName: string
+  position: { x: number; y: number }
+  onClose: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent | TouchEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        onClose()
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('touchstart', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('touchstart', handleClickOutside)
+    }
+  }, [onClose])
+
+  return (
+    <div
+      ref={ref}
+      className={cn(
+        'absolute z-[70] bg-bg-primary border border-border rounded-lg shadow-xl p-3',
+        'text-xs min-w-[160px] pointer-events-auto',
+        'animate-in fade-in-0 zoom-in-95 duration-150',
+      )}
+      style={{
+        left: Math.max(8, position.x - 80),
+        top: position.y - 80,
+      }}
+    >
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-1.5">
+          <Circle className="size-2.5 text-gold" />
+          <span className="font-semibold text-text-primary">{save.name || 'Unnamed Save'}</span>
+        </div>
+        <div className="text-text-muted space-y-0.5">
+          <div>Tick: <span className="text-text-secondary font-mono">{save.tick}</span></div>
+          <div>Time: <span className="text-text-secondary">{formatTimestamp(save.created_at)}</span></div>
+          <div>Branch: <span className="text-text-secondary">{branchName}</span></div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Delete branch confirmation dialog
+// ---------------------------------------------------------------------------
+
+function DeleteBranchDialog({
+  branchName,
+  saveCount,
+  onConfirm,
+  onCancel,
+}: {
+  branchName: string
+  saveCount: number
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  return (
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 z-[90] bg-black/60" onClick={onCancel} />
+      {/* Dialog */}
+      <div
+        className={cn(
+          'fixed z-[91] bg-bg-secondary border border-border rounded-xl shadow-2xl',
+          'inset-x-4 bottom-8 p-5',
+          'md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2',
+          'md:w-[380px] md:p-6',
+          'animate-in fade-in-0 slide-in-from-bottom-4 duration-200',
+        )}
+      >
+        <div className="flex items-start gap-3 mb-4">
+          <div className="shrink-0 flex items-center justify-center size-10 rounded-full bg-danger/10">
+            <AlertTriangle size={20} className="text-danger" />
+          </div>
+          <div>
+            <h4 className="text-base font-bold text-text-primary m-0">Delete Branch</h4>
+            <p className="text-sm text-text-secondary mt-1 m-0">
+              Delete <strong className="text-text-primary">{branchName}</strong>?
+              {saveCount > 0 && (
+                <> This branch has {saveCount} save{saveCount !== 1 ? 's' : ''} associated with it.</>
+              )}
+            </p>
+            <p className="text-xs text-text-muted mt-1.5 m-0">
+              Save files on disk will not be deleted, only the branch metadata.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 justify-end">
+          <button
+            onClick={onCancel}
+            className={cn(
+              'flex items-center px-4 py-2 rounded-lg text-sm font-medium min-h-[44px]',
+              'bg-bg-tertiary text-text-secondary hover:text-text-primary',
+              'transition-colors active:scale-95',
+            )}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className={cn(
+              'flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold min-h-[44px]',
+              'bg-danger/15 text-danger border border-danger/20',
+              'hover:bg-danger/25 active:scale-95 transition-all',
+            )}
+          >
+            <Trash2 size={14} />
+            Delete Branch
+          </button>
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Branch name prompt -- inline input overlay
 // ---------------------------------------------------------------------------
 
 function BranchNamePrompt({
@@ -208,7 +392,7 @@ function BranchNamePrompt({
 }
 
 // ---------------------------------------------------------------------------
-// Branch tree visualization — organic vine style
+// Branch tree visualization -- organic vine style
 // ---------------------------------------------------------------------------
 
 function BranchTree({
@@ -216,13 +400,18 @@ function BranchTree({
   saves,
   onSwitchBranch,
   onLoadSave,
+  onDeleteBranch,
   loadingId,
+  newBranchId,
 }: {
   branchStore: BranchStore
   saves: SaveEntry[]
   onSwitchBranch: (branchId: string) => void
   onLoadSave: (saveId: number) => void
+  onDeleteBranch: (branchId: string) => void
   loadingId: number | null
+  /** ID of a recently created branch (for vine animation) */
+  newBranchId: string | null
 }) {
   const saveMap = useMemo(() => {
     const map = new Map<number, SaveEntry>()
@@ -230,29 +419,75 @@ function BranchTree({
     return map
   }, [saves])
 
+  // Tooltip state
+  const [tooltip, setTooltip] = useState<{
+    save: SaveEntry
+    branchName: string
+    position: { x: number; y: number }
+  } | null>(null)
+
+  // Compute tick divergence: how many ticks each branch has from its fork point
+  const tickDivergence = useMemo(() => {
+    const divergence = new Map<string, number>()
+    for (const branch of branchStore.branches) {
+      if (!branch.parentBranchId) {
+        // Root has no divergence
+        divergence.set(branch.id, 0)
+        continue
+      }
+      // Get the max tick on this branch from its saves
+      const branchSaveTicks = branch.saveIds
+        .map(id => saveMap.get(id)?.tick ?? 0)
+      const maxTick = branchSaveTicks.length > 0 ? Math.max(...branchSaveTicks) : branch.createdAtTick
+      const ticksFromFork = maxTick - branch.createdAtTick
+      divergence.set(branch.id, Math.max(0, ticksFromFork))
+    }
+    return divergence
+  }, [branchStore.branches, saveMap])
+
   // Build a layered tree: root at left, branches growing right
   const rootBranch = branchStore.branches.find(b => b.parentBranchId === null)
   if (!rootBranch) return null
+
+  const handleSaveNodeInteraction = (
+    e: React.MouseEvent | React.TouchEvent,
+    save: SaveEntry,
+    branchName: string,
+  ) => {
+    e.stopPropagation()
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const containerRect = (e.currentTarget as HTMLElement).closest('.branch-tree-container')?.getBoundingClientRect()
+    if (!containerRect) return
+    setTooltip({
+      save,
+      branchName,
+      position: {
+        x: rect.left - containerRect.left + rect.width / 2,
+        y: rect.top - containerRect.top,
+      },
+    })
+  }
 
   // Render a single branch row
   const renderBranch = (branch: BranchNode, depth: number) => {
     const color = BRANCH_COLORS[branch.colorIdx % BRANCH_COLORS.length]
     const isActive = branch.id === branchStore.activeBranchId
     const children = branchStore.branches.filter(b => b.parentBranchId === branch.id)
+    const isNew = branch.id === newBranchId
+    const divergenceTicks = tickDivergence.get(branch.id) ?? 0
+    const isRoot = branch.parentBranchId === null
 
     return (
       <div key={branch.id} className="flex flex-col">
         {/* Branch row */}
         <div className="flex items-center gap-1 min-h-[52px]">
-          {/* Depth indent — vine connectors */}
+          {/* Depth indent -- vine connectors */}
           {depth > 0 && (
             <div className="flex items-center" style={{ width: depth * 24 }}>
               {Array.from({ length: depth }, (_, i) => (
                 <div
                   key={i}
-                  className={cn(
-                    'w-6 h-full flex items-center justify-center',
-                  )}
+                  className="w-6 h-full flex items-center justify-center"
                 >
                   <div className="w-0.5 h-full bg-border/30" />
                 </div>
@@ -260,15 +495,31 @@ function BranchTree({
             </div>
           )}
 
-          {/* Branch fork indicator */}
+          {/* Branch fork indicator with vine growth animation */}
           {depth > 0 && (
             <div className="flex items-center">
-              <div className={cn('w-4 h-0.5 rounded-full', color.vine, 'opacity-60')} />
-              <ChevronRight className={cn('size-3 -ml-1', color.text, 'opacity-60')} />
+              {isNew ? (
+                /* Animated vine connector for new branches */
+                <svg width="20" height="4" viewBox="0 0 20 4" className="shrink-0">
+                  <line
+                    x1="0" y1="2" x2="20" y2="2"
+                    stroke={color.hex}
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    className="vine-grow-anim"
+                    opacity="0.6"
+                  />
+                </svg>
+              ) : (
+                <>
+                  <div className={cn('w-4 h-0.5 rounded-full', color.vine, 'opacity-60')} />
+                  <ChevronRight className={cn('size-3 -ml-1', color.text, 'opacity-60')} />
+                </>
+              )}
             </div>
           )}
 
-          {/* Branch node — tappable */}
+          {/* Branch node -- tappable */}
           <button
             onClick={() => onSwitchBranch(branch.id)}
             className={cn(
@@ -277,6 +528,7 @@ function BranchTree({
               isActive
                 ? `bg-bg-tertiary border ${color.border} ${color.glow} shadow-md`
                 : 'bg-bg-secondary/50 border border-border/50 hover:border-border',
+              isNew && 'animate-in fade-in-0 slide-in-from-left-2 duration-300',
             )}
           >
             {/* Branch orb */}
@@ -308,8 +560,32 @@ function BranchTree({
               <div className="flex items-center gap-2 text-[10px] text-text-muted mt-0.5">
                 <span>T{branch.createdAtTick}</span>
                 <span>{branch.saveIds.length} save{branch.saveIds.length !== 1 ? 's' : ''}</span>
+                {/* Tick divergence count */}
+                {!isRoot && (
+                  <span className={cn('px-1 py-0.5 rounded bg-bg-primary/60', color.text, 'text-[9px] font-medium')}>
+                    {divergenceTicks} tick{divergenceTicks !== 1 ? 's' : ''} from fork
+                  </span>
+                )}
               </div>
             </div>
+
+            {/* Delete branch button (not for root or active branch) */}
+            {!isRoot && !isActive && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDeleteBranch(branch.id)
+                }}
+                className={cn(
+                  'shrink-0 flex items-center justify-center size-9 min-h-[44px] min-w-[44px] rounded-lg',
+                  'text-text-muted/40 hover:text-danger hover:bg-danger/10',
+                  'transition-colors active:scale-95',
+                )}
+                aria-label={`Delete branch ${branch.name}`}
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
           </button>
 
           {/* Save nodes on this branch */}
@@ -321,10 +597,23 @@ function BranchTree({
                 <button
                   key={saveId}
                   onClick={() => onLoadSave(saveId)}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    handleSaveNodeInteraction(e, save, branch.name)
+                  }}
+                  onTouchStart={(e) => {
+                    // Long-press for tooltip on mobile
+                    const timer = setTimeout(() => {
+                      handleSaveNodeInteraction(e, save, branch.name)
+                    }, 400)
+                    const cleanup = () => clearTimeout(timer)
+                    e.currentTarget.addEventListener('touchend', cleanup, { once: true })
+                    e.currentTarget.addEventListener('touchmove', cleanup, { once: true })
+                  }}
                   disabled={loadingId !== null}
                   title={`${save.name} (Tick ${save.tick})`}
                   className={cn(
-                    'shrink-0 flex items-center gap-1 px-2 py-1 rounded text-[10px] min-h-[36px]',
+                    'shrink-0 flex items-center gap-1 px-2 py-1 rounded text-[10px] min-h-[44px] min-w-[44px]',
                     'border border-border/50 bg-bg-tertiary/50',
                     'hover:border-gold/30 hover:bg-gold/5 active:scale-95',
                     'transition-all',
@@ -343,15 +632,24 @@ function BranchTree({
           </div>
         </div>
 
-        {/* Child branches — recursion */}
+        {/* Child branches -- recursion */}
         {children.map(child => renderBranch(child, depth + 1))}
       </div>
     )
   }
 
   return (
-    <div className="overflow-x-auto scrollbar-none px-3 py-2">
+    <div className="overflow-x-auto scrollbar-none px-3 py-2 relative branch-tree-container">
       {renderBranch(rootBranch, 0)}
+      {/* Tooltip overlay */}
+      {tooltip && (
+        <SaveNodeTooltip
+          save={tooltip.save}
+          branchName={tooltip.branchName}
+          position={tooltip.position}
+          onClose={() => setTooltip(null)}
+        />
+      )}
     </div>
   )
 }
@@ -370,6 +668,15 @@ export function SaveBranching() {
   const [loadingId, setLoadingId] = useState<number | null>(null)
   const [showBranchPrompt, setShowBranchPrompt] = useState(false)
   const [branchFromSaveId, setBranchFromSaveId] = useState<number | null>(null)
+  /** Track the most recently created branch for vine growth animation */
+  const [newBranchId, setNewBranchId] = useState<string | null>(null)
+  /** Branch pending deletion (for confirmation dialog) */
+  const [deletingBranch, setDeletingBranch] = useState<BranchNode | null>(null)
+
+  // Inject vine growth animation styles
+  useEffect(() => {
+    ensureVineStyles()
+  }, [])
 
   // Initialize branch store from localStorage
   useEffect(() => {
@@ -390,7 +697,7 @@ export function SaveBranching() {
     if (!isOpen || !storyId) return
     let cancelled = false
 
-    async function fetch() {
+    async function fetchSaves() {
       setLoading(true)
       const all = await apiListSaves()
       if (cancelled) return
@@ -398,17 +705,30 @@ export function SaveBranching() {
       setSaves(filtered)
       setLoading(false)
     }
-    fetch()
+    fetchSaves()
 
     return () => { cancelled = true }
   }, [isOpen, storyId])
+
+  // Load a save (with branch tracking)
+  const handleLoadSave = useCallback(async (saveId: number) => {
+    if (loadingId !== null) return
+    setLoadingId(saveId)
+    const ok = await apiLoad(saveId)
+    setLoadingId(null)
+    if (ok) {
+      // Offer to branch if loading from a different branch's save
+      // For now, just load
+    }
+  }, [loadingId])
 
   // Create a new branch from a save point
   const handleCreateBranch = useCallback((name: string) => {
     if (!branchStore) return
 
+    const branchId = `branch_${Date.now()}`
     const newBranch: BranchNode = {
-      id: `branch_${Date.now()}`,
+      id: branchId,
       name,
       parentSaveId: branchFromSaveId,
       parentBranchId: branchStore.activeBranchId,
@@ -428,6 +748,10 @@ export function SaveBranching() {
       }
     })
 
+    // Trigger vine growth animation
+    setNewBranchId(branchId)
+    setTimeout(() => setNewBranchId(null), 600)
+
     setShowBranchPrompt(false)
     setBranchFromSaveId(null)
 
@@ -435,10 +759,14 @@ export function SaveBranching() {
     if (branchFromSaveId) {
       handleLoadSave(branchFromSaveId)
     }
-  }, [branchStore, branchFromSaveId, tick])
+  }, [branchStore, branchFromSaveId, tick, handleLoadSave])
 
-  // Switch active branch
-  const handleSwitchBranch = useCallback((branchId: string) => {
+  // Switch active branch + auto-load latest save on that branch
+  const handleSwitchBranch = useCallback(async (branchId: string) => {
+    if (!branchStore) return
+    const targetBranch = branchStore.branches.find(b => b.id === branchId)
+    if (!targetBranch || targetBranch.id === branchStore.activeBranchId) return
+
     setBranchStore(prev => {
       if (!prev) return prev
       return {
@@ -447,19 +775,48 @@ export function SaveBranching() {
         activeBranchId: branchId,
       }
     })
-  }, [])
 
-  // Load a save (with branch tracking)
-  const handleLoadSave = useCallback(async (saveId: number) => {
-    if (loadingId !== null) return
-    setLoadingId(saveId)
-    const ok = await apiLoad(saveId)
-    setLoadingId(null)
-    if (ok) {
-      // Offer to branch if loading from a different branch's save
-      // For now, just load
+    // Auto-load the latest save from the switched branch
+    if (targetBranch.saveIds.length > 0) {
+      const latestSaveId = targetBranch.saveIds[targetBranch.saveIds.length - 1]
+      await handleLoadSave(latestSaveId)
     }
-  }, [loadingId])
+  }, [branchStore, handleLoadSave])
+
+  // Delete a branch (with children)
+  const handleDeleteBranch = useCallback((branchId: string) => {
+    if (!branchStore) return
+    const branch = branchStore.branches.find(b => b.id === branchId)
+    if (!branch || branch.parentBranchId === null) return // Cannot delete root
+    if (branch.id === branchStore.activeBranchId) return // Cannot delete active branch
+    setDeletingBranch(branch)
+  }, [branchStore])
+
+  const confirmDeleteBranch = useCallback(() => {
+    if (!deletingBranch || !branchStore) return
+
+    // Collect all descendant branch IDs (recursive)
+    const idsToDelete = new Set<string>()
+    function collectDescendants(parentId: string) {
+      idsToDelete.add(parentId)
+      for (const b of branchStore!.branches) {
+        if (b.parentBranchId === parentId) {
+          collectDescendants(b.id)
+        }
+      }
+    }
+    collectDescendants(deletingBranch.id)
+
+    setBranchStore(prev => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        branches: prev.branches.filter(b => !idsToDelete.has(b.id)),
+      }
+    })
+
+    setDeletingBranch(null)
+  }, [deletingBranch, branchStore])
 
   // Register a new save on the active branch
   const registerSaveOnBranch = useCallback((saveId: number) => {
@@ -484,7 +841,7 @@ export function SaveBranching() {
 
   return (
     <>
-      {/* Branch button — sits in the controls area */}
+      {/* Branch button -- sits in the controls area */}
       <button
         onClick={() => setIsOpen(true)}
         className={cn(
@@ -506,7 +863,7 @@ export function SaveBranching() {
         )}
       </button>
 
-      {/* Branch panel — bottom sheet (mobile) / popover (desktop) */}
+      {/* Branch panel -- bottom sheet (mobile) / popover (desktop) */}
       {isOpen && branchStore && (
         <>
           {/* Backdrop */}
@@ -594,7 +951,9 @@ export function SaveBranching() {
                       handleLoadSave(saveId)
                     }
                   }}
+                  onDeleteBranch={handleDeleteBranch}
                   loadingId={loadingId}
+                  newBranchId={newBranchId}
                 />
               )}
             </div>
@@ -611,6 +970,16 @@ export function SaveBranching() {
             </div>
           </div>
         </>
+      )}
+
+      {/* Delete branch confirmation dialog */}
+      {deletingBranch && (
+        <DeleteBranchDialog
+          branchName={deletingBranch.name}
+          saveCount={deletingBranch.saveIds.length}
+          onConfirm={confirmDeleteBranch}
+          onCancel={() => setDeletingBranch(null)}
+        />
       )}
     </>
   )
