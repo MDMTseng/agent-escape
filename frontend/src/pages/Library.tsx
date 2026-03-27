@@ -7,6 +7,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { timeAgo } from '@/lib/timeago'
 import { useGameStore } from '@/stores/gameStore'
+import { SceneDuplicate } from '@/components/library/SceneDuplicate'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -266,11 +267,13 @@ function StoryCard({
   story,
   onDelete,
   onPlay,
+  onDuplicate,
   playingId,
 }: {
   story: Story
   onDelete: (id: number) => void
   onPlay: (story: Story) => void
+  onDuplicate: () => void
   playingId: number | null
 }) {
   const isLoading = playingId === story.id
@@ -303,6 +306,17 @@ function StoryCard({
                 <Play className="size-4 ml-0.5" fill="currentColor" />
               )}
             </button>
+            {/* Desktop-only duplicate button (hover reveal) */}
+            <div className="hidden md:block opacity-0 group-hover/card:opacity-100 transition-all">
+              <SceneDuplicate
+                storyId={story.id}
+                storyTitle={story.title}
+                theme={story.theme}
+                premise={story.premise}
+                difficulty={story.difficulty}
+                onDuplicated={onDuplicate}
+              />
+            </div>
             {/* Desktop-only delete button (hover reveal) */}
             <button
               onClick={(e) => {
@@ -817,6 +831,7 @@ export default function Library() {
                     if (s) setDeleteTarget(s)
                   }}
                   onPlay={handlePlayStory}
+                  onDuplicate={fetchStories}
                   playingId={playingStoryId}
                 />
               </div>

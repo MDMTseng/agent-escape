@@ -10,6 +10,7 @@ import { PuzzlesTab } from '@/components/creator/PuzzlesTab'
 import { AgentsTab } from '@/components/creator/AgentsTab'
 import { ValidateTab } from '@/components/creator/ValidateTab'
 import { SceneExportImport } from '@/components/creator/SceneExportImport'
+import { VersionHistory } from '@/components/creator/VersionHistory'
 import type { AgentItem, AgentRelationship } from '@/components/creator/AgentsTab'
 
 /* ------------------------------------------------------------------ */
@@ -507,11 +508,18 @@ export default function Creator() {
               Build your escape room step by step
             </p>
           </div>
-          {/* Export/Import controls (P3-003) */}
-          <SceneExportImport
-            sceneState={sceneState}
-            onImport={(imported) => setSceneState(imported)}
-          />
+          <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+            {/* Version history controls (P3-004) */}
+            <VersionHistory
+              sceneState={sceneState}
+              onRevert={(version) => setSceneState(version)}
+            />
+            {/* Export/Import controls (P3-003) */}
+            <SceneExportImport
+              sceneState={sceneState}
+              onImport={(imported) => setSceneState(imported)}
+            />
+          </div>
         </div>
       </div>
 
