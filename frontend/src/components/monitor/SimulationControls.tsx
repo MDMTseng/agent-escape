@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SaveLoadControls } from '@/components/monitor/SaveLoadControls'
+import { SaveBranching } from '@/components/monitor/SaveBranching'
 import {
   useIsPlaying,
   useTick,
@@ -198,6 +199,9 @@ export function SimulationControls() {
 
       {/* --- Save/Load controls (P1-008) --- */}
       <SaveLoadControls />
+
+      {/* --- Branch timeline controls (P3-002) --- */}
+      <SaveBranching />
 
       {/* --- Quit to Library button --- */}
       <button
