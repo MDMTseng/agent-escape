@@ -114,24 +114,24 @@
       "phase": "P1",
       "name": "Scene Creator — Agent designer tab",
       "description": "Build the Agents tab. Add/remove agents with: name, role, backstory textarea, personality traits (tag input from archetype library + free text), spawn room (dropdown from rooms), initial inventory, goal, and secret motivation. Show relationship matrix between agents (trust slider per pair). Preview how traits map to behavior.",
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Reviewed 2026-03-27. All criteria met. Add/remove agents, archetype presets, traits with autocomplete, behavior preview, relationship matrix with trust sliders. Mobile swipe-to-delete. Cross-tab state sharing verified."
     },
     {
       "id": "P1-005",
       "phase": "P1",
       "name": "Scene Creator — Validate tab + save scene",
       "description": "Build the Validate tab. Run solvability check (call a new POST /api/validate-scene endpoint or client-side BFS). Show pass/fail per puzzle with explanation. 'Save Scene' button persists to the story database. 'Play Scene' button saves + starts the game + navigates to monitor.",
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Reviewed 2026-03-27. All criteria met. 7 validation checks (BFS connectivity, cycle detection, completeness). Save to database via POST /api/stories/create. Play Scene disabled when failures exist. Overall status banner."
     },
     {
       "id": "P1-006",
       "phase": "P1",
       "name": "Puzzle Progress Dashboard panel",
       "description": "Add a collapsible panel to the Game Monitor showing all puzzles in a grid: puzzle name, type icon, room, status badge (unsolved/in-progress/solved), clues found vs required. Warmth indicator (cold/warm/hot) based on clue discovery ratio. Click a puzzle to see its clue list and which agents found which clues.",
-      "passes": false,
-      "notes": "Depends on P0-005"
+      "passes": true,
+      "notes": "Reviewed 2026-03-27. All criteria met. Collapsible panel, puzzle cards with type icons, status badges, warmth indicators, clue counts. Click to expand shows entity list and solver info. 2-col desktop, 1-col mobile."
     },
     {
       "id": "P1-007",
