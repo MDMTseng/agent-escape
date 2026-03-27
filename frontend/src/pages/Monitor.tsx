@@ -17,6 +17,7 @@ import { NarrativeFeed } from '@/components/monitor/NarrativeFeed'
 import { AgentStatusStrip } from '@/components/monitor/AgentStatusStrip'
 import { EscapeChainProgress } from '@/components/monitor/EscapeChainProgress'
 import { SimulationControls } from '@/components/monitor/SimulationControls'
+import { PuzzleProgressDashboard } from '@/components/monitor/PuzzleProgressDashboard'
 import { Wifi, WifiOff, Loader2, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -83,6 +84,9 @@ export default function Monitor() {
 
       {/* Escape chain progress bar — compact bar + expandable checklist */}
       <EscapeChainProgress />
+
+      {/* Puzzle progress dashboard — collapsible panel (P1-006) */}
+      <PuzzleProgressDashboard />
 
       {/* Main content area — narrative feed */}
       <div className="flex-1 min-h-0 relative">
