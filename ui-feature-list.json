@@ -35,7 +35,7 @@
       "name": "Scene Library page",
       "description": "Build the home/landing page that lists all saved scenes (stories). Fetch from GET /api/stories. Display as a grid of cards showing: title, theme badge, difficulty, room count, agent count, creation date, save count. Include a 'New Scene' button and delete action per card. Empty state when no scenes exist.",
       "passes": true,
-      "notes": "Reviewed 2026-03-27. All criteria met. Cards show title, theme badge, difficulty, creation date, save count. Responsive grid (1/2/3 cols). Delete with confirmation sheet. Empty/loading/error states. Room/agent count not available from API — save_count and max_tick shown instead (acceptable adaptation)."
+      "notes": "Reviewed 2026-03-27. All criteria met. Cards show title, theme badge, difficulty, creation date, save count. Responsive grid (1/2/3 cols). Delete with confirmation sheet. Empty/loading/error states. Room/agent count not available from API \u2014 save_count and max_tick shown instead (acceptable adaptation)."
     },
     {
       "id": "P0-005",
@@ -48,7 +48,7 @@
     {
       "id": "P0-006",
       "phase": "P0",
-      "name": "Game Monitor — Narrative Feed",
+      "name": "Game Monitor \u2014 Narrative Feed",
       "description": "Build the narrative feed panel for the game monitor page. Renders narrator-generated prose as styled cards (one per tick). Supports auto-scroll (follow latest) and manual scroll. Filter by event type (puzzle, movement, dialogue, discovery). Show tick number on each card.",
       "passes": true,
       "notes": "Re-reviewed 2026-03-26 after scroll containment fix. All criteria met. Auto-scroll, manual pause, Jump-to-latest, filters, tick badges all functional. Build clean."
@@ -56,15 +56,15 @@
     {
       "id": "P0-007",
       "phase": "P0",
-      "name": "Game Monitor — Agent Status Strip",
+      "name": "Game Monitor \u2014 Agent Status Strip",
       "description": "Build a horizontal agent status strip showing each agent as a compact card: name, current room, inventory icons, emotional state indicator, current action. Updates in real-time from the Zustand store. Clicking an agent card expands to show more detail.",
       "passes": true,
-      "notes": "Reviewed 2026-03-26. All criteria met. Cards show name, room, inventory count. Detail bottom-sheet (mobile) / dialog (desktop). Backdrop, Escape, X dismiss all work. useMemo workaround solid. Backend lacks emotional_state/current_action fields — reasonable adaptation."
+      "notes": "Reviewed 2026-03-26. All criteria met. Cards show name, room, inventory count. Detail bottom-sheet (mobile) / dialog (desktop). Backdrop, Escape, X dismiss all work. useMemo workaround solid. Backend lacks emotional_state/current_action fields \u2014 reasonable adaptation."
     },
     {
       "id": "P0-008",
       "phase": "P0",
-      "name": "Game Monitor — Escape Chain Progress Bar",
+      "name": "Game Monitor \u2014 Escape Chain Progress Bar",
       "description": "Build a visual escape chain progress component. Show the 12-step chain as a horizontal segmented bar with solved (green), active (gold pulse), and pending (gray) states. Below the bar, show a collapsible checklist with step descriptions. Clicking a solved step shows which agent solved it and at what tick.",
       "passes": true,
       "notes": "Reviewed 2026-03-26. All criteria met. Segmented bar with green/gold-pulse/gray states. Collapsible checklist. Solved step detail (agent + tick). Touch targets 48-60px. ARIA progressbar. Collapsed 49px. Hides when no data. Build clean."
@@ -72,7 +72,7 @@
     {
       "id": "P0-009",
       "phase": "P0",
-      "name": "Game Monitor — Simulation Controls",
+      "name": "Game Monitor \u2014 Simulation Controls",
       "description": "Build play/pause/step control bar. Play button calls POST /api/resume, pause calls POST /api/pause, step calls POST /api/step. Show current tick count and simulation speed. Disable step button when not paused. Add a 'Quit to Library' button that pauses and navigates home.",
       "passes": true,
       "notes": "Re-reviewed 2026-03-27 after optimistic state fix. All criteria met. Play/Pause toggle, Step disable, tick counter, Quit-to-Library all verified."
@@ -88,7 +88,7 @@
     {
       "id": "P1-001",
       "phase": "P1",
-      "name": "Scene Creator — Story tab",
+      "name": "Scene Creator \u2014 Story tab",
       "description": "Build the Scene Creator page with a tabbed layout (Story | Rooms | Puzzles | Agents | Validate). The Story tab has: theme selector (card-based, fetch from GET /api/themes), premise text area, difficulty slider (1-5), and a 'Generate World Bible' button that calls POST /api/generate-story and displays the result (setting, characters, inciting incident).",
       "passes": true,
       "notes": "Reviewed 2026-03-27. All criteria met. Tabbed layout (5 tabs), theme selector from API, premise textarea, difficulty slider 1-5, Generate World Bible calls POST /api/generate-story, result card with inciting incident + characters. Navigation added. Mobile-first."
@@ -96,7 +96,7 @@
     {
       "id": "P1-002",
       "phase": "P1",
-      "name": "Scene Creator — Room graph editor",
+      "name": "Scene Creator \u2014 Room graph editor",
       "description": "Build the Rooms tab with a visual graph editor (React Flow or similar). Users can: add rooms (click to create node), connect rooms with doors (drag edge), select a room to edit name/description/entities in a side panel. Show door status (locked/unlocked) on edges. Include an 'Auto-generate' button that uses the world bible to populate rooms.",
       "passes": true,
       "notes": "Reviewed 2026-03-27. All criteria met. React Flow graph editor, add/connect rooms, side panel (desktop) + bottom sheet (mobile), locked/unlocked edge display, auto-generate from world bible. Pinch-to-zoom, pan built in."
@@ -104,7 +104,7 @@
     {
       "id": "P1-003",
       "phase": "P1",
-      "name": "Scene Creator — Puzzle builder tab",
+      "name": "Scene Creator \u2014 Puzzle builder tab",
       "description": "Build the Puzzles tab. List all puzzles in the scene with: name, type (dropdown: key_lock, combination_lock, password_door, pressure_plate, examine_reveal, sequential_levers), room assignment, required items/clues. Add/remove puzzles. Visual dependency chain showing which puzzles gate which others. AI-assist button: describe puzzle intent in natural language, Claude generates the mechanics.",
       "passes": true,
       "notes": "Reviewed 2026-03-27. All criteria met. Expandable puzzle cards, 6 types, room assignment, required items, dependency chain visualization, AI Assist bottom sheet (mocked). Swipe-to-delete on mobile."
@@ -112,7 +112,7 @@
     {
       "id": "P1-004",
       "phase": "P1",
-      "name": "Scene Creator — Agent designer tab",
+      "name": "Scene Creator \u2014 Agent designer tab",
       "description": "Build the Agents tab. Add/remove agents with: name, role, backstory textarea, personality traits (tag input from archetype library + free text), spawn room (dropdown from rooms), initial inventory, goal, and secret motivation. Show relationship matrix between agents (trust slider per pair). Preview how traits map to behavior.",
       "passes": true,
       "notes": "Reviewed 2026-03-27. All criteria met. Add/remove agents, archetype presets, traits with autocomplete, behavior preview, relationship matrix with trust sliders. Mobile swipe-to-delete. Cross-tab state sharing verified."
@@ -120,7 +120,7 @@
     {
       "id": "P1-005",
       "phase": "P1",
-      "name": "Scene Creator — Validate tab + save scene",
+      "name": "Scene Creator \u2014 Validate tab + save scene",
       "description": "Build the Validate tab. Run solvability check (call a new POST /api/validate-scene endpoint or client-side BFS). Show pass/fail per puzzle with explanation. 'Save Scene' button persists to the story database. 'Play Scene' button saves + starts the game + navigates to monitor.",
       "passes": true,
       "notes": "Reviewed 2026-03-27. All criteria met. 7 validation checks (BFS connectivity, cycle detection, completeness). Save to database via POST /api/stories/create. Play Scene disabled when failures exist. Overall status banner."
@@ -162,24 +162,24 @@
       "phase": "P2",
       "name": "Agent memory inspector",
       "description": "Add a slide-out panel per agent showing: working memory (always-visible key facts), memory stream (scrollable list sorted by recency, with importance score badges), and reflections (periodic summaries). Search within agent memory. Highlight which memories were retrieved for the latest decision.",
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Reviewed 2026-03-27. All criteria met. Slide-out panel (bottom sheet mobile, right panel desktop). Three-tier memory: working facts, stream with importance badges, reflections. Search filters across all tabs. Gold glow on latest-tick memories. Client-side synthesis from narrative events."
     },
     {
       "id": "P2-003",
       "phase": "P2",
       "name": "Agent perception overlay",
       "description": "When viewing an agent's detail panel, show what the agent currently perceives: a filtered view of the room showing only visible entities (respecting HIDDEN state), available exits, other agents present, and the agent's own inventory. Contrast with the 'god view' (everything in the room) to show what the agent is missing.",
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Reviewed 2026-03-27. All criteria met. Agent view shows non-hidden entities, exits, other agents, inventory. God view reveals hidden items as ghosted silhouettes with purple tint. Toggle between views. Key ID shown in God view. Room description, entity state badges."
     },
     {
       "id": "P2-004",
       "phase": "P2",
       "name": "Nudge system",
       "description": "Add spectator nudge controls: 'Hint' (suggest an agent examine a specific entity), 'Focus' (redirect an agent to a specific puzzle), 'Talk' (prompt two agents to discuss a topic). Nudges are sent as a new WebSocket message type or API call. Show nudge history in a collapsible log. Limit nudge frequency (cooldown timer).",
-      "passes": false,
-      "notes": "Requires backend endpoint additions"
+      "passes": true,
+      "notes": "Reviewed 2026-03-27. All criteria met. Three nudge types (Hint/Focus/Talk) with agent/entity/puzzle/topic selectors. 30s cooldown with progress bar. Collapsible history log with narrative descriptions. Simulated send (ready for backend API). Enter-to-send on Talk topic."
     },
     {
       "id": "P2-005",

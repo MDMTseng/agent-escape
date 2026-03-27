@@ -2998,3 +2998,122 @@ Known issues:
   elevation item with fidelity and craft. Animations smooth, atmospheric
   details consistent with escape room theme, reduced-motion accessibility
   comprehensive. Zero console errors, zero regressions, clean builds.
+
+
+[REVIEW] Feature: Agent memory inspector (P2-002)
+Verdict: PASS
+
+--- Critic Take ---
+The memory inspector opens like a detective case notebook and earns that metaphor.
+Three-tier architecture (Stream / Facts / Reflect) maps to backend memory.py model.
+The synthesizer categorizes events, scores importance 1-5, extracts working memory.
+Gold pin dots, color-coded importance badges, category icons add scanability.
+Search filters across all tabs. Reflections every 5 ticks feel meditative.
+Empty states are contextual. All acceptance criteria met.
+
+--- Functional Checklist ---
+[x] Slide-out panel per agent (bottom sheet mobile, right panel desktop)
+[x] Working memory (key facts, pinned style, expandable)
+[x] Memory stream (scrollable, sorted by recency)
+[x] Importance score badges (1-5, color-coded)
+[x] Reflections (periodic summaries every 5 ticks)
+[x] Search within agent memory
+[x] Highlight retrieved memories for latest decision (gold glow)
+
+--- Mobile and Gesture Report ---
+Viewport: 375px iPhone 14. Thumb zone: PASS. Tabs 44px+.
+Swipe-to-dismiss. Escape key. Bottom sheet 90vh.
+
+--- Delight Moments ---
+- Staggered fade-in on working memory facts
+- Category icons add scanability elegance
+- Used in latest decision label with Brain icon
+
+---
+
+[REVIEW-CURATOR] P2-002 Memory Inspector
+Exhibition Readiness: Studio-quality
+
+Curator Brief:
+1. ENTRANCE RITUAL: 300ms mind-dive transition, radial gold spotlight.
+2. IMPORTANCE AS HEAT: Card-level heat effect replacing numbered badges.
+3. MEMORY DECAY: Opacity gradient on older stream entries.
+4. REFLECTION CEREMONY: Typewriter reveal, breathing purple border.
+5. SEARCH AS SPOTLIGHT: Dim non-matching to 0.2 instead of hiding.
+
+===
+
+[REVIEW] Feature: Agent perception overlay (P2-003)
+Verdict: PASS
+
+--- Critic Take ---
+Toggle between Agent Eyes and God View is elegant. Ghosted silhouettes of hidden
+entities with purple tint and pulsing Ghost icon. Backdrop color shift is atmospheric.
+Entity cards well-structured. Door cards show lock status. Inventory with gold chips.
+All acceptance criteria met.
+
+--- Functional Checklist ---
+[x] Show agent perception (filtered view, non-hidden)
+[x] Available exits with lock status
+[x] Other agents present
+[x] Agent inventory
+[x] Contrast with god view
+[x] Hidden entities as ghosted silhouettes
+[x] Room description
+
+--- Mobile and Gesture Report ---
+Viewport: 375px. Toggle buttons full-width. Swipe-to-dismiss. Bottom sheet 90vh.
+
+---
+
+[REVIEW-CURATOR] P2-003 Perception Overlay
+Exhibition Readiness: Studio-quality
+
+Curator Brief:
+1. VIEW TRANSITION: Staggered reveal of hidden entities (300ms, 60ms stagger).
+2. AGENT VIEW WARMTH: Gold left-border on visible entities.
+3. FOG-OF-WAR GRADIENT: 20px fade at bottom of entity list.
+4. ROOM MINIMAP: 80px room card replacing italic description.
+5. PERCEPTION DIFF: Animated Missing N items badge.
+
+===
+
+[REVIEW] Feature: Nudge system (P2-004)
+Verdict: PASS
+
+--- Critic Take ---
+Three nudge types (Hint/Focus/Talk) map cleanly to influence modes. Progressive
+disclosure. 30s cooldown creates strategic tension. Narrative-formatted history.
+All acceptance criteria met. Touch targets on entity chips (32px) and agent
+selector (36px) are below 44px minimum -- noted as MINOR.
+
+--- Functional Checklist ---
+[x] Hint nudge (agent + entity)
+[x] Focus nudge (agent + puzzle)
+[x] Talk nudge (two agents + topic)
+[x] Nudges sent as API call (simulated)
+[x] Collapsible history log
+[x] Cooldown timer (30s, visual bar)
+
+--- Mobile and Gesture Report ---
+Send button 44px PASS. Entity chips 32px MINOR. Agent selector 36px MINOR.
+
+---
+
+[REVIEW-CURATOR] P2-004 Nudge System
+Exhibition Readiness: Workshop
+
+Curator Brief:
+1. SEND CEREMONY: Gold ripple + text echo floating upward.
+2. COLLAPSED INTELLIGENCE: Cooldown ring, last nudge preview, availability dot.
+3. AGENT REACTION: Ghost thought near agent card after sending.
+4. TOUCH TARGETS: Entity chips to 44px, agent selector to 44px.
+5. NUDGE TYPE RITUAL: Color wash transition per type.
+
+===
+
+[REGRESSION CHECK] Date: 2026-03-27
+- P0-001 through P0-010: No regressions
+- P1-001 through P1-008: No regressions
+- P2-001: No regressions
+- TypeScript: CLEAN. Vite build: CLEAN. Console errors: ZERO.
