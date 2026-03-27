@@ -2648,3 +2648,123 @@ interchangeable with any React admin panel. They need a signature moment, an
 atmospheric hook, something that makes a user pause and think someone cared
 about this. The Curator Brief items above are ordered by impact: item 1 in
 each list is the single highest-ROI change for that feature.
+
+---
+
+[BUILD] P2-002 — Agent Memory Inspector
+Date: 2026-03-27
+Commit: feat(ui): build agent memory inspector panel (P2-002)
+
+Files changed:
+  - frontend/src/components/monitor/AgentMemoryInspector.tsx (NEW, ~480 lines)
+  - frontend/src/components/monitor/AgentStatusStrip.tsx (modified — added Memory/Perception buttons to AgentDetail, state management for inspector panels)
+
+What was built:
+  - Slide-out memory inspector panel: bottom sheet on mobile (90vh), right side panel on desktop (420px)
+  - Three-tier memory architecture display matching backend memory.py:
+    - Working Memory: pinned facts with gold pin accent dots, expandable/collapsible
+    - Memory Stream: chronological list (newest first) with importance score badges (1-5, color-coded from gray to red), category icons (Eye/Zap/Sparkles/MessageCircle/AlertTriangle), tick numbers
+    - Reflections: periodic summaries in purple-tinted cards with italic text
+  - Search bar: filters across all memory tabs
+  - Gold glow highlight: memories from the latest tick are marked as "Used in latest decision" with a gold left-border glow
+  - Tab navigation: Stream / Facts / Reflect with count badges
+  - Footer: memory stats (total memories, working facts, reflections)
+  - Empty states: contextual messages when no data
+  - Swipe-to-dismiss on mobile, Escape key to close
+  - Integrated via "Memory" button in the AgentDetail panel (from P0-007)
+
+Memory synthesis approach:
+  Since the backend doesn't expose LLMBrain memory over WebSocket, client-side synthesis extracts structured memories from tick events. Categorizes by type (observation/action/discovery/conversation/failure), scores importance based on event significance (unlock/solve = 5, examine with quotes = 4, talk = 3, move = 1). Extracts working memory facts from patterns (quoted text, codes, discoveries, failures, speech). Generates reflections every 5 ticks.
+
+Mobile/gesture notes:
+  - 44px+ touch targets on all buttons and tabs
+  - Swipe-down-to-dismiss (100px threshold)
+  - Scrollable content area with momentum scroll
+  - Staggered fade-in animation on pinned facts
+
+Screenshots:
+  - screenshots/build-P2-002-003-004-mobile.png
+  - screenshots/build-P2-002-003-004-desktop.png
+  - screenshots/build-P2-monitor-mobile.png
+  - screenshots/build-P2-monitor-desktop.png
+
+Known issues:
+  - Memory data is synthesized client-side from narrative events, not from actual backend memory. If backend adds a /api/agents/{id}/memory endpoint, should swap to real data.
+  - Importance scoring is heuristic-based; may not perfectly match backend scoring.
+
+---
+
+[BUILD] P2-003 — Agent Perception Overlay
+Date: 2026-03-27
+Commit: feat(ui): build agent perception overlay (P2-003)
+
+Files changed:
+  - frontend/src/components/monitor/AgentPerceptionOverlay.tsx (NEW, ~430 lines)
+
+What was built:
+  - Two-view perception panel comparing what agent sees vs full room state:
+    - Agent's Eyes (gold theme): only non-HIDDEN entities, all exits, other agents present, agent inventory
+    - God View (purple theme): everything in the room, hidden items shown as ghosted silhouettes with purple tint, Ghost icon, and "[entity name]" italic styling
+  - Toggle bar with visual metaphor shift (gold spotlight vs purple omniscience)
+  - Entity cards: name, state badge (color-coded), description, portable indicator
+  - Door cards: direction, lock status with Lock/Unlock icons, key ID shown in God View
+  - Other agents section: avatar initial, name, description
+  - Inventory section: expandable/collapsible with gold-tinted item chips
+  - Room description shown at top
+  - Footer stats: visible/hidden entity counts
+  - Backdrop color shifts with view mode (black for agent view, purple-tinted for god view)
+  - Bottom sheet (mobile) / right panel (desktop), swipe-to-dismiss
+  - Integrated via "Perception" button in AgentDetail panel
+
+Mobile/gesture notes:
+  - Swipe-down-to-dismiss on mobile (100px threshold)
+  - All touch targets 44px+
+  - Single column layout on mobile, scrollable
+
+Known issues:
+  - Entity visibility is based purely on state === 'hidden'. The backend's visible_entities() method does the same, so this is accurate.
+  - No animation when toggling between views (entities don't animate in/out). Could add stagger transitions for exhibition polish.
+
+---
+
+[BUILD] P2-004 — Nudge System
+Date: 2026-03-27
+Commit: feat(ui): build spectator nudge system (P2-004)
+
+Files changed:
+  - frontend/src/components/monitor/NudgeSystem.tsx (NEW, ~540 lines)
+  - frontend/src/pages/Monitor.tsx (modified — added NudgeSystem above SimulationControls)
+
+What was built:
+  - Collapsible nudge panel in the Monitor page, positioned above simulation controls
+  - Three nudge types with distinct colors:
+    - Hint (gold): select agent + entity from their room -> "examine this"
+    - Focus (blue): select agent + unsolved puzzle step -> "work on this"
+    - Talk (purple): select two agents + type a topic -> "discuss this"
+  - Nudge type tab selector with icon and color theming
+  - Agent selector: shows all agents as selectable cards with initial avatars
+  - Entity selector: chip-style buttons for all entities in the selected agent's room
+  - Puzzle selector: lists unsolved escape chain steps with step numbers
+  - Topic input: free-text input for Talk nudges with Enter-to-send
+  - Send button: disabled during cooldown, shows loading spinner during send
+  - Cooldown timer: 30 seconds between nudges, visual progress bar, countdown display
+  - Nudge history: collapsible log showing all past nudges with timestamps, type icons, and descriptions formatted as narrative ("Whispered to X: examine the Y")
+  - Whisper aesthetic: instructional italic text changes per nudge type
+
+Integration approach:
+  No backend /api/nudge endpoint exists. Uses a simple in-memory store (module-level variable + listener pattern) for nudge history. Send action simulates a 400ms delay. Ready to swap for real API calls: replace the setTimeout with a POST to /api/nudge.
+
+Mobile/gesture notes:
+  - Collapsed state: compact header bar with nudge count and cooldown indicator
+  - Expanded state: scrollable form with 44px+ touch targets
+  - Enter key sends Talk nudges
+  - History section scrollable with max-height cap
+
+Screenshots: (same screenshots as P2-002 since all three are on the Monitor page)
+  - screenshots/build-P2-monitor-mobile.png
+  - screenshots/build-P2-monitor-desktop.png
+
+Known issues:
+  - Nudges are not actually sent to the backend. Local store only. Backend needs POST /api/nudge endpoint.
+  - Nudge history is lost on page refresh (in-memory, not persisted).
+  - No real-time feedback from agents acknowledging the nudge.
