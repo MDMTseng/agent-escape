@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { RoomsTab } from '@/components/creator/RoomsTab'
 import { PuzzlesTab } from '@/components/creator/PuzzlesTab'
 import { AgentsTab } from '@/components/creator/AgentsTab'
+import { ValidateTab } from '@/components/creator/ValidateTab'
 import type { AgentItem, AgentRelationship } from '@/components/creator/AgentsTab'
 
 /* ------------------------------------------------------------------ */
@@ -547,7 +548,9 @@ export default function Creator() {
         {activeTab === 'Agents' && (
           <AgentsTab sceneState={sceneState} setSceneState={setSceneState} />
         )}
-        {activeTab === 'Validate' && <PlaceholderTab name="Validate" />}
+        {activeTab === 'Validate' && (
+          <ValidateTab sceneState={sceneState} setSceneState={setSceneState} />
+        )}
       </div>
     </div>
   )
