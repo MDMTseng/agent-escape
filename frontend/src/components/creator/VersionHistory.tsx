@@ -1,25 +1,26 @@
 /**
- * VersionHistory — track scene edits as versions with revert capability.
+ * VersionHistory -- track scene edits as versions with revert capability.
  *
- * Stores version snapshots in localStorage as a film-strip timeline.
- * Each save to the scene creator auto-creates a version snapshot.
- * Users can view the history and revert to a previous version.
+ * Exhibition-grade enhancements (curator feedback):
+ *   1. Auto-snapshot on tab navigation -- saves a version when switching tabs
+ *   2. Revert confirmation dialog -- warns about unsaved changes before reverting
+ *   3. Snapshot success animation -- camera flash/shutter effect on save
  *
  * Visual aesthetic: film-strip timeline with numbered frames.
- *
  * Mobile-first: bottom sheet for history list, 44px+ touch targets.
  */
 
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import {
   History,
   X,
   RotateCcw,
   Film,
-  ChevronRight,
   Loader2,
   Trash2,
   Plus,
+  AlertTriangle,
+  Camera,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { SceneCreatorState } from '@/pages/Creator'
@@ -34,7 +35,7 @@ interface VersionEntry {
   label: string
   /** ISO timestamp */
   createdAt: string
-  /** What changed — auto-generated summary */
+  /** What changed -- auto-generated summary */
   summary: string
   /** Serialized scene snapshot */
   snapshot: SceneCreatorState
@@ -133,19 +134,135 @@ function formatTime(isoStr: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Snapshot flash styles (injected once)
+// ---------------------------------------------------------------------------
+
+const FLASH_STYLE_ID = 'version-history-flash-styles'
+
+function ensureFlashStyles() {
+  if (typeof document === 'undefined') return
+  if (document.getElementById(FLASH_STYLE_ID)) return
+  const style = document.createElement('style')
+  style.id = FLASH_STYLE_ID
+  style.textContent = `
+    @keyframes snapshot-flash {
+      0% { opacity: 0; }
+      15% { opacity: 0.7; }
+      100% { opacity: 0; }
+    }
+    .snapshot-flash-anim {
+      animation: snapshot-flash 250ms ease-out forwards;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .snapshot-flash-anim {
+        animation: none;
+      }
+    }
+  `
+  document.head.appendChild(style)
+}
+
+// ---------------------------------------------------------------------------
+// Revert Confirmation Dialog
+// ---------------------------------------------------------------------------
+
+function RevertConfirmDialog({
+  versionLabel,
+  onConfirm,
+  onCancel,
+}: {
+  versionLabel: string
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  return (
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 z-[90] bg-black/60" onClick={onCancel} />
+      {/* Dialog */}
+      <div
+        className={cn(
+          'fixed z-[91] bg-bg-secondary border border-border rounded-xl shadow-2xl',
+          'inset-x-4 bottom-8 p-5',
+          'md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2',
+          'md:w-[380px] md:p-6',
+          'animate-in fade-in-0 slide-in-from-bottom-4 duration-200',
+        )}
+      >
+        <div className="flex items-start gap-3 mb-4">
+          <div className="shrink-0 flex items-center justify-center size-10 rounded-full bg-gold/10">
+            <AlertTriangle size={20} className="text-gold" />
+          </div>
+          <div>
+            <h4 className="text-base font-bold text-text-primary m-0">Revert to Previous Version?</h4>
+            <p className="text-sm text-text-secondary mt-1 m-0">
+              Reverting to <strong className="text-text-primary">{versionLabel}</strong> will
+              replace your current scene state. Any unsaved changes will be lost.
+            </p>
+            <p className="text-xs text-text-muted mt-1.5 m-0">
+              Tip: Take a snapshot first to preserve your current state.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 justify-end">
+          <button
+            onClick={onCancel}
+            className={cn(
+              'flex items-center px-4 py-2 rounded-lg text-sm font-medium min-h-[44px]',
+              'bg-bg-tertiary text-text-secondary hover:text-text-primary',
+              'transition-colors active:scale-95',
+            )}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className={cn(
+              'flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold min-h-[44px]',
+              'bg-gold/15 text-gold border border-gold/20',
+              'hover:bg-gold/25 active:scale-95 transition-all',
+            )}
+          >
+            <RotateCcw size={14} />
+            Revert
+          </button>
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Main VersionHistory component
 // ---------------------------------------------------------------------------
 
 export function VersionHistory({
   sceneState,
   onRevert,
+  activeTab,
 }: {
   sceneState: SceneCreatorState
   onRevert: (version: SceneCreatorState) => void
+  /** Current active tab name -- used for auto-snapshot on tab navigation */
+  activeTab?: string
 }) {
   const [isOpen, setIsOpen] = useState(false)
   const [store, setStore] = useState<VersionStore>(loadVersionStore)
   const [revertingId, setRevertingId] = useState<string | null>(null)
+  /** Entry pending revert confirmation */
+  const [pendingRevert, setPendingRevert] = useState<VersionEntry | null>(null)
+  /** Show camera flash animation overlay */
+  const [showFlash, setShowFlash] = useState(false)
+  /** Track the previous tab for auto-snapshot */
+  const prevTabRef = useRef<string | undefined>(activeTab)
+  /** Track whether scene has any meaningful data (avoid empty snapshots) */
+  const hasData = sceneState.rooms.length > 0 || sceneState.agents.length > 0 || sceneState.puzzles.length > 0 || !!sceneState.worldBible
+
+  // Inject flash animation styles
+  useEffect(() => {
+    ensureFlashStyles()
+  }, [])
 
   // Persist on changes
   useEffect(() => {
@@ -171,23 +288,59 @@ export function VersionHistory({
         ...prev,
         versions: [...prev.versions, newEntry].slice(-prev.maxVersions),
       }))
+
+      return newEntry
     },
     [sceneState, store.versions],
   )
 
-  // Revert to a version
-  const handleRevert = useCallback(
-    (entry: VersionEntry) => {
-      setRevertingId(entry.id)
-      // Brief delay for visual feedback
-      setTimeout(() => {
-        onRevert(entry.snapshot)
-        setRevertingId(null)
-        setIsOpen(false)
-      }, 400)
+  // Save with flash animation
+  const saveWithFlash = useCallback(
+    (label?: string) => {
+      const entry = saveVersion(label)
+      // Trigger camera flash
+      setShowFlash(true)
+      setTimeout(() => setShowFlash(false), 300)
+      return entry
     },
-    [onRevert],
+    [saveVersion],
   )
+
+  // Auto-snapshot on tab navigation
+  useEffect(() => {
+    if (!activeTab || !prevTabRef.current) {
+      prevTabRef.current = activeTab
+      return
+    }
+    if (activeTab !== prevTabRef.current && hasData) {
+      // Auto-snapshot with tab context label
+      saveVersion(`Auto: ${prevTabRef.current} tab`)
+    }
+    prevTabRef.current = activeTab
+    // Only trigger on activeTab change, not on saveVersion reference changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, hasData])
+
+  // Revert to a version (with confirmation dialog)
+  const handleRevertRequest = useCallback(
+    (entry: VersionEntry) => {
+      setPendingRevert(entry)
+    },
+    [],
+  )
+
+  const confirmRevert = useCallback(() => {
+    if (!pendingRevert) return
+    setRevertingId(pendingRevert.id)
+    const entry = pendingRevert
+    setPendingRevert(null)
+    // Brief delay for visual feedback
+    setTimeout(() => {
+      onRevert(entry.snapshot)
+      setRevertingId(null)
+      setIsOpen(false)
+    }, 400)
+  }, [pendingRevert, onRevert])
 
   // Delete a version
   const handleDelete = useCallback((id: string) => {
@@ -201,11 +354,19 @@ export function VersionHistory({
 
   return (
     <>
+      {/* Snapshot flash overlay -- brief white flash for camera effect */}
+      {showFlash && (
+        <div
+          className="fixed inset-0 z-[100] bg-white pointer-events-none snapshot-flash-anim"
+          aria-hidden="true"
+        />
+      )}
+
       {/* History + Save buttons */}
       <div className="flex items-center gap-1.5">
         {/* Save version button */}
         <button
-          onClick={() => saveVersion()}
+          onClick={() => saveWithFlash()}
           className={cn(
             'flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium min-h-[44px]',
             'bg-bg-tertiary text-text-secondary',
@@ -214,7 +375,7 @@ export function VersionHistory({
           )}
           title="Save current state as version"
         >
-          <Plus className="size-4" />
+          <Camera className="size-4" />
           <span className="hidden sm:inline">Snapshot</span>
         </button>
 
@@ -277,14 +438,15 @@ export function VersionHistory({
               </button>
             </div>
 
-            {/* Version list — film strip style */}
+            {/* Version list -- film strip style */}
             <div className="overflow-y-auto max-h-[calc(75vh-80px)] md:max-h-[calc(100vh-180px)] p-3 space-y-2">
               {versionCount === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
                   <Film size={32} className="text-text-muted/30 mb-2" />
                   <p className="text-sm text-text-muted m-0">No versions saved</p>
                   <p className="text-xs text-text-muted/60 m-0 mt-1">
-                    Click &ldquo;Snapshot&rdquo; to save the current state
+                    Click &ldquo;Snapshot&rdquo; to save the current state.
+                    Versions are also created automatically when you switch tabs.
                   </p>
                 </div>
               ) : (
@@ -292,6 +454,7 @@ export function VersionHistory({
                 [...store.versions].reverse().map((entry, index) => {
                   const isLatest = index === 0
                   const isReverting = revertingId === entry.id
+                  const isAutoSnapshot = entry.label.startsWith('Auto:')
 
                   return (
                     <div
@@ -304,8 +467,11 @@ export function VersionHistory({
                       )}
                     >
                       {/* Film frame number */}
-                      <div className="absolute top-0 left-0 px-1.5 py-0.5 text-[8px] font-mono font-bold text-text-muted/40 bg-bg-primary/50 rounded-br">
+                      <div className="absolute top-0 left-0 px-1.5 py-0.5 text-[8px] font-mono font-bold text-text-muted/40 bg-bg-primary/50 rounded-br flex items-center gap-1">
                         #{store.versions.length - index}
+                        {isAutoSnapshot && (
+                          <span className="text-text-muted/30">auto</span>
+                        )}
                       </div>
 
                       <div className="px-4 py-3 pt-5">
@@ -331,7 +497,7 @@ export function VersionHistory({
                             {/* Revert button */}
                             {!isLatest && (
                               <button
-                                onClick={() => handleRevert(entry)}
+                                onClick={() => handleRevertRequest(entry)}
                                 disabled={revertingId !== null}
                                 className={cn(
                                   'flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium min-h-[44px]',
@@ -349,7 +515,7 @@ export function VersionHistory({
                               </button>
                             )}
 
-                            {/* Delete button — 44px min touch target */}
+                            {/* Delete button -- 44px min touch target */}
                             <button
                               onClick={() => handleDelete(entry.id)}
                               className={cn(
@@ -389,6 +555,15 @@ export function VersionHistory({
             )}
           </div>
         </>
+      )}
+
+      {/* Revert confirmation dialog */}
+      {pendingRevert && (
+        <RevertConfirmDialog
+          versionLabel={pendingRevert.label}
+          onConfirm={confirmRevert}
+          onCancel={() => setPendingRevert(null)}
+        />
       )}
     </>
   )

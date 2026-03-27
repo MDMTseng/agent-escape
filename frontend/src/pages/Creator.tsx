@@ -513,6 +513,7 @@ export default function Creator() {
             <VersionHistory
               sceneState={sceneState}
               onRevert={(version) => setSceneState(version)}
+              activeTab={activeTab}
             />
             {/* Export/Import controls (P3-003) */}
             <SceneExportImport
