@@ -3228,3 +3228,137 @@ Curator Brief:
   Build verification:
     - tsc --noEmit: CLEAN
     - vite build: CLEAN (391ms, 649KB JS / 110KB CSS)
+
+[REVIEW-CURATOR-RECHECK] Features: P2-002, P2-003, P2-004 -- Elevation Verification
+  Curator: ui-reviewer (Claude Code / Opus 4.6)
+  Date: 2026-03-27
+
+  --- Overall Assessment ---
+
+  All three features compile cleanly (tsc --noEmit passes, vite build succeeds),
+  render without console errors, and integrate properly into the Monitor page. The
+  elevation commits landed real code -- not stubs, not broken skeletons. Each feature
+  received substantial additions (308/98/217 net new lines respectively) with matching
+  CSS keyframes and prefers-reduced-motion coverage. No regressions detected in the
+  surrounding Monitor components (narrative feed, simulation controls, escape chain,
+  thought bubbles all render correctly at mobile/tablet/desktop).
+
+  --- P2-002: Agent Memory Inspector ---
+
+  Elevation Implemented: YES
+  Previous Grade: Studio-quality
+  New Grade: GALLERY-READY
+
+  What was added and verified:
+    [x] Entrance ritual: animate-mind-dive-backdrop (radial gold spotlight) and
+        animate-mind-dive-panel (scale(0.97)->1 + blur(2px)->0 + fade). The isEntering
+        state gate clears after 350ms, preventing re-triggering on re-renders. The
+        cubic-bezier(0.23, 1, 0.32, 1) easing on the panel is a beautiful spring
+        curve -- the panel does not just appear, it breathes into existence.
+    [x] Importance as thermal glow: getHeatStyles() maps importance 1-5 to escalating
+        border colors, box-shadows, and background tints. Importance 5 gets the
+        pulsing animate-heat-pulse-gold (2.5s cycle). The heat dot indicator replaces
+        the old numbered badge -- a 2px glowing circle that shifts from muted to gold.
+        Elegant and legible at a glance.
+    [x] Memory decay opacity gradient: decayOpacity = 1.0 - (index/total)*0.3,
+        giving the most recent memory full brightness and the oldest 0.7 opacity.
+        Subtle enough to feel natural rather than clinical.
+    [x] Reflection typewriter: useTypewriter hook with 12ms speed, stagger delay per
+        card (300ms + index*200ms). Purple blinking cursor. animate-breathing-border-purple
+        on container (3s infinite). Respects usePrefersReducedMotion().
+    [x] Search as spotlight: non-matching memories dim to opacity 0.2 instead of removal.
+        Matching memories get gold border + 16px gold box-shadow. Search icon turns gold.
+        Count reads "N of M memories illuminated" -- poetic and on-metaphor.
+
+  Bugs found: NONE
+  Regressions: NONE
+  Gallery-ready: YES. Entrance ritual and thermal glow are standout craft.
+
+  Polish note (non-blocking): Typewriter at 12ms/char means a 200-char reflection takes
+  ~2.4s. With stagger delays, the third reflection waits 700ms to start. Consider making
+  only the NEWEST reflection typewrite, with older ones pre-revealed.
+
+  --- P2-003: Agent Perception Overlay ---
+
+  Elevation Implemented: YES
+  Previous Grade: Studio-quality
+  New Grade: GALLERY-READY
+
+  What was added and verified:
+    [x] Staggered hidden entity reveal: animate-entity-reveal (250ms ease-out) with
+        animationDelay of staggerIndex * 60ms. Ghost icons get animate-scale-pop (300ms
+        spring bounce). Mutable stagger counter in render is technically impure but
+        correct for synchronous React.
+    [x] Agent view warmth: border-l-2 border-l-gold/40 + bg-gold/[0.02] on visible
+        entities and doors. This faint gold left-border makes agent view intimate --
+        like candlelight on a page vs the cooler God View.
+    [x] Fog-of-war bottom gradient: sticky div with linear-gradient from transparent
+        to bg-secondary in Agent mode. Atmospheric: "more is hidden beyond sight."
+    [x] "Missing N items" badge with flash: animate-badge-flash (600ms gold flash).
+        showBadgeFlash clears after 600ms. Draws eye to perception gap count.
+
+  Bugs found: NONE
+  Regressions: NONE
+  Gallery-ready: YES. The warmth treatment is the best visual detail in the entire UI.
+
+  handleToggleView correctly bounds transition at (hiddenEntities.length * 60) + 300ms.
+  Backdrop transitions between black/60 and purple-950/40 with 300ms color ease.
+
+  --- P2-004: Nudge System ---
+
+  Elevation Implemented: YES (with one non-functional visual bug)
+  Previous Grade: Workshop
+  New Grade: STUDIO-QUALITY
+
+  What was added and verified:
+    [x] SVG cooldown ring: CooldownRing with strokeDasharray/strokeDashoffset. Shows
+        in collapsed header with remaining seconds. Clean SVG, -rotate-90 start.
+    [x] Ghost thought bubble: "... hmm ..." with animate-ghost-thought (2s cycle).
+        Auto-clears at 2.2s. Charming micro-interaction.
+    [x] 44px touch targets: AgentSelector, EntitySelector, PuzzleSelector, NudgeTypeSelector
+        -- all min-h-[44px]. Four locations verified, all pass.
+    [x] Nudge type background tint: gold/blue/purple at 0.02 opacity via getNudgeTypeWash().
+        transition-colors duration-200. Subtle but perceptible.
+    [x] Collapsed state intelligence: availability dot (green/gold+pulse), inline
+        CooldownRing, last nudge preview (max-w-[120px]). Communicates state without
+        requiring expansion.
+
+  Bug found:
+    [COSMETIC] SendCeremony whisper float is invisible
+      Container: "relative pointer-events-none overflow-hidden h-0"
+      Child: "absolute bottom-0" with translateY(-40px) animation
+      Because parent is h-0 + overflow-hidden, the child is clipped at zero height.
+      The whisper text never becomes visible. The gold ripple (animate-send-ripple)
+      works fine in its own container. Only the text echo is dead.
+      Fix: Remove overflow-hidden, or change h-0 to h-8, or reparent outside.
+
+  Regressions: NONE
+
+  Why not Gallery-ready: The invisible whisper float is cosmetic, but the send ceremony
+  was a key elevation item. Workshop -> Studio-quality is already a big jump. The
+  collapsed state intelligence and 44px targets were highest-impact fixes.
+
+  Highest-ROI to reach Gallery: Fix SendCeremony overflow clipping. One-line CSS change
+  completes the send ceremony as designed.
+
+  --- Regression Check (All Monitor Components) ---
+
+  Verified at 375px, 768px, 1280px:
+    [x] Agent Status Strip: renders, clickable
+    [x] Thought Bubbles: toggle buttons visible
+    [x] Narrative Feed: empty state renders correctly
+    [x] Filter chips: horizontal scroll mobile, all visible desktop
+    [x] Room Map: collapsible, shows "5 rooms, 2 agents"
+    [x] Simulation Controls: Play/Step/tick in bottom bar
+    [x] Spectator Nudge: collapsed bar with availability dot
+    [x] Navigation: bottom nav (mobile), sidebar (desktop) intact
+    [x] No console errors at any viewport
+    [x] Build: tsc + vite build both clean
+
+  --- Summary Grades ---
+
+  | Feature | Previous | Verified | New Grade | Notes |
+  |---------|----------|----------|-----------|-------|
+  | P2-002 Memory Inspector | Studio | 5/5 items | GALLERY-READY | Entrance ritual + thermal glow standout |
+  | P2-003 Perception Overlay | Studio | 4/4 items | GALLERY-READY | Gold warmth best detail in UI |
+  | P2-004 Nudge System | Workshop | 5/6 (whisper clipped) | STUDIO-QUALITY | One cosmetic bug; fix is trivial |
