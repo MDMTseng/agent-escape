@@ -16,6 +16,13 @@
  * Visual metaphor: whispering into the room — not clicking admin buttons.
  * Uses a speech-bubble / whisper aesthetic.
  *
+ * Exhibition-grade elevation (curator feedback):
+ *  - Send ceremony: radial gold ripple + translucent text whisper floating up
+ *  - Collapsed state intelligence: cooldown ring, last nudge preview, availability dot
+ *  - Agent reaction placeholder: ghost thought bubble after nudge
+ *  - Touch target fix: entity chips and agent buttons >= 44px height
+ *  - Nudge type ritual: panel background tints by type (gold/blue/purple)
+ *
  * Mobile: collapsible panel above simulation controls, expandable as bottom sheet.
  * Desktop: collapsible panel in the monitor layout.
  */
@@ -115,12 +122,51 @@ function useCooldown() {
     isOnCooldown: remainingMs > 0,
     remainingMs,
     remainingSeconds: Math.ceil(remainingMs / 1000),
+    progress: 1 - (remainingMs / COOLDOWN_MS),
     triggerCooldown,
   }
 }
 
 // ---------------------------------------------------------------------------
-// Agent selector dropdown
+// SVG Cooldown ring (circular progress for collapsed state)
+// ---------------------------------------------------------------------------
+
+function CooldownRing({ progress, size = 24 }: { progress: number; size?: number }) {
+  const r = (size - 4) / 2
+  const circumference = 2 * Math.PI * r
+  const offset = circumference * (1 - progress)
+
+  return (
+    <svg width={size} height={size} className="shrink-0 -rotate-90">
+      {/* Background ring */}
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        className="text-bg-tertiary"
+      />
+      {/* Progress ring */}
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeDasharray={circumference}
+        strokeDashoffset={offset}
+        className="text-gold transition-all duration-100"
+      />
+    </svg>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Agent selector dropdown — 44px touch targets
 // ---------------------------------------------------------------------------
 
 function AgentSelector({
@@ -149,15 +195,15 @@ function AgentSelector({
             key={agent.id}
             onClick={() => onSelect(agent.id)}
             className={cn(
-              'flex items-center gap-2 px-3 py-2 rounded-lg border text-left transition-all duration-150',
-              'text-sm',
+              'flex items-center gap-2 px-3 py-2.5 rounded-lg border text-left transition-all duration-150',
+              'text-sm min-h-[44px]', // TOUCH TARGET FIX: enforce 44px
               selectedId === agent.id
                 ? 'border-gold/40 bg-gold/[0.06] text-gold'
                 : 'border-border/50 bg-bg-primary/40 text-text-secondary hover:border-border hover:text-text-primary',
             )}
           >
             <div className={cn(
-              'w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold',
+              'w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-[11px] font-bold',
               selectedId === agent.id ? 'bg-gold/15 text-gold' : 'bg-bg-tertiary text-text-muted',
             )}>
               {agent.name.charAt(0)}
@@ -171,7 +217,7 @@ function AgentSelector({
 }
 
 // ---------------------------------------------------------------------------
-// Entity selector for hints
+// Entity selector for hints — 44px touch targets
 // ---------------------------------------------------------------------------
 
 function EntitySelector({
@@ -210,7 +256,8 @@ function EntitySelector({
             key={entity.id}
             onClick={() => onSelect(entity.name)}
             className={cn(
-              'px-2.5 py-1.5 rounded-md border text-sm transition-all duration-150',
+              // TOUCH TARGET FIX: enforce 44px height on entity chips
+              'px-3 py-2.5 rounded-md border text-sm transition-all duration-150 min-h-[44px]',
               selectedEntity === entity.name
                 ? 'border-gold/40 bg-gold/[0.06] text-gold'
                 : 'border-border/50 bg-bg-primary/40 text-text-secondary hover:border-border',
@@ -261,7 +308,7 @@ function PuzzleSelector({
             key={step.step}
             onClick={() => onSelect(step.description)}
             className={cn(
-              'flex items-center gap-2 px-3 py-2 rounded-lg border text-left text-sm transition-all duration-150',
+              'flex items-center gap-2 px-3 py-2.5 rounded-lg border text-left text-sm transition-all duration-150 min-h-[44px]',
               selectedStep === step.description
                 ? 'border-gold/40 bg-gold/[0.06] text-gold'
                 : 'border-border/50 bg-bg-primary/40 text-text-secondary hover:border-border',
@@ -328,7 +375,7 @@ function formatTimeAgo(timestamp: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Nudge type tab selector
+// Nudge type tab selector — with type ritual (color wash)
 // ---------------------------------------------------------------------------
 
 function NudgeTypeSelector({
@@ -351,7 +398,7 @@ function NudgeTypeSelector({
           key={key}
           onClick={() => onSelect(key)}
           className={cn(
-            'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-xs font-medium transition-all duration-150',
+            'flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-md text-xs font-medium transition-all duration-150 min-h-[44px]',
             activeType === key
               ? cn('bg-bg-tertiary', color, 'shadow-sm')
               : 'text-text-muted hover:text-text-secondary',
@@ -389,6 +436,60 @@ function CooldownBar({ remainingSeconds, remainingMs }: { remainingSeconds: numb
 }
 
 // ---------------------------------------------------------------------------
+// Send ceremony — ripple + whisper float
+// ---------------------------------------------------------------------------
+
+function SendCeremony({
+  text,
+  isActive,
+}: {
+  text: string
+  isActive: boolean
+}) {
+  if (!isActive) return null
+
+  return (
+    <div className="relative pointer-events-none overflow-hidden h-0">
+      {/* Floating whisper text */}
+      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 animate-whisper-float">
+        <span className="text-xs text-gold/60 italic whitespace-nowrap">
+          "{text.length > 40 ? text.slice(0, 37) + '...' : text}"
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Ghost thought bubble — appears near agent status after nudge
+// ---------------------------------------------------------------------------
+
+function GhostThoughtBubble({ agentName, isVisible }: { agentName: string; isVisible: boolean }) {
+  if (!isVisible) return null
+
+  return (
+    <div className="flex items-center gap-2 px-3 py-1.5 animate-ghost-thought">
+      <span className="text-[10px] text-text-muted">{agentName}:</span>
+      <span className="text-xs text-text-muted/70 italic bg-bg-tertiary/50 px-2 py-0.5 rounded-md border border-border/30">
+        ... hmm ...
+      </span>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Nudge type background color wash
+// ---------------------------------------------------------------------------
+
+function getNudgeTypeWash(type: NudgeType): string {
+  switch (type) {
+    case 'hint': return 'bg-gold/[0.02]'
+    case 'focus': return 'bg-blue-500/[0.02]'
+    case 'talk': return 'bg-purple-500/[0.02]'
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main NudgeSystem component
 // ---------------------------------------------------------------------------
 
@@ -409,12 +510,32 @@ export function NudgeSystem() {
   const [topic, setTopic] = useState('')
   const [isSending, setIsSending] = useState(false)
 
-  const { isOnCooldown, remainingMs, remainingSeconds, triggerCooldown } = useCooldown()
+  // Send ceremony state
+  const [showSendCeremony, setShowSendCeremony] = useState(false)
+  const [sendCeremonyText, setSendCeremonyText] = useState('')
+  const [showSendRipple, setShowSendRipple] = useState(false)
+  const sendButtonRef = useRef<HTMLButtonElement>(null)
+
+  // Ghost thought bubble state
+  const [ghostAgentName, setGhostAgentName] = useState('')
+  const [showGhostBubble, setShowGhostBubble] = useState(false)
+
+  const { isOnCooldown, remainingMs, remainingSeconds, progress, triggerCooldown } = useCooldown()
 
   // Get the selected agent's room for entity selection
   const selectedAgent = agents.find(a => a.id === selectedAgentId)
   const selectedRoom = selectedAgent ? rooms[selectedAgent.room_id] ?? null : null
   const targetAgent = agents.find(a => a.id === targetAgentId)
+
+  // Last nudge preview for collapsed state
+  const lastNudge = history.length > 0 ? history[0] : null
+  const lastNudgePreview = useMemo(() => {
+    if (!lastNudge) return ''
+    if (lastNudge.type === 'hint') return `Hint: ${lastNudge.agentName} -> ${lastNudge.entityName}`
+    if (lastNudge.type === 'focus') return `Focus: ${lastNudge.agentName}`
+    if (lastNudge.type === 'talk') return `Talk: ${lastNudge.agentName} + ${lastNudge.targetAgentName}`
+    return ''
+  }, [lastNudge])
 
   // Reset selections when nudge type changes
   useEffect(() => {
@@ -433,9 +554,24 @@ export function NudgeSystem() {
     return false
   }, [isOnCooldown, isSending, selectedAgentId, nudgeType, selectedEntity, selectedPuzzle, targetAgentId, topic])
 
+  // Build ceremony text from current nudge
+  const buildCeremonyText = useCallback((): string => {
+    if (nudgeType === 'hint' && selectedAgent) return `${selectedAgent.name}, examine the ${selectedEntity}`
+    if (nudgeType === 'focus' && selectedAgent) return `${selectedAgent.name}, focus on ${selectedPuzzle}`
+    if (nudgeType === 'talk' && selectedAgent && targetAgent) return `${selectedAgent.name} and ${targetAgent.name}: ${topic}`
+    return ''
+  }, [nudgeType, selectedAgent, selectedEntity, selectedPuzzle, targetAgent, topic])
+
   const handleSend = useCallback(async () => {
     if (!canSend || !selectedAgent) return
     setIsSending(true)
+
+    // Trigger send ceremony
+    setSendCeremonyText(buildCeremonyText())
+    setShowSendCeremony(true)
+    setShowSendRipple(true)
+    setTimeout(() => setShowSendRipple(false), 600)
+    setTimeout(() => setShowSendCeremony(false), 1200)
 
     // Simulate API call (replace with real POST /api/nudge when backend supports it)
     await new Promise(resolve => setTimeout(resolve, 400))
@@ -458,19 +594,28 @@ export function NudgeSystem() {
     triggerCooldown()
     setIsSending(false)
 
+    // Show ghost thought bubble for the targeted agent
+    setGhostAgentName(selectedAgent.name)
+    setShowGhostBubble(true)
+    setTimeout(() => setShowGhostBubble(false), 2200)
+
     // Reset form
     setSelectedEntity('')
     setSelectedPuzzle('')
     setTargetAgentId('')
     setTopic('')
-  }, [canSend, nudgeType, selectedAgentId, selectedAgent, selectedEntity, selectedPuzzle, targetAgentId, targetAgent, topic, triggerCooldown])
+  }, [canSend, nudgeType, selectedAgentId, selectedAgent, selectedEntity, selectedPuzzle, targetAgentId, targetAgent, topic, triggerCooldown, buildCeremonyText])
 
   // Don't render anything if no agents exist
   if (agents.length === 0) return null
 
   return (
-    <div className="border-t border-border/50 bg-bg-secondary">
-      {/* Collapsed header — tap to expand */}
+    <div className={cn(
+      'border-t border-border/50 transition-colors duration-200',
+      // Nudge type color wash when expanded
+      isExpanded ? getNudgeTypeWash(nudgeType) : 'bg-bg-secondary',
+    )}>
+      {/* Collapsed header — with intelligence: cooldown ring, preview, availability dot */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         className={cn(
@@ -479,8 +624,13 @@ export function NudgeSystem() {
         )}
       >
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-gold/10 flex items-center justify-center">
+          <div className="relative w-7 h-7 rounded-full bg-gold/10 flex items-center justify-center">
             <MessageCircle size={14} className="text-gold" />
+            {/* Availability dot (green = ready, gold = cooling down) */}
+            <span className={cn(
+              'absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border border-bg-secondary',
+              isOnCooldown ? 'bg-gold animate-status-pulse' : 'bg-success',
+            )} />
           </div>
           <span className="text-sm font-medium text-text-primary">Spectator Nudge</span>
           {history.length > 0 && (
@@ -488,10 +638,16 @@ export function NudgeSystem() {
               {history.length}
             </span>
           )}
-          {isOnCooldown && (
-            <span className="text-[10px] text-text-muted flex items-center gap-1">
-              <Clock size={10} className="animate-status-pulse" />
-              {remainingSeconds}s
+          {/* Collapsed state: cooldown ring + last nudge preview */}
+          {!isExpanded && isOnCooldown && (
+            <div className="flex items-center gap-1.5 ml-1">
+              <CooldownRing progress={progress} size={18} />
+              <span className="text-[10px] text-text-muted">{remainingSeconds}s</span>
+            </div>
+          )}
+          {!isExpanded && lastNudgePreview && !isOnCooldown && (
+            <span className="text-[10px] text-text-muted truncate max-w-[120px] ml-1">
+              {lastNudgePreview}
             </span>
           )}
         </div>
@@ -499,6 +655,9 @@ export function NudgeSystem() {
           {isExpanded ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
         </span>
       </button>
+
+      {/* Ghost thought bubble — appears after sending a nudge */}
+      <GhostThoughtBubble agentName={ghostAgentName} isVisible={showGhostBubble} />
 
       {/* Expanded panel */}
       {isExpanded && (
@@ -573,35 +732,47 @@ export function NudgeSystem() {
             </>
           )}
 
-          {/* Send button */}
-          <button
-            onClick={handleSend}
-            disabled={!canSend}
-            className={cn(
-              'w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg',
-              'text-sm font-medium transition-all duration-200',
-              canSend
-                ? 'bg-gold/10 border border-gold/30 text-gold hover:bg-gold/15 active:scale-[0.98] shadow-[0_0_12px_rgba(227,179,65,0.08)]'
-                : 'bg-bg-tertiary border border-border/50 text-text-muted cursor-not-allowed',
+          {/* Send ceremony — whisper float animation */}
+          <SendCeremony text={sendCeremonyText} isActive={showSendCeremony} />
+
+          {/* Send button — with ripple effect */}
+          <div className="relative">
+            {/* Ripple overlay */}
+            {showSendRipple && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden rounded-lg">
+                <div className="w-8 h-8 rounded-full bg-gold/30 animate-send-ripple" />
+              </div>
             )}
-          >
-            {isSending ? (
-              <>
-                <Loader2 size={15} className="animate-spin" />
-                Sending...
-              </>
-            ) : isOnCooldown ? (
-              <>
-                <Clock size={15} />
-                Cooldown ({remainingSeconds}s)
-              </>
-            ) : (
-              <>
-                <Send size={15} />
-                Send Nudge
-              </>
-            )}
-          </button>
+            <button
+              ref={sendButtonRef}
+              onClick={handleSend}
+              disabled={!canSend}
+              className={cn(
+                'w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg',
+                'text-sm font-medium transition-all duration-200 relative z-10',
+                canSend
+                  ? 'bg-gold/10 border border-gold/30 text-gold hover:bg-gold/15 active:scale-[0.98] shadow-[0_0_12px_rgba(227,179,65,0.08)]'
+                  : 'bg-bg-tertiary border border-border/50 text-text-muted cursor-not-allowed',
+              )}
+            >
+              {isSending ? (
+                <>
+                  <Loader2 size={15} className="animate-spin" />
+                  Sending...
+                </>
+              ) : isOnCooldown ? (
+                <>
+                  <Clock size={15} />
+                  Cooldown ({remainingSeconds}s)
+                </>
+              ) : (
+                <>
+                  <Send size={15} />
+                  Send Nudge
+                </>
+              )}
+            </button>
+          </div>
 
           {/* Cooldown progress bar */}
           {isOnCooldown && (
