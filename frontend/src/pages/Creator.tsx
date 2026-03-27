@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { RoomsTab } from '@/components/creator/RoomsTab'
 import { PuzzlesTab } from '@/components/creator/PuzzlesTab'
+import { AgentsTab } from '@/components/creator/AgentsTab'
+import type { AgentItem, AgentRelationship } from '@/components/creator/AgentsTab'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -34,6 +36,8 @@ export interface SceneCreatorState {
   rooms: RoomNode[]
   doors: DoorEdge[]
   puzzles: PuzzleItem[]
+  agents: AgentItem[]
+  relationships: AgentRelationship[]
 }
 
 export interface RoomNode {
@@ -477,6 +481,8 @@ export default function Creator() {
     rooms: [],
     doors: [],
     puzzles: [],
+    agents: [],
+    relationships: [],
   })
 
   // Scroll active tab into view on mobile
@@ -538,7 +544,9 @@ export default function Creator() {
         {activeTab === 'Puzzles' && (
           <PuzzlesTab sceneState={sceneState} setSceneState={setSceneState} />
         )}
-        {activeTab === 'Agents' && <PlaceholderTab name="Agents" />}
+        {activeTab === 'Agents' && (
+          <AgentsTab sceneState={sceneState} setSceneState={setSceneState} />
+        )}
         {activeTab === 'Validate' && <PlaceholderTab name="Validate" />}
       </div>
     </div>
