@@ -1833,3 +1833,135 @@ Navigation between pages is clean. WebSocket connects. Build passes.
   Known issues:
     - AI Assist is mocked (no backend endpoint for puzzle generation yet)
     - Dependency visualization is a simple indented list, not a full graph
+
+
+[REVIEW] Feature: "Scene Creator - Story tab" (P1-001)
+Verdict: PASS
+
+--- Critic's Take ---
+The Scene Creator page announces itself with quiet authority. The gold heading against
+dark charcoal says: this is a workshop, not a toy. The five-tab layout provides clean
+wayfinding with numbered steps. Theme selector cards bring visual personality -- Gothic
+Manor in purple, Sci-Fi Lab in blue, Ancient Tomb in amber. The difficulty slider with
+color-coded labels (green Easy through red Nightmare) works precisely. The Generate
+World Bible button transforms a 15-20 second API call into atmospheric anticipation via
+cycling messages. The World Bible result card slides in with golden gradient border,
+displaying inciting incident and character cards.
+
+--- Functional Checklist ---
+[x] Scene Creator page at /creator route
+[x] 5-tab layout (Story | Rooms | Puzzles | Agents | Validate)
+[x] Theme selector cards from GET /api/themes -- 3 themes fetched
+[x] Premise textarea with placeholder and validation
+[x] Difficulty slider 1-5 with dot markers and color-coded labels
+[x] Generate World Bible calls POST /api/generate-story
+[x] Result displays inciting incident + characters in World Bible card
+[x] Create nav item added to sidebar/bottom nav/drawer
+[x] Error handling for empty premise and API errors
+[x] Loading state with cycling atmospheric messages
+[x] TypeScript and Vite production builds clean
+[x] No console errors across all tabs
+
+--- Mobile & Gesture Report ---
+Viewport tested: 375x812 (iPhone 14)
+Thumb zone: PASS -- Generate button at comfortable scroll, theme cards reachable
+Touch targets: PASS -- tab buttons 44px, theme cards 80px, Generate h-14
+Gestures: Tab bar horizontally scrollable, auto-scrolls to active tab
+One-hand usability: PASS
+Bottom sheets/drawers: N/A for this tab
+
+--- Atmosphere & Polish Notes ---
+- Theme card accent colors feel like stained glass in a dark corridor
+- Cycling generation messages transform loading into anticipation
+- World Bible card golden gradient border is elegant
+
+--- Delight Moments ---
+- Numbered tab labels create guided progression
+- Placeholder text in premise textarea teaches by example
+
+---
+
+[REVIEW] Feature: "Scene Creator - Room graph editor" (P1-002)
+Verdict: PASS
+
+--- Critic's Take ---
+React Flow delivers a proper graph editor: dark dot grid background, gold connection
+handles, bezier curves. Green solid lines = open doors, red dashed = locked. Instantly
+legible visual encoding. Room nodes with gold DoorOpen icon and truncated descriptions.
+Side panel (desktop 320px) and bottom sheet (mobile, swipe-to-dismiss) for editing.
+Auto-generate is the star: one click creates a connected chain of themed rooms from the
+world bible, first door open, rest locked. It feels like magic.
+
+--- Functional Checklist ---
+[x] React Flow installed (@xyflow/react) with graph canvas and dot background
+[x] Add room creates node with auto-positioning
+[x] Connect rooms by dragging edges (4 handles per node)
+[x] Select room opens side panel (desktop) / bottom sheet (mobile)
+[x] Edit name/description/entities in detail panel
+[x] Door status shown on edges (green/solid vs red/dashed)
+[x] Edge click toggles lock status
+[x] Auto-generate creates connected room chain from world bible
+[x] Delete room removes node and connected edges
+[x] Empty state with guidance text
+[x] Room/door counter updates
+
+--- Mobile & Gesture Report ---
+Viewport tested: 375x812 (iPhone 14)
+Thumb zone: PASS -- Add Room in toolbar, Controls at bottom-left
+Touch targets: PASS -- Control buttons 44px
+Gestures: Pinch-to-zoom, two-finger pan, bottom sheet swipe-to-dismiss
+One-hand usability: ACCEPTABLE (canvas needs two fingers, standard)
+Bottom sheets/drawers: PASS -- room detail as bottom sheet
+
+--- Issues (non-blocking) ---
+1. [MINOR] Edge label tap targets ~40x20px on mobile
+2. [COSMETIC] Entity tag X buttons 16px, below 44px guideline
+
+--- Delight Moments ---
+- Auto-generate: blank canvas to connected map in one click
+- Locked door visual (red dashed + lock icon) carries real weight
+
+---
+
+[REVIEW] Feature: "Scene Creator - Puzzle builder tab" (P1-003)
+Verdict: PASS
+
+--- Critic's Take ---
+Expandable cards instead of table rows -- the right mobile-first instinct. Six puzzle
+types correct with distinct icons. Cross-tab state sharing works (room dropdown from
+Rooms tab). Dependency system clean: toggle buttons, gold highlights, indented tree
+visualization. AI Assist mocked but UI contract fulfilled. Swipe-to-delete matches
+Library pattern.
+
+--- Functional Checklist ---
+[x] Expandable puzzle cards with inline name editing
+[x] Type dropdown with 6 types (key_lock through sequential_levers)
+[x] Room assignment dropdown from Rooms tab state
+[x] Required items/clues tag input (Enter + button)
+[x] Add/remove puzzle (desktop delete + mobile swipe-to-delete)
+[x] Visual dependency chain (indented tree with arrows)
+[x] Dependency toggle per puzzle (gold-highlighted buttons)
+[x] AI Assist bottom sheet with textarea and mock generation
+[x] Empty state with Add Manually and AI Assist buttons
+[x] Puzzle counter updates
+
+--- Mobile & Gesture Report ---
+Viewport tested: 375x812 (iPhone 14)
+Thumb zone: PASS
+Touch targets: PASS -- chevron 44px, dropdowns 44px, toggles 44px
+Gestures: Swipe-to-delete 72px zone, AI Assist swipe-to-dismiss
+One-hand usability: PASS
+Bottom sheets/drawers: PASS -- AI Assist dismissible
+
+--- Issues (non-blocking) ---
+1. [MINOR] AI Assist mocked (no Claude API) -- acceptable for P1
+2. [COSMETIC] Tag removal X buttons 16px
+3. [COSMETIC] Puzzle name input bg-transparent, invisible until focused
+
+--- Delight Moments ---
+- AI keyword detection demonstrates intended UX cleverly
+- Dependency chain immediately legible
+
+--- Regression Check ---
+P0-001 through P0-010: No regressions. Library, Quick Play, Monitor all functional.
+Create nav added cleanly. Builds clean. Bundle 541KB (React Flow adds ~186KB).
