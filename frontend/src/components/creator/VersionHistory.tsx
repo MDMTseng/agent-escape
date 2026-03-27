@@ -334,7 +334,7 @@ export function VersionHistory({
                                 onClick={() => handleRevert(entry)}
                                 disabled={revertingId !== null}
                                 className={cn(
-                                  'flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium min-h-[40px]',
+                                  'flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium min-h-[44px]',
                                   'bg-gold/10 text-gold border border-gold/20',
                                   'hover:bg-gold/20 active:scale-95 transition-all',
                                   revertingId !== null && 'opacity-50 cursor-not-allowed',
@@ -349,17 +349,17 @@ export function VersionHistory({
                               </button>
                             )}
 
-                            {/* Delete button */}
+                            {/* Delete button — 44px min touch target */}
                             <button
                               onClick={() => handleDelete(entry.id)}
                               className={cn(
-                                'flex items-center justify-center size-8 min-h-[36px] min-w-[36px] rounded-lg',
+                                'flex items-center justify-center size-9 min-h-[44px] min-w-[44px] rounded-lg',
                                 'text-text-muted/50 hover:text-danger hover:bg-danger/10',
                                 'transition-colors active:scale-95',
                               )}
                               aria-label="Delete version"
                             >
-                              <Trash2 size={12} />
+                              <Trash2 size={14} />
                             </button>
                           </div>
                         </div>

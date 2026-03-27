@@ -306,8 +306,8 @@ function StoryCard({
                 <Play className="size-4 ml-0.5" fill="currentColor" />
               )}
             </button>
-            {/* Desktop-only duplicate button (hover reveal) */}
-            <div className="hidden md:block opacity-0 group-hover/card:opacity-100 transition-all">
+            {/* Duplicate button — always visible on mobile, hover-reveal on desktop */}
+            <div className="md:opacity-0 md:group-hover/card:opacity-100 transition-all">
               <SceneDuplicate
                 storyId={story.id}
                 storyTitle={story.title}
