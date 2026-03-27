@@ -10,6 +10,12 @@
  * Visual metaphor: a spotlight illuminating what the agent sees, with fog/shadow
  * over what they're missing. Toggle between views or compare side by side on desktop.
  *
+ * Exhibition-grade elevation (curator feedback):
+ *  - View transition: staggered entity reveal with scale-pop on hidden items
+ *  - Agent view warmth: faint gold left-border on visible entities
+ *  - Fog-of-war gradient: bottom edge fade in Agent mode
+ *  - Perception diff counter: animated "Missing N items" badge with flash
+ *
  * Mobile: bottom sheet (90vh), single view with toggle.
  * Desktop: side panel with optional side-by-side comparison.
  */
@@ -37,16 +43,18 @@ import { useRooms, useDoors, useAgents } from '@/stores/gameStore'
 import type { AgentState, Entity, Door, Room } from '@/types/game'
 
 // ---------------------------------------------------------------------------
-// Entity display card
+// Entity display card — with warmth tint and stagger animation support
 // ---------------------------------------------------------------------------
 
 interface EntityCardProps {
   entity: Entity
   isHidden: boolean // Whether this entity is hidden from the agent
   isGodView: boolean // Whether we're in god view mode
+  staggerIndex?: number // For stagger animation on view transition
+  isTransitioning?: boolean // Whether we're mid-transition
 }
 
-function EntityCard({ entity, isHidden, isGodView }: EntityCardProps) {
+function EntityCard({ entity, isHidden, isGodView, staggerIndex = 0, isTransitioning = false }: EntityCardProps) {
   const stateColors: Record<string, string> = {
     default: 'bg-text-muted/15 text-text-muted',
     locked: 'bg-danger/15 text-danger',
@@ -63,14 +71,29 @@ function EntityCard({ entity, isHidden, isGodView }: EntityCardProps) {
       className={cn(
         'relative flex items-start gap-2.5 px-3 py-2 rounded-lg border transition-all duration-200',
         isHidden && isGodView
-          // Ghost effect for hidden items in god view
+          // Ghost effect for hidden items in god view — with scale-pop on transition
           ? 'border-purple-500/20 bg-purple-500/[0.03] opacity-50'
           : 'border-border/50 bg-bg-primary/40',
+        // Agent view warmth: faint gold left-border on visible entities
+        !isGodView && !isHidden && 'border-l-2 border-l-[#e3b341]/40 bg-gold/[0.02]',
+        // Stagger animation when transitioning to god view
+        isTransitioning && isHidden && isGodView && 'animate-entity-reveal',
       )}
+      style={
+        isTransitioning && isHidden && isGodView
+          ? { animationDelay: `${staggerIndex * 60}ms` }
+          : undefined
+      }
     >
-      {/* Ghost indicator for hidden items */}
+      {/* Ghost indicator for hidden items — with scale-pop on transition */}
       {isHidden && isGodView && (
-        <div className="absolute -top-1 -right-1">
+        <div
+          className={cn(
+            'absolute -top-1 -right-1',
+            isTransitioning && 'animate-scale-pop',
+          )}
+          style={isTransitioning ? { animationDelay: `${staggerIndex * 60}ms` } : undefined}
+        >
           <Ghost size={14} className="text-purple-400 animate-status-pulse" />
         </div>
       )}
@@ -129,7 +152,11 @@ interface DoorCardProps {
 
 function DoorCard({ door, direction, isGodView }: DoorCardProps) {
   return (
-    <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-border/50 bg-bg-primary/40">
+    <div className={cn(
+      'flex items-center gap-2.5 px-3 py-2 rounded-lg border border-border/50 bg-bg-primary/40',
+      // Agent view warmth on doors too
+      !isGodView && 'border-l-2 border-l-[#e3b341]/40 bg-gold/[0.02]',
+    )}>
       <div className={cn(
         'w-7 h-7 rounded-md flex items-center justify-center shrink-0',
         door.locked ? 'bg-danger/10' : 'bg-success/10',
@@ -186,13 +213,14 @@ function AgentPresenceCard({ agent: otherAgent }: { agent: AgentState }) {
 }
 
 // ---------------------------------------------------------------------------
-// View header with visual metaphor
+// View header with visual metaphor + perception diff counter
 // ---------------------------------------------------------------------------
 
-function ViewHeader({ isGodView, entityCount, hiddenCount }: {
+function ViewHeader({ isGodView, entityCount, hiddenCount, showBadgeFlash }: {
   isGodView: boolean
   entityCount: number
   hiddenCount: number
+  showBadgeFlash: boolean
 }) {
   return (
     <div className={cn(
@@ -211,7 +239,7 @@ function ViewHeader({ isGodView, entityCount, hiddenCount }: {
           <Eye size={16} className="text-gold" />
         )}
       </div>
-      <div>
+      <div className="flex-1">
         <span className={cn(
           'text-sm font-bold',
           isGodView ? 'text-purple-400' : 'text-gold',
@@ -224,6 +252,21 @@ function ViewHeader({ isGodView, entityCount, hiddenCount }: {
             : `${entityCount - hiddenCount} visible entities`}
         </span>
       </div>
+      {/* Perception diff counter — animated badge */}
+      {hiddenCount > 0 && (
+        <div
+          className={cn(
+            'flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium transition-all duration-200',
+            isGodView
+              ? 'bg-purple-500/15 text-purple-400'
+              : 'bg-gold/10 text-gold',
+            showBadgeFlash && 'animate-badge-flash',
+          )}
+        >
+          <EyeOff size={10} />
+          <span>Missing {hiddenCount}</span>
+        </div>
+      )}
     </div>
   )
 }
@@ -243,6 +286,8 @@ export function AgentPerceptionOverlay({ agent, onClose }: AgentPerceptionOverla
   const allAgents = useAgents()
   const [isGodView, setIsGodView] = useState(false)
   const [inventoryExpanded, setInventoryExpanded] = useState(true)
+  const [isTransitioning, setIsTransitioning] = useState(false)
+  const [showBadgeFlash, setShowBadgeFlash] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
   const dragStartY = useRef<number | null>(null)
   const currentTranslateY = useRef(0)
@@ -282,6 +327,20 @@ export function AgentPerceptionOverlay({ agent, onClose }: AgentPerceptionOverla
 
   // Entities to display based on view mode
   const displayEntities = isGodView ? roomEntities : visibleEntities
+
+  // Track hidden entity index for stagger offset
+  let hiddenStaggerIndex = 0
+
+  // Handle view toggle with transition animation
+  const handleToggleView = useCallback((godView: boolean) => {
+    setIsGodView(godView)
+    setIsTransitioning(true)
+    setShowBadgeFlash(true)
+    // Clear transition state after animations complete
+    const maxDelay = (hiddenEntities.length * 60) + 300
+    setTimeout(() => setIsTransitioning(false), maxDelay)
+    setTimeout(() => setShowBadgeFlash(false), 600)
+  }, [hiddenEntities.length])
 
   // Swipe-to-dismiss
   const onTouchStart = useCallback((e: React.TouchEvent) => {
@@ -391,7 +450,7 @@ export function AgentPerceptionOverlay({ agent, onClose }: AgentPerceptionOverla
         <div className="shrink-0 px-4 py-2.5 border-b border-border/50">
           <div className="flex rounded-lg border border-border/50 bg-bg-primary/50 p-0.5">
             <button
-              onClick={() => setIsGodView(false)}
+              onClick={() => handleToggleView(false)}
               className={cn(
                 'flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-all duration-200',
                 !isGodView
@@ -403,7 +462,7 @@ export function AgentPerceptionOverlay({ agent, onClose }: AgentPerceptionOverla
               Agent's Eyes
             </button>
             <button
-              onClick={() => setIsGodView(true)}
+              onClick={() => handleToggleView(true)}
               className={cn(
                 'flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-sm font-medium transition-all duration-200',
                 isGodView
@@ -422,13 +481,14 @@ export function AgentPerceptionOverlay({ agent, onClose }: AgentPerceptionOverla
           </div>
         </div>
 
-        {/* Scrollable content */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">
-          {/* View header banner */}
+        {/* Scrollable content — with fog-of-war gradient in Agent mode */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 relative">
+          {/* View header banner with diff counter */}
           <ViewHeader
             isGodView={isGodView}
             entityCount={roomEntities.length}
             hiddenCount={hiddenEntities.length}
+            showBadgeFlash={showBadgeFlash}
           />
 
           {/* Room description */}
@@ -455,14 +515,20 @@ export function AgentPerceptionOverlay({ agent, onClose }: AgentPerceptionOverla
               <p className="text-sm text-text-muted italic py-2">No entities visible</p>
             ) : (
               <div className="grid gap-1.5">
-                {displayEntities.map((entity) => (
-                  <EntityCard
-                    key={entity.id}
-                    entity={entity}
-                    isHidden={entity.state === 'hidden'}
-                    isGodView={isGodView}
-                  />
-                ))}
+                {displayEntities.map((entity) => {
+                  const isHidden = entity.state === 'hidden'
+                  const currentStagger = isHidden ? hiddenStaggerIndex++ : 0
+                  return (
+                    <EntityCard
+                      key={entity.id}
+                      entity={entity}
+                      isHidden={isHidden}
+                      isGodView={isGodView}
+                      staggerIndex={currentStagger}
+                      isTransitioning={isTransitioning}
+                    />
+                  )
+                })}
               </div>
             )}
           </div>
@@ -539,6 +605,16 @@ export function AgentPerceptionOverlay({ agent, onClose }: AgentPerceptionOverla
               )
             )}
           </div>
+
+          {/* Fog-of-war gradient — bottom edge fade in Agent mode only */}
+          {!isGodView && (
+            <div
+              className="pointer-events-none sticky bottom-0 left-0 right-0 h-5"
+              style={{
+                background: 'linear-gradient(to bottom, transparent, var(--color-bg-secondary))',
+              }}
+            />
+          )}
         </div>
 
         {/* Footer — perception stats */}
