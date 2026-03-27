@@ -20,6 +20,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { SaveLoadControls } from '@/components/monitor/SaveLoadControls'
 import {
   useIsPlaying,
   useTick,
@@ -194,6 +195,9 @@ export function SimulationControls() {
           </span>
         )}
       </div>
+
+      {/* --- Save/Load controls (P1-008) --- */}
+      <SaveLoadControls />
 
       {/* --- Quit to Library button --- */}
       <button
