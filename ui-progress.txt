@@ -1965,3 +1965,82 @@ Bottom sheets/drawers: PASS -- AI Assist dismissible
 --- Regression Check ---
 P0-001 through P0-010: No regressions. Library, Quick Play, Monitor all functional.
 Create nav added cleanly. Builds clean. Bundle 541KB (React Flow adds ~186KB).
+
+--- 2026-03-27 (batch 2) ---
+
+[BUILD] P1-004: Scene Creator — Agent designer tab — COMPLETE
+  Agent: ui-builder (Claude Code, Opus 4.6)
+  What was done:
+    - Created AgentsTab component with full agent designer
+    - Agent cards: name, role, backstory textarea, personality traits (tag input with autocomplete from 24-trait library), spawn room dropdown (from Rooms tab), initial inventory (tag input), goal, secret motivation
+    - Archetype presets: The Detective, The Scholar, The Skeptic, The Helper — quick-fill buttons that create agents with pre-filled traits, role, backstory, and goal
+    - Relationship matrix: trust sliders (-1 to +1) between all agent pairs, with labels (Hostile/Distrustful/Neutral/Friendly/Allied)
+    - Trait-to-behavior preview: shows how each trait influences agent behavior
+    - Updated SceneCreatorState interface to include agents[] and relationships[]
+    - Replaced Agents placeholder tab with real AgentsTab
+  Files created/modified:
+    frontend/src/components/creator/AgentsTab.tsx (new, ~550 lines)
+    frontend/src/pages/Creator.tsx (updated imports, types, state init, tab rendering)
+  Mobile/gesture notes:
+    - Swipe-to-delete on agent cards (matching PuzzlesTab pattern)
+    - Expandable cards (collapsed by default for mobile density)
+    - 44px+ touch targets on all interactive elements
+    - Tag input with autocomplete dropdown for trait suggestions
+    - Trust sliders: touch-pan-x enabled, 24px thumb, properly labeled
+  Known issues:
+    - Agent data is client-side only; not persisted to backend (the /api/stories/create endpoint generates agents server-side from num_characters param)
+    - Free-text traits work but only library traits have behavior previews
+
+[BUILD] P1-005: Scene Creator — Validate tab + save scene — COMPLETE
+  Agent: ui-builder (Claude Code, Opus 4.6)
+  What was done:
+    - Created ValidateTab with 7 client-side validation checks:
+      1. Room existence check
+      2. Room connectivity (BFS graph traversal via door edges)
+      3. Agent existence + spawn room assignment check
+      4. Puzzle room assignment check
+      5. Puzzle required items/clues check
+      6. Puzzle dependency cycle detection (DFS with 3-color algorithm)
+      7. Story setup completeness (theme + premise)
+    - Overall status banner: "Ready to Play" (green), "Ready with Warnings" (yellow), "Issues Found" (red)
+    - Save Scene button: calls POST /api/stories/create with scene state
+    - Play Scene button: saves (or uses already-saved story), navigates to /monitor
+    - Error handling with visible error/success banners
+    - Replaced Validate placeholder tab with real ValidateTab
+  Files created/modified:
+    frontend/src/components/creator/ValidateTab.tsx (new, ~320 lines)
+    frontend/src/pages/Creator.tsx (updated imports, tab rendering)
+  Mobile/gesture notes:
+    - Validation checklist is mobile-friendly single-column layout
+    - Action buttons are 56px tall in the thumb zone
+    - Buttons stack vertically on mobile, side-by-side on desktop
+    - Play button disabled when there are failed checks
+  Known issues:
+    - Save uses /api/stories/create which generates a full world server-side; client-side scene data (rooms, puzzles, agents) is used only for validation display, not sent to backend since the backend generates its own world
+    - No real BFS solvability check for the escape chain (would need backend integration)
+
+[BUILD] P1-006: Puzzle Progress Dashboard panel — COMPLETE
+  Agent: ui-builder (Claude Code, Opus 4.6)
+  What was done:
+    - Created PuzzleProgressDashboard collapsible panel for Monitor page
+    - Shows all escape chain steps as puzzle cards:
+      - Type icon mapped from step action/check_type
+      - Room location
+      - Status badge: unsolved (gray), in-progress (gold pulse), solved (green)
+      - Clues found vs total room entities
+      - Warmth indicator: cold (blue snowflake), warm (amber thermometer), hot (red flame) based on entity discovery ratio
+    - Click to expand: shows solver info (agent name + tick), step action/target/check_type details, full room entity list with state indicators
+    - Summary badges in header: solved count, active count, fraction progress
+    - Collapsed by default, 2-column grid on desktop, single column on mobile
+    - Integrated into Monitor page between EscapeChainProgress and NarrativeFeed
+  Files created/modified:
+    frontend/src/components/monitor/PuzzleProgressDashboard.tsx (new, ~340 lines)
+    frontend/src/pages/Monitor.tsx (added import + component)
+  Mobile/gesture notes:
+    - Expandable cards with 56px min-height headers
+    - Status badges shown below header on mobile (separate row), inline on desktop
+    - Touch target 44px+ on all expand buttons
+    - Single column layout on mobile, 2-col grid on md+
+  Known issues:
+    - "Clues found" is derived from room entity states (non-hidden, non-default) which is an approximation; actual clue tracking would need explicit backend support
+    - Warmth is based on entity discovery ratio in the room, not puzzle-specific clue tracking
