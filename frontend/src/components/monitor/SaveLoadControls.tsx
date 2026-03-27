@@ -8,6 +8,11 @@
  *
  * Mobile: bottom sheet for both save dialog and load list.
  * Desktop: popover/dropdown inline in the controls area.
+ *
+ * Exhibition-grade elevation:
+ *  - Save ceremony: wax-seal circular reveal wipe in gold, shrinks to "Saved at Tick N" badge
+ *  - Load list as dossier/case files: rotated cards, paper-fold corners, classified stamp
+ *  - Load transition: glitch/dissolve effect when loading a save
  */
 
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
@@ -20,6 +25,7 @@ import {
   Check,
   Trash2,
   Download,
+  Stamp,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useStoryId, useTick } from '@/stores/gameStore'
@@ -103,7 +109,7 @@ function formatTimestamp(isoStr: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Save Dialog — inline popover (desktop) / bottom sheet (mobile)
+// Save Dialog — wax-seal ceremony with circular reveal animation
 // ---------------------------------------------------------------------------
 
 function SaveDialog({
@@ -111,12 +117,12 @@ function SaveDialog({
   onSaved,
 }: {
   onClose: () => void
-  onSaved: () => void
+  onSaved: (tick: number) => void
 }) {
   const tick = useTick()
   const [name, setName] = useState('')
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
+  const [savePhase, setSavePhase] = useState<'idle' | 'sealing' | 'sealed'>('idle')
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -124,18 +130,24 @@ function SaveDialog({
   }, [])
 
   const handleSave = useCallback(async () => {
-    if (saving) return
+    if (saving || savePhase !== 'idle') return
     setSaving(true)
     const result = await apiSave(name.trim() || undefined)
     setSaving(false)
     if (result) {
-      setSaved(true)
+      // Start the sealing ceremony
+      setSavePhase('sealing')
+      // After the seal animation completes, transition to sealed badge
       setTimeout(() => {
-        onSaved()
-        onClose()
-      }, 600)
+        setSavePhase('sealed')
+        onSaved(tick)
+        // Close after showing the sealed state briefly
+        setTimeout(() => {
+          onClose()
+        }, 800)
+      }, 700)
     }
-  }, [name, saving, onSaved, onClose])
+  }, [name, saving, savePhase, onSaved, onClose, tick])
 
   return (
     <>
@@ -185,7 +197,8 @@ function SaveDialog({
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleSave() }}
               placeholder={`Tick ${tick}`}
-              className="w-full rounded-lg border border-border bg-bg-primary px-3 py-2.5 text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-gold/30 focus:border-gold/50 min-h-[44px]"
+              disabled={savePhase !== 'idle'}
+              className="w-full rounded-lg border border-border bg-bg-primary px-3 py-2.5 text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-gold/30 focus:border-gold/50 min-h-[44px] disabled:opacity-50"
             />
           </div>
 
@@ -193,35 +206,61 @@ function SaveDialog({
             Current tick: <span className="text-gold font-mono">{tick}</span>
           </div>
 
-          <button
-            onClick={handleSave}
-            disabled={saving || saved}
-            className={cn(
-              'w-full flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold min-h-[48px]',
-              'transition-all duration-200',
-              saved
-                ? 'bg-success/15 text-success border border-success/30'
-                : 'bg-gold hover:bg-gold-bright text-bg-primary active:scale-[0.98]',
-              (saving || saved) && 'cursor-not-allowed',
+          {/* Save button with wax-seal ceremony */}
+          <div className="relative overflow-hidden rounded-lg">
+            {/* Seal reveal overlay — appears during sealing animation */}
+            {savePhase === 'sealing' && (
+              <div
+                className="absolute inset-0 z-10 animate-seal-reveal rounded-lg"
+                style={{
+                  background: 'rgba(227, 179, 65, 0.2)',
+                }}
+              />
             )}
-          >
-            {saving ? (
-              <>
-                <Loader2 size={16} className="animate-spin" />
-                Saving...
-              </>
-            ) : saved ? (
-              <>
-                <Check size={16} />
-                Saved!
-              </>
-            ) : (
-              <>
-                <Save size={16} />
-                Save
-              </>
-            )}
-          </button>
+
+            <button
+              onClick={handleSave}
+              disabled={saving || savePhase !== 'idle'}
+              className={cn(
+                'w-full flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold min-h-[48px]',
+                'transition-all duration-300',
+                savePhase === 'sealed'
+                  ? 'bg-gold/10 text-gold border border-gold/30'
+                  : savePhase === 'sealing'
+                  ? 'bg-gold/20 text-gold border border-gold/40'
+                  : 'bg-gold hover:bg-gold-bright text-bg-primary active:scale-[0.98]',
+                (saving || savePhase !== 'idle') && 'cursor-not-allowed',
+              )}
+            >
+              {saving ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Saving...
+                </>
+              ) : savePhase === 'sealing' ? (
+                <>
+                  <span
+                    className="w-5 h-5 rounded-full border-2 border-gold"
+                    style={{
+                      background: 'radial-gradient(circle, #f0c95c 0%, #b8902e 100%)',
+                      boxShadow: '0 0 8px rgba(227, 179, 65, 0.4)',
+                    }}
+                  />
+                  Sealing...
+                </>
+              ) : savePhase === 'sealed' ? (
+                <>
+                  <Check size={16} />
+                  Saved at Tick {tick}
+                </>
+              ) : (
+                <>
+                  <Save size={16} />
+                  Save
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </>
@@ -229,13 +268,15 @@ function SaveDialog({
 }
 
 // ---------------------------------------------------------------------------
-// Load Panel — list of saves
+// Load Panel — dossier-style case file cards
 // ---------------------------------------------------------------------------
 
 function LoadPanel({
   onClose,
+  onLoadStart,
 }: {
   onClose: () => void
+  onLoadStart: () => void
 }) {
   const [saves, setSaves] = useState<SaveEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -261,12 +302,13 @@ function LoadPanel({
   const handleLoad = useCallback(async (saveId: number) => {
     if (loadingId !== null) return
     setLoadingId(saveId)
+    onLoadStart() // trigger glitch effect on monitor
     const ok = await apiLoad(saveId)
     setLoadingId(null)
     if (ok) {
       onClose()
     }
-  }, [loadingId, onClose])
+  }, [loadingId, onClose, onLoadStart])
 
   const handleDelete = useCallback(async (saveId: number) => {
     if (deletingId !== null) return
@@ -302,7 +344,7 @@ function LoadPanel({
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <h3 className="text-base font-bold text-text-primary m-0 flex items-center gap-2">
             <FolderOpen size={16} className="text-gold" />
-            Load Save
+            Case Files
           </h3>
           <button
             onClick={onClose}
@@ -313,36 +355,60 @@ function LoadPanel({
           </button>
         </div>
 
-        {/* Save list */}
-        <div className="overflow-y-auto max-h-[calc(70vh-80px)] md:max-h-[calc(60vh-80px)]">
+        {/* Save list — dossier style */}
+        <div className="overflow-y-auto max-h-[calc(70vh-80px)] md:max-h-[calc(60vh-80px)] p-3 space-y-2">
           {loading ? (
             <div className="flex items-center justify-center py-10 text-text-muted">
               <Loader2 size={20} className="animate-spin mr-2" />
-              Loading saves...
+              Loading case files...
             </div>
           ) : saves.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
               <FolderOpen size={32} className="text-text-muted/30 mb-2" />
-              <p className="text-sm text-text-muted m-0">No saves found</p>
+              <p className="text-sm text-text-muted m-0">No case files found</p>
               <p className="text-xs text-text-muted/60 m-0 mt-1">
-                Save your game first to see saves here
+                Save your game first to create case files
               </p>
             </div>
           ) : (
-            <div className="divide-y divide-border">
-              {saves.map((save) => (
-                <div
-                  key={save.id}
-                  className="flex items-center gap-3 px-4 py-3 hover:bg-bg-tertiary/50 transition-colors"
-                >
+            saves.map((save, index) => (
+              <div
+                key={save.id}
+                className="dossier-card rounded-lg border border-border bg-bg-tertiary/70 px-4 py-3"
+                style={{
+                  // Alternating slight rotation for dossier feel
+                  transform: `rotate(${index % 2 === 0 ? -0.8 : 0.6}deg)`,
+                }}
+              >
+                {/* CLASSIFIED stamp on most recent save */}
+                {index === 0 && (
+                  <div
+                    className="absolute -top-1 -right-1 z-10 flex items-center gap-1 px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest"
+                    style={{
+                      background: 'rgba(248, 81, 73, 0.15)',
+                      color: '#f85149',
+                      border: '1px solid rgba(248, 81, 73, 0.3)',
+                      transform: 'rotate(3deg)',
+                    }}
+                  >
+                    <Stamp size={8} />
+                    Latest
+                  </div>
+                )}
+
+                <div className="flex items-center gap-3">
                   {/* Save info */}
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-text-primary truncate">
                       {save.name}
                     </div>
                     <div className="flex items-center gap-2 mt-0.5 text-xs text-text-muted">
-                      <span className="font-mono text-gold-dim">
-                        Tick {save.tick}
+                      {/* Tick in typewriter-style mono font */}
+                      <span
+                        className="font-mono tracking-wider"
+                        style={{ color: '#e3b341', letterSpacing: '0.1em' }}
+                      >
+                        TICK {String(save.tick).padStart(3, '0')}
                       </span>
                       <span className="flex items-center gap-1">
                         <Clock size={10} />
@@ -389,8 +455,8 @@ function LoadPanel({
                     )}
                   </button>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))
           )}
         </div>
       </div>
@@ -403,9 +469,13 @@ function LoadPanel({
 // ---------------------------------------------------------------------------
 
 export function SaveLoadControls() {
+  const tick = useTick()
   const [showSave, setShowSave] = useState(false)
   const [showLoad, setShowLoad] = useState(false)
+  const [lastSaveTick, setLastSaveTick] = useState<number | null>(null)
   const [lastSaveTime, setLastSaveTime] = useState<number | null>(null)
+  // Glitch effect state — triggered when a save is being loaded
+  const [isGlitching, setIsGlitching] = useState(false)
 
   // Format last save time as relative
   const lastSaveLabel = useMemo(() => {
@@ -425,16 +495,45 @@ export function SaveLoadControls() {
     return () => clearInterval(timer)
   }, [lastSaveTime])
 
-  const handleSaved = useCallback(() => {
+  const handleSaved = useCallback((savedTick: number) => {
     setLastSaveTime(Date.now())
+    setLastSaveTick(savedTick)
+  }, [])
+
+  const handleLoadStart = useCallback(() => {
+    // Trigger glitch/dissolve effect
+    setIsGlitching(true)
+    setTimeout(() => setIsGlitching(false), 800)
   }, [])
 
   return (
     <>
+      {/* Glitch overlay — covers the parent monitor when loading a save */}
+      {isGlitching && (
+        <div className="fixed inset-0 z-[55] pointer-events-none animate-load-glitch">
+          <div className="w-full h-full bg-bg-primary/30" />
+        </div>
+      )}
+
       {/* Control buttons — rendered in the simulation controls bar area */}
       <div className="flex items-center gap-1.5">
-        {/* Auto-save / last-save indicator */}
-        {lastSaveLabel && (
+        {/* Sealed save badge — shows after save ceremony */}
+        {lastSaveTick !== null && (
+          <span
+            className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium mr-1"
+            style={{
+              background: 'rgba(227, 179, 65, 0.08)',
+              color: '#b8902e',
+              border: '1px solid rgba(227, 179, 65, 0.15)',
+            }}
+          >
+            <Check size={10} />
+            Tick {lastSaveTick}
+          </span>
+        )}
+
+        {/* Auto-save / last-save indicator (fallback if no tick badge) */}
+        {lastSaveLabel && !lastSaveTick && (
           <span className="text-[10px] text-text-muted hidden sm:inline mr-1">
             {lastSaveLabel}
           </span>
@@ -481,6 +580,7 @@ export function SaveLoadControls() {
       {showLoad && (
         <LoadPanel
           onClose={() => setShowLoad(false)}
+          onLoadStart={handleLoadStart}
         />
       )}
     </>
