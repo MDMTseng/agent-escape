@@ -19,6 +19,7 @@ import { EscapeChainProgress } from '@/components/monitor/EscapeChainProgress'
 import { SimulationControls } from '@/components/monitor/SimulationControls'
 import { PuzzleProgressDashboard } from '@/components/monitor/PuzzleProgressDashboard'
 import { InteractiveMap } from '@/components/monitor/InteractiveMap'
+import { ThoughtBubbles } from '@/components/monitor/ThoughtBubble'
 import { Wifi, WifiOff, Loader2, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -82,6 +83,9 @@ export default function Monitor() {
 
       {/* Agent status strip — horizontal scrollable agent cards */}
       <AgentStatusStrip />
+
+      {/* Agent thought bubbles — appear after each tick (P2-001) */}
+      <ThoughtBubbles />
 
       {/* Escape chain progress bar — compact bar + expandable checklist */}
       <EscapeChainProgress />
