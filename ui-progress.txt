@@ -3508,3 +3508,198 @@ Curator Brief:
       storage if many snapshots are taken.
     - Duplicate button calls /api/stories/create which generates a NEW story
       (not a true copy). Backend would need a copy endpoint for exact duplication.
+
+
+--- 2026-03-27 ---
+
+[REVIEW-BUG] P2-004 Nudge System -- whisper text overflow fix
+Verdict: VERIFIED
+
+The SendCeremony component at NudgeSystem.tsx line 452 now reads
+overflow-visible instead of overflow-hidden. The floating whisper text
+sits inside a zero-height container. With overflow-hidden, the text was
+clipped entirely. With overflow-visible, the text floats above. Fix is
+surgically correct. No regressions in surrounding layout.
+
+=========================================================================
+
+[REVIEW] Feature: "Agent conversation log" (P2-005)
+Verdict: PASS
+
+--- Critic Take ---
+
+The ConversationLog is a well-conceived interrogation transcript -- a
+collapsible panel that renders agent-to-agent dialogue as alternating
+speech bubbles with avatar orbs, speaker names, tick badges, and room
+labels. Talk events are parsed from narrative entries with regex for both
+directed and broadcast patterns. The clue detection system scans messages
+for 40+ puzzle-related keywords and decorates matching bubbles with a gold
+Clue badge and ring highlight. The typewriter reveal animation with adaptive
+speed adds cinematic tension.
+
+The filter system uses alphabetically-normalized agent pairs as scrollable
+chips with All and Clues-only toggles. The summary footer shows message and
+clue counts. Auto-scroll on new messages works via ref-tracked count.
+
+The film-noir vignette background is barely perceptible. The 50vh/40vh
+height constraint with flex layout and overflow scroll is correct.
+
+--- Functional Checklist ---
+[x] Chat-style UI with speech bubbles -- verified
+[x] Agent avatars -- verified
+[x] Filter by agent pair -- verified
+[x] Highlight clue/puzzle conversations -- verified
+[x] Alternating alignment by speaker -- verified
+[x] Typewriter reveal animation -- verified
+[x] Collapsible panel -- verified
+[x] Auto-scroll -- verified
+[x] Empty state -- verified
+
+--- Mobile Report ---
+Viewport: 375px | Touch targets: Filter chips 36px (marginal) | Gestures: Horizontal scroll
+
+--- Exhibition Readiness: Gallery-ready ---
+
+Curator Brief:
+1. Increase vignette opacity from 15% to 25-30%
+2. Add search input above filter chips
+3. Cross-link clue messages to Puzzle Dashboard
+4. Group same-tick messages under shared header
+5. Filter chips min-h-[44px]
+
+=========================================================================
+
+[REVIEW] Feature: "Timeline scrubber + replay" (P3-001)
+Verdict: PASS
+
+--- Critic Take ---
+
+Compact horizontal film-strip rendering each tick as 48px segment with
+colored event markers (amber stars, purple magnifying glasses, emerald
+speech bubbles). Current tick pulses gold. Click navigates to narrative
+card via data-tick attribute with gold ring highlight. Touch drag scrubbing
+via PointerEvent capture with touchAction pan-y works correctly.
+
+Event markers at 20px are below 44px standard but tick column area is
+~48x40px which is functionally adequate. State restoration not implemented
+(spec notes auto-save dependency). Timeline visualization and navigation
+meet core requirements.
+
+--- Functional Checklist ---
+[x] Timeline bar with all ticks -- verified
+[x] Event markers (star/magnifier/bubble) -- verified
+[x] Click to jump to narrative card -- verified
+[x] Drag scrub (mouse + touch) -- verified
+[x] Current tick gold pulse -- verified
+[~] State restore on scrub -- PARTIAL
+
+--- Mobile Report ---
+Viewport: 375px | Touch targets: Markers 20px, columns 48x40px | Gestures: Drag scrub works
+
+--- Exhibition Readiness: Gallery-ready ---
+
+Curator Brief:
+1. Larger invisible touch area on markers (44px overlay)
+2. Mobile legend in tick counter area
+3. Tooltip on marker tap previewing event text
+4. Mini-scrub handle on progress bar
+
+=========================================================================
+
+[REVIEW] Feature: "Save branching" (P3-002)
+Verdict: PASS
+
+--- Critic Take ---
+
+Client-side localStorage branching with clean data model. Main Timeline
+root by default, branches fork with user names. Recursive tree with colored
+vine connectors, glowing orbs, save nodes. Branch name prompt with autofocus
+and Enter/Escape. Cross-branch save load auto-prompts for branch creation.
+Bottom sheet on mobile. Branch switching requires manual save load.
+
+--- Functional Checklist ---
+[x] Named branch on mid-game save load -- verified
+[x] Branch tree visualization -- verified
+[x] Independent progress per branch -- verified
+[x] Switch between branches -- verified
+[x] localStorage persistence -- verified
+
+--- Mobile Report ---
+Viewport: 375px | Touch targets: Rows 48px, saves 36px, buttons 44px | Bottom sheet: correct
+
+--- Exhibition Readiness: Studio-quality ---
+
+Curator Brief:
+1. Auto-load latest save on branch switch
+2. Show tick divergence between branches
+3. Delete branch with confirmation
+4. Animated vine growth on creation
+5. Save node tooltips
+
+=========================================================================
+
+[REVIEW] Feature: "Scene export/import" (P3-003)
+Verdict: PASS
+
+--- Critic Take ---
+
+Versioned envelope export (agenttown_scene_v1) with browser download.
+FileReader import with JSON.parse and error handling. Validation checks
+format, scene, theme, rooms. Warnings for missing optional fields. Import
+preview with summary card and entity counts. Seal animation adds ceremony.
+Bottom sheet on mobile with 44-48px targets.
+
+--- Functional Checklist ---
+[x] Export as JSON download -- verified
+[x] Import from JSON upload -- verified
+[x] Schema validation -- verified
+[x] All scene data included -- verified
+[x] Preview before import -- verified
+[x] Error handling -- verified
+
+--- Mobile Report ---
+Viewport: 375px | Touch targets: 44-48px | Bottom sheet: correct
+
+--- Exhibition Readiness: Gallery-ready ---
+
+Curator Brief:
+1. Validate relationships and worldBible structure
+2. Diff preview when importing into non-empty scene
+3. Copy-to-clipboard option
+4. Human-readable date in filename
+
+=========================================================================
+
+[REVIEW] Feature: "Scene duplicate + version history" (P3-004)
+Verdict: PASS (with caveats)
+
+--- Critic Take ---
+
+SceneDuplicate: compact icon button with three-phase animation. Desktop
+hover-reveal only -- mobile hidden (hidden md:block). No mobile duplicate
+path exists. Passing because spec does not mandate mobile, but flagged.
+
+VersionHistory: localStorage snapshots (max 20) with auto-generated change
+summaries. Film-strip numbered frames. Revert with animation. Bottom sheet
+on mobile, right panel on desktop. Manual Snapshot required (spec implies
+auto-track but manual is reasonable trade-off).
+
+--- Functional Checklist ---
+[x] Duplicate button on cards -- verified (desktop only)
+[x] Version tracking -- verified (manual snapshots)
+[x] Version history in creator -- verified
+[x] Revert to previous version -- verified
+[~] Mobile duplicate -- MISSING
+[~] Auto-track edits -- manual only
+
+--- Mobile Report ---
+Viewport: 375px | Touch targets: Snapshot 44px, History 44px, Revert 40px, Delete 36px
+
+--- Exhibition Readiness: Studio-quality ---
+
+Curator Brief:
+1. Mobile duplicate access (swipe-right or long-press)
+2. Delete button to 44px minimum
+3. Auto-snapshot on tab navigation
+4. Revert confirmation dialog
+5. Snapshot success animation
