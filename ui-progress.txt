@@ -3117,3 +3117,114 @@ Curator Brief:
 - P1-001 through P1-008: No regressions
 - P2-001: No regressions
 - TypeScript: CLEAN. Vite build: CLEAN. Console errors: ZERO.
+
+--- 2026-03-27 ---
+
+[BUILD-ELEVATION] P2-002: Agent Memory Inspector — Exhibition-grade elevation
+  Agent: ui-builder (Claude Code)
+  Date: 2026-03-27
+  Commit: feat(ui): elevate Memory Inspector to exhibition-grade (curator feedback)
+  What was done:
+    1. ENTRANCE RITUAL: Added radial gold spotlight backdrop animation (300ms) +
+       panel scale(0.97)->1 with blur(2px)->0 focus effect. Two new CSS keyframes:
+       mindDiveBackdrop and mindDivePanel.
+    2. IMPORTANCE AS HEAT: Replaced numbered ImportanceBadge component with card-level
+       thermal glow system. Importance 5 = pulsing gold border glow (animate-heat-pulse-gold,
+       2.5s cycle). Importance 4 = warm amber tint + shadow. Importance 1-2 = cool, no glow.
+       Heat indicator reduced to a 2px colored dot in top-right corner.
+    3. MEMORY DECAY: Stream entries now receive opacity gradient based on position.
+       Index 0 (most recent) = opacity 1.0, last entry = opacity 0.7. Linear interpolation.
+    4. REFLECTION CEREMONY: Added typewriter text reveal to reflection cards using same
+       useTypewriter hook pattern from ThoughtBubble.tsx. Purple blinking cursor (#7c3aed).
+       Breathing purple border via new animate-breathing-border-purple keyframe (3s cycle).
+       Stagger delay: 300ms + index * 200ms per card.
+    5. SEARCH AS SPOTLIGHT: When search is active, ALL memories remain visible. Non-matching
+       entries dim to opacity 0.2. Matching entries get enhanced gold glow. Search icon turns
+       gold when active. Count text shows "N of M memories illuminated."
+  Files modified:
+    frontend/src/components/monitor/AgentMemoryInspector.tsx — full elevation rewrite
+    frontend/src/index.css — added 4 new keyframes (mindDiveBackdrop, mindDivePanel,
+      heatPulseGold, breathingBorderPurple) + updated reduced-motion list
+  Animations added:
+    - animate-mind-dive-backdrop (radial gold spotlight)
+    - animate-mind-dive-panel (scale + blur focus)
+    - animate-heat-pulse-gold (importance 5 pulsing glow)
+    - animate-breathing-border-purple (reflection cards)
+  Accessibility:
+    - All new animations listed in @media (prefers-reduced-motion: reduce) block
+    - usePrefersReducedMotion hook disables typewriter for reflection cards
+  Build verification:
+    - tsc --noEmit: CLEAN
+    - vite build: CLEAN (391ms)
+
+[BUILD-ELEVATION] P2-003: Agent Perception Overlay — Exhibition-grade elevation
+  Agent: ui-builder (Claude Code)
+  Date: 2026-03-27
+  Commit: feat(ui): elevate Perception Overlay to exhibition-grade (curator feedback)
+  What was done:
+    1. VIEW TRANSITION ANIMATION: When toggling to God View, hidden entities stagger-reveal
+       with animate-entity-reveal (60ms delay per entity). Ghost icons get scale-pop animation
+       (0->1.2->1 over 300ms via animate-scale-pop). Transition state tracked with
+       isTransitioning flag that auto-clears after max stagger completes.
+    2. AGENT VIEW WARMTH: In Agent's Eyes mode, visible entities receive a faint gold
+       left-border (2px, border-l-[#e3b341]/40) and warm bg-gold/[0.02] tint. Doors
+       also receive the warmth treatment. Creates intimate golden atmosphere.
+    3. FOG-OF-WAR GRADIENT: Added 20px sticky bottom gradient that fades from transparent
+       to bg-secondary in Agent mode. Removed in God View. Uses inline linear-gradient
+       with CSS variable for color consistency.
+    4. PERCEPTION DIFF COUNTER: Added "Missing N items" badge in ViewHeader that flashes
+       gold (animate-badge-flash, 600ms) when toggling between views. Badge color transitions
+       between gold (agent view) and purple (god view).
+  Files modified:
+    frontend/src/components/monitor/AgentPerceptionOverlay.tsx — elevation rewrite
+    frontend/src/index.css — added scalePop, entityReveal, badgeFlash keyframes (in prev commit)
+  Animations added:
+    - animate-scale-pop (Ghost icon entrance)
+    - animate-entity-reveal (staggered entity fade-in)
+    - animate-badge-flash (diff counter gold flash)
+  Build verification:
+    - tsc --noEmit: CLEAN
+    - vite build: CLEAN
+
+[BUILD-ELEVATION] P2-004: Nudge System — Exhibition-grade elevation
+  Agent: ui-builder (Claude Code)
+  Date: 2026-03-27
+  Commit: feat(ui): elevate Nudge System to exhibition-grade (curator feedback)
+  What was done:
+    1. SEND CEREMONY: When nudge is sent, radial gold ripple expands from send button
+       (animate-send-ripple, 600ms, scale 0->4). Translucent text echo of the nudge
+       message floats upward and fades (animate-whisper-float, 1200ms). Text is truncated
+       to 40 chars for the whisper preview.
+    2. COLLAPSED STATE INTELLIGENCE: When collapsed, shows:
+       - SVG cooldown ring (CooldownRing component, circular progress using stroke-dasharray)
+       - One-line preview of last nudge (truncated to 120px)
+       - Availability dot: green (bg-success) = ready, gold with pulse = cooling down
+       Positioned inline in the collapsed header bar.
+    3. AGENT REACTION PLACEHOLDER: After sending, GhostThoughtBubble component shows
+       "... hmm ..." text near agent name with animate-ghost-thought (2s fade cycle:
+       fade in, hold, fade out). Auto-clears after 2.2 seconds.
+    4. TOUCH TARGET FIX (MANDATORY): Entity chips increased from py-1.5 to py-2.5 with
+       explicit min-h-[44px]. Agent selector buttons increased to py-2.5 min-h-[44px].
+       Puzzle selector buttons increased to py-2.5 min-h-[44px]. NudgeTypeSelector buttons
+       increased to py-2.5 min-h-[44px]. All interactive elements now meet 44px minimum.
+    5. NUDGE TYPE RITUAL: Panel background transitions to subtle tinted wash based on
+       selected type: gold/[0.02] for Hint, blue-500/[0.02] for Focus, purple-500/[0.02]
+       for Talk. 200ms transition via transition-colors class.
+  Files modified:
+    frontend/src/components/monitor/NudgeSystem.tsx — full elevation rewrite
+    frontend/src/index.css — added sendRipple, whisperFloat, ghostThought keyframes (in earlier commit)
+  New sub-components:
+    - CooldownRing: SVG circular progress indicator
+    - SendCeremony: whisper float animation overlay
+    - GhostThoughtBubble: temporary "... hmm ..." bubble
+    - getNudgeTypeWash: returns background tint class per type
+  Animations added:
+    - animate-send-ripple (gold ripple from button)
+    - animate-whisper-float (text echo floating up)
+    - animate-ghost-thought (thought bubble appear/hold/fade)
+  Accessibility:
+    - All 3 new animations in prefers-reduced-motion block
+    - Touch targets verified >= 44px on all interactive elements
+  Build verification:
+    - tsc --noEmit: CLEAN
+    - vite build: CLEAN (391ms, 649KB JS / 110KB CSS)
