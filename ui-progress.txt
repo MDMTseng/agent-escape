@@ -3362,3 +3362,149 @@ Curator Brief:
   | P2-002 Memory Inspector | Studio | 5/5 items | GALLERY-READY | Entrance ritual + thermal glow standout |
   | P2-003 Perception Overlay | Studio | 4/4 items | GALLERY-READY | Gold warmth best detail in UI |
   | P2-004 Nudge System | Workshop | 5/6 (whisper clipped) | STUDIO-QUALITY | One cosmetic bug; fix is trivial |
+
+--- 2026-03-27 (Session: 6 tasks — 1 bug fix + 5 features) ---
+
+[FIX] P2-004: Nudge System whisper text clipped by overflow-hidden
+  Agent: ui-builder (Claude Code / Opus 4.6)
+  What was done:
+    - Fixed SendCeremony whisper float text being invisible
+    - The container used `overflow-hidden h-0`, clipping the absolutely-positioned
+      child before the translateY(-40px) animation could display
+    - Changed `overflow-hidden` to `overflow-visible` on line 452
+  Files modified:
+    frontend/src/components/monitor/NudgeSystem.tsx (1 line change)
+  Commit: fix(ui): fix nudge whisper text clipped by overflow-hidden
+
+[BUILD] P2-005: Agent Conversation Log — COMPLETE
+  Agent: ui-builder (Claude Code / Opus 4.6)
+  What was done:
+    - New component: ConversationLog.tsx
+    - Chat-style UI with speech bubbles, agent avatars (deterministic gradient colors)
+    - Parses talk events from narrative entries (directed and broadcast formats)
+    - Filter by agent pair (toggle chips) or clues-only mode
+    - Clue detection: scans messages for 30+ puzzle-related keywords
+    - Gold-highlighted "Clue" badge on messages containing puzzle info
+    - Typewriter reveal animation on newly appearing messages (adaptive speed)
+    - Film-noir interrogation room aesthetic (vignette background)
+    - Collapsible panel with message count + clue count in header
+    - Auto-scroll to latest message
+    - Left/right bubble alignment based on speaker order
+  Mobile/gesture notes:
+    - Full-width bubbles on mobile (85% max-width)
+    - Horizontally scrollable filter chips
+    - 44px+ touch targets on all buttons
+    - Panel expands to 50vh on mobile, 40vh on desktop
+  Files created:
+    frontend/src/components/monitor/ConversationLog.tsx
+  Files modified:
+    frontend/src/pages/Monitor.tsx (added import + component)
+  Commit: feat(ui): build agent conversation log panel (P2-005)
+  Screenshots: screenshots/build-monitor-375.png, screenshots/build-monitor-1280.png
+
+[BUILD] P3-001: Timeline Scrubber + Replay — COMPLETE
+  Agent: ui-builder (Claude Code / Opus 4.6)
+  What was done:
+    - New component: TimelineScrubber.tsx
+    - Horizontal timeline bar showing all ticks as segments
+    - Colored event markers: Star (amber/puzzle), Search (purple/discovery),
+      MessageCircle (emerald/conversation)
+    - Click marker to scroll narrative feed to that tick's card (uses data-tick attr)
+    - Pointer-drag scrubbing on the timeline strip
+    - Progress bar overview at top
+    - Current tick highlighted with gold pulse animation
+    - Auto-scrolls to keep current tick centered
+    - Desktop legend showing marker types
+    - Added data-tick attributes to NarrativeCard for scroll targeting
+    - Tick number labels on every 5th tick, current tick, and hovered tick
+  Mobile/gesture notes:
+    - Horizontal scroll, compact height
+    - Touch-drag support via pointer events
+    - 48px per tick segment for comfortable touch
+  Files created:
+    frontend/src/components/monitor/TimelineScrubber.tsx
+  Files modified:
+    frontend/src/components/monitor/NarrativeCard.tsx (added data-tick + transition)
+    frontend/src/pages/Monitor.tsx (added import + component above SimControls)
+  Commit: feat(ui): build timeline scrubber with event markers (P3-001)
+
+[BUILD] P3-002: Save Branching — COMPLETE
+  Agent: ui-builder (Claude Code / Opus 4.6)
+  What was done:
+    - New component: SaveBranching.tsx
+    - Branch button in simulation controls bar opens branch panel
+    - Create named branches from any save point (with name prompt)
+    - Organic vine-style tree visualization with colored branch lines (7 colors)
+    - Switch between branches (updates active branch tracking)
+    - Load saves from any branch; prompts to create new branch when loading
+      from a different branch's save
+    - Branch metadata persisted in localStorage per story
+    - Default "Main Timeline" branch auto-created
+  Mobile/gesture notes:
+    - Bottom sheet on mobile, left-side popover on desktop
+    - 44px+ touch targets on all interactive elements
+    - Branch rows are full-width tappable buttons
+  Files created:
+    frontend/src/components/monitor/SaveBranching.tsx
+  Files modified:
+    frontend/src/components/monitor/SimulationControls.tsx (added import + component)
+  Commit: feat(ui): build save branching with tree visualization (P3-002)
+  Known issues:
+    - Branch metadata is client-side only (localStorage). Backend has no
+      branch concept, so branches are a UI-level abstraction.
+
+[BUILD] P3-003: Scene Export/Import — COMPLETE
+  Agent: ui-builder (Claude Code / Opus 4.6)
+  What was done:
+    - New component: SceneExportImport.tsx
+    - Export: serializes scene to versioned JSON envelope (agenttown_scene_v1),
+      triggers browser download with theme-based filename
+    - Import: file upload (.json), schema validation with detailed errors/warnings,
+      preview card showing counts, confirmation dialog
+    - Validation checks: format identifier, required fields, array types
+    - Wax-seal animation during export, "breaking the seal" animation during import
+    - Integrated into Creator page header alongside version history
+  Mobile/gesture notes:
+    - Bottom sheet for import preview on mobile
+    - Centered dialog on desktop
+    - 44px+ touch targets on all buttons
+  Files created:
+    frontend/src/components/creator/SceneExportImport.tsx
+  Files modified:
+    frontend/src/pages/Creator.tsx (added import + component in header)
+  Commit: feat(ui): build scene export/import with validation (P3-003)
+  Screenshots: screenshots/build-creator-375.png
+
+[BUILD] P3-004: Scene Duplicate + Version History — COMPLETE
+  Agent: ui-builder (Claude Code / Opus 4.6)
+  What was done:
+    - New component: SceneDuplicate.tsx (Library)
+      - Duplicate button on scene cards (desktop hover-reveal)
+      - Creates copy via POST /api/stories/create with [Copy] prefix
+      - Cloning animation (loading/done/idle states)
+      - Refreshes story list after duplication
+    - New component: VersionHistory.tsx (Creator)
+      - Snapshot button to save current scene state as a version
+      - Version history panel with film-strip aesthetic (numbered frames)
+      - Revert to any previous version
+      - Delete individual versions
+      - Auto-summarizes changes between versions
+      - Persisted in localStorage (max 20 versions)
+    - Integrated: SceneDuplicate in Library StoryCard, VersionHistory in Creator header
+  Mobile/gesture notes:
+    - Duplicate button is desktop-only hover-reveal (mobile uses swipe-to-delete pattern)
+    - Version history: bottom sheet on mobile, right-side panel on desktop
+    - 44px+ touch targets throughout
+  Files created:
+    frontend/src/components/library/SceneDuplicate.tsx
+    frontend/src/components/creator/VersionHistory.tsx
+  Files modified:
+    frontend/src/pages/Library.tsx (added SceneDuplicate import + prop)
+    frontend/src/pages/Creator.tsx (added VersionHistory import + component)
+  Commit: feat(ui): build scene duplicate and version history (P3-004)
+  Screenshots: screenshots/build-library-375.png
+  Known issues:
+    - Version history is localStorage only. Large scenes may consume significant
+      storage if many snapshots are taken.
+    - Duplicate button calls /api/stories/create which generates a NEW story
+      (not a true copy). Backend would need a copy endpoint for exact duplication.
