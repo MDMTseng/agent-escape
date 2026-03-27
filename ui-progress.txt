@@ -3703,3 +3703,78 @@ Curator Brief:
 3. Auto-snapshot on tab navigation
 4. Revert confirmation dialog
 5. Snapshot success animation
+
+=========================================================================
+
+[FIX] P3-004: Mobile duplicate access + 44px touch targets
+  Date: 2026-03-27
+  Agent: ui-builder (Claude Code / Opus 4.6)
+  What was fixed:
+    - SceneDuplicate button was hidden on mobile (hidden md:block) -- now
+      always visible. On desktop it still fades in on hover (md:opacity-0
+      md:group-hover/card:opacity-100).
+    - VersionHistory delete button increased from 36px to 44px minimum
+    - VersionHistory revert button increased from 40px to 44px minimum
+  Files modified:
+    frontend/src/pages/Library.tsx
+    frontend/src/components/creator/VersionHistory.tsx
+  Commit: fix(ui): add mobile duplicate access and fix 44px touch targets
+
+=========================================================================
+
+[BUILD-ELEVATION] P3-002: Save Branching -- Studio to Gallery-ready
+  Date: 2026-03-27
+  Agent: ui-builder (Claude Code / Opus 4.6)
+  Curator feedback implemented:
+    1. AUTO-LOAD ON BRANCH SWITCH -- switching to a different branch
+       automatically loads the latest save from that branch via
+       handleSwitchBranch async callback.
+    2. TICK DIVERGENCE COUNTS -- each non-root branch shows "N ticks
+       from fork" badge computed from (max save tick - createdAtTick).
+    3. ANIMATED VINE GROWTH -- new branches get a stroke-dasharray SVG
+       line animation (500ms) plus a slide-in-from-left-2 on the node.
+       Respects prefers-reduced-motion.
+    4. SAVE NODE TOOLTIPS -- long-press (mobile) or right-click (desktop)
+       on save node orbs shows tick number, timestamp, and branch name
+       in a positioned tooltip. Dismisses on outside click/tap.
+    5. DELETE BRANCH -- trash icon on non-root, non-active branches.
+       Confirmation dialog warns about save count. Recursively deletes
+       child branches. Save files on disk are preserved.
+  Files modified:
+    frontend/src/components/monitor/SaveBranching.tsx (full rewrite)
+  Mobile/gesture notes:
+    - Save node tooltip via long-press (400ms threshold)
+    - All touch targets 44px minimum
+    - Delete branch button only on inactive non-root branches
+    - Vine animation GPU-accelerated (SVG stroke-dasharray)
+  Commit: feat(ui): elevate Save Branching to exhibition-grade
+
+=========================================================================
+
+[BUILD-ELEVATION] P3-004: Version History -- Studio to Gallery-ready
+  Date: 2026-03-27
+  Agent: ui-builder (Claude Code / Opus 4.6)
+  Curator feedback implemented:
+    1. AUTO-SNAPSHOT ON TAB NAVIGATION -- switching tabs in Creator
+       auto-saves a version labeled "Auto: [previous tab] tab". Only
+       fires when scene has meaningful data (rooms, agents, puzzles,
+       or worldBible). Tracked via prevTabRef to avoid double-fires.
+    2. REVERT CONFIRMATION DIALOG -- clicking Revert now opens a
+       confirmation dialog warning about unsaved changes. Suggests
+       taking a snapshot first. Mobile: bottom-positioned dialog.
+       Desktop: centered modal. 44px touch targets on both buttons.
+    3. SNAPSHOT SUCCESS ANIMATION -- manual Snapshot button now shows
+       a camera flash effect (white overlay, 250ms fade-out via
+       @keyframes snapshot-flash). Camera icon replaces Plus icon
+       for visual consistency. Respects prefers-reduced-motion.
+  Additional polish:
+    - Auto-snapshots tagged with "auto" badge in film-strip frame number
+    - Empty state text updated to mention auto-snapshot behavior
+  Files modified:
+    frontend/src/components/creator/VersionHistory.tsx (full rewrite)
+    frontend/src/pages/Creator.tsx (pass activeTab prop)
+  Mobile/gesture notes:
+    - Flash overlay is pointer-events-none, no interaction blocking
+    - Confirmation dialog positioned at bottom on mobile for thumb reach
+    - All touch targets remain 44px minimum
+  Commit: feat(ui): elevate Version History to exhibition-grade
