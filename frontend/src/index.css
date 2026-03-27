@@ -373,6 +373,147 @@ button, a, [role="button"] {
   animation: borderExtinguish 200ms ease-out both;
 }
 
+/* --- Memory Inspector: Mind-dive entrance (backdrop radial spotlight) --- */
+@keyframes mindDiveBackdrop {
+  from {
+    background: radial-gradient(circle at 90% 50%, rgba(227, 179, 65, 0.15) 0%, rgba(0, 0, 0, 0.6) 30%);
+  }
+  to {
+    background: rgba(0, 0, 0, 0.6);
+  }
+}
+
+.animate-mind-dive-backdrop {
+  animation: mindDiveBackdrop 300ms ease-out both;
+}
+
+/* --- Memory Inspector: Mind-dive entrance (panel scale + blur focus) --- */
+@keyframes mindDivePanel {
+  from {
+    transform: scale(0.97);
+    filter: blur(2px);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    filter: blur(0px);
+    opacity: 1;
+  }
+}
+
+.animate-mind-dive-panel {
+  animation: mindDivePanel 300ms cubic-bezier(0.23, 1, 0.32, 1) both;
+  will-change: transform, filter, opacity;
+}
+
+/* --- Memory Inspector: Importance 5 pulsing gold heat glow --- */
+@keyframes heatPulseGold {
+  0%, 100% {
+    box-shadow: 0 0 12px rgba(227, 179, 65, 0.15);
+    border-color: rgba(227, 179, 65, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(227, 179, 65, 0.35);
+    border-color: rgba(227, 179, 65, 0.6);
+  }
+}
+
+.animate-heat-pulse-gold {
+  animation: heatPulseGold 2.5s ease-in-out infinite;
+  will-change: box-shadow, border-color;
+}
+
+/* --- Reflections: Breathing purple border --- */
+@keyframes breathingBorderPurple {
+  0%, 100% { border-color: rgba(124, 58, 237, 0.2); }
+  50% { border-color: rgba(124, 58, 237, 0.55); }
+}
+
+.animate-breathing-border-purple {
+  animation: breathingBorderPurple 3s ease-in-out infinite;
+  will-change: border-color;
+}
+
+/* --- Perception Overlay: Stagger entity reveal (scale-pop) --- */
+@keyframes scalePop {
+  0% { transform: scale(0); opacity: 0; }
+  70% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-scale-pop {
+  animation: scalePop 300ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  will-change: transform, opacity;
+}
+
+/* --- Perception Overlay: Stagger entity fade-in --- */
+@keyframes entityReveal {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-entity-reveal {
+  animation: entityReveal 250ms ease-out both;
+  will-change: opacity, transform;
+}
+
+/* --- Perception Overlay: Missing items badge flash --- */
+@keyframes badgeFlash {
+  0%, 100% { background-color: rgba(227, 179, 65, 0.1); }
+  30% { background-color: rgba(227, 179, 65, 0.35); }
+}
+
+.animate-badge-flash {
+  animation: badgeFlash 600ms ease-out;
+}
+
+/* --- Nudge System: Radial gold ripple from send button --- */
+@keyframes sendRipple {
+  from {
+    transform: scale(0);
+    opacity: 0.5;
+  }
+  to {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+.animate-send-ripple {
+  animation: sendRipple 600ms ease-out both;
+  will-change: transform, opacity;
+}
+
+/* --- Nudge System: Whisper float-up text echo --- */
+@keyframes whisperFloat {
+  from {
+    transform: translateY(0);
+    opacity: 0.7;
+  }
+  to {
+    transform: translateY(-40px);
+    opacity: 0;
+  }
+}
+
+.animate-whisper-float {
+  animation: whisperFloat 1200ms ease-out both;
+  will-change: transform, opacity;
+}
+
+/* --- Nudge System: Ghost thought bubble fade --- */
+@keyframes ghostThought {
+  0% { opacity: 0; transform: translateY(4px) scale(0.9); }
+  15% { opacity: 0.7; transform: translateY(0) scale(1); }
+  80% { opacity: 0.7; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-4px) scale(0.95); }
+}
+
+.animate-ghost-thought {
+  animation: ghostThought 2s ease-in-out both;
+  will-change: opacity, transform;
+}
+
 /* --- Reduced motion: disable all custom animations --- */
 @media (prefers-reduced-motion: reduce) {
   .animate-room-entrance,
@@ -381,8 +522,18 @@ button, a, [role="button"] {
   .animate-load-glitch,
   .animate-cursor-blink,
   .animate-breathing-border,
+  .animate-breathing-border-purple,
   .animate-thought-dissolve,
-  .animate-border-extinguish {
+  .animate-border-extinguish,
+  .animate-mind-dive-backdrop,
+  .animate-mind-dive-panel,
+  .animate-heat-pulse-gold,
+  .animate-scale-pop,
+  .animate-entity-reveal,
+  .animate-badge-flash,
+  .animate-send-ripple,
+  .animate-whisper-float,
+  .animate-ghost-thought {
     animation: none !important;
   }
   .map-room-node:hover {

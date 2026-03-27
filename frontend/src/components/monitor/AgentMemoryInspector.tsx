@@ -11,6 +11,13 @@
  * Visual metaphor: a detective's case notebook — handwritten feel, pinned notes,
  * worn paper textures through color and shadow.
  *
+ * Exhibition-grade elevation (curator feedback):
+ *  - Entrance ritual: radial gold spotlight expand + scale(0.97)->1 + blur->focus
+ *  - Importance as heat: card-level thermal glow replaces numbered badges
+ *  - Memory decay: opacity gradient on older stream entries
+ *  - Reflection ceremony: typewriter text reveal + breathing purple border
+ *  - Search as spotlight: non-matching memories dim instead of being removed
+ *
  * Mobile: bottom sheet (90vh, swipe to dismiss)
  * Desktop: side panel sliding in from right
  */
@@ -175,29 +182,102 @@ function synthesizeMemories(
 }
 
 // ---------------------------------------------------------------------------
-// Importance badge — color-coded score
+// useTypewriter — reused from ThoughtBubble pattern
 // ---------------------------------------------------------------------------
 
-function ImportanceBadge({ score }: { score: number }) {
-  const config = {
-    1: { label: '1', bg: 'bg-text-muted/20', text: 'text-text-muted', glow: '' },
-    2: { label: '2', bg: 'bg-blue-500/15', text: 'text-blue-400', glow: '' },
-    3: { label: '3', bg: 'bg-green-500/15', text: 'text-green-400', glow: '' },
-    4: { label: '4', bg: 'bg-gold/15', text: 'text-gold', glow: 'shadow-[0_0_4px_rgba(227,179,65,0.2)]' },
-    5: { label: '5', bg: 'bg-danger/15', text: 'text-danger', glow: 'shadow-[0_0_6px_rgba(248,81,73,0.25)]' },
-  }[Math.min(Math.max(score, 1), 5)] ?? { label: '?', bg: 'bg-text-muted/20', text: 'text-text-muted', glow: '' }
+function useTypewriter(
+  text: string,
+  enabled: boolean,
+  delay: number,
+  speed: number = 18,
+): { displayed: string; isDone: boolean; showCursor: boolean } {
+  const [charIndex, setCharIndex] = useState(0)
+  const [started, setStarted] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold shrink-0',
-        config.bg, config.text, config.glow,
-      )}
-      title={`Importance: ${score}/5`}
-    >
-      {config.label}
-    </span>
-  )
+  useEffect(() => {
+    if (!enabled) {
+      setCharIndex(text.length)
+      setStarted(true)
+      return
+    }
+    setCharIndex(0)
+    setStarted(false)
+    const startTimer = setTimeout(() => setStarted(true), delay)
+    return () => clearTimeout(startTimer)
+  }, [text, enabled, delay])
+
+  useEffect(() => {
+    if (!started || charIndex >= text.length) return
+    timerRef.current = setTimeout(() => {
+      setCharIndex((prev) => prev + 1)
+    }, speed)
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+  }, [started, charIndex, text.length, speed])
+
+  return {
+    displayed: text.slice(0, charIndex),
+    isDone: charIndex >= text.length,
+    showCursor: started && charIndex < text.length,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Reduced motion check hook
+// ---------------------------------------------------------------------------
+
+function usePrefersReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(false)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    setReduced(mq.matches)
+    const handler = (e: MediaQueryListEvent) => setReduced(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+  return reduced
+}
+
+// ---------------------------------------------------------------------------
+// Importance heat glow — replaces numbered badges with thermal card glow
+// ---------------------------------------------------------------------------
+
+function getHeatStyles(importance: number): { border: string; shadow: string; bg: string } {
+  switch (Math.min(Math.max(importance, 1), 5)) {
+    case 5:
+      return {
+        border: 'border-gold/50',
+        shadow: 'shadow-[0_0_16px_rgba(227,179,65,0.25)]',
+        bg: 'bg-gold/[0.05]',
+      }
+    case 4:
+      return {
+        border: 'border-amber-500/30',
+        shadow: 'shadow-[0_0_8px_rgba(245,158,11,0.15)]',
+        bg: 'bg-amber-500/[0.03]',
+      }
+    case 3:
+      return {
+        border: 'border-border/60',
+        shadow: '',
+        bg: 'bg-bg-primary/50',
+      }
+    case 2:
+      return {
+        border: 'border-border/40',
+        shadow: '',
+        bg: 'bg-bg-primary/40',
+      }
+    default: // 1
+      return {
+        border: 'border-border/30',
+        shadow: '',
+        bg: 'bg-bg-primary/30',
+      }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -218,32 +298,73 @@ function CategoryIcon({ category }: { category: SynthMemory['category'] }) {
 }
 
 // ---------------------------------------------------------------------------
-// Memory stream entry card
+// Memory stream entry card — with thermal glow and decay opacity
 // ---------------------------------------------------------------------------
 
-function MemoryCard({ memory }: { memory: SynthMemory }) {
+function MemoryCard({
+  memory,
+  index,
+  totalCount,
+  isSearchMatch,
+  isSearchActive,
+}: {
+  memory: SynthMemory
+  index: number
+  totalCount: number
+  isSearchMatch: boolean
+  isSearchActive: boolean
+}) {
+  const heat = getHeatStyles(memory.importance)
+
+  // Memory decay: most recent = 1.0, fades to 0.7 at the bottom
+  const decayOpacity = totalCount <= 1
+    ? 1.0
+    : 1.0 - (index / (totalCount - 1)) * 0.3
+
+  // Search spotlight: non-matching dim to 0.2, matching glow brighter
+  const searchOpacity = isSearchActive
+    ? (isSearchMatch ? 1.0 : 0.2)
+    : decayOpacity
+
   return (
     <div
       className={cn(
-        'group relative px-3 py-2.5 rounded-lg border transition-all duration-200',
-        'bg-bg-primary/50',
-        memory.isRetrieved
-          ? 'border-gold/40 shadow-[0_0_12px_rgba(227,179,65,0.15)] bg-gold/[0.03]'
-          : 'border-border/50 hover:border-border',
+        'group relative px-3 py-2.5 rounded-lg border transition-all duration-300',
+        heat.bg,
+        heat.border,
+        heat.shadow,
+        // Importance 5 gets pulsing gold glow
+        memory.importance === 5 && 'animate-heat-pulse-gold',
+        // Retrieved indicator override
+        memory.isRetrieved && 'border-gold/40 shadow-[0_0_12px_rgba(227,179,65,0.15)] bg-gold/[0.03]',
+        // Search spotlight glow on match
+        isSearchActive && isSearchMatch && 'shadow-[0_0_16px_rgba(227,179,65,0.3)] border-gold/50',
       )}
+      style={{ opacity: searchOpacity }}
     >
       {/* Retrieved indicator — gold glow marker */}
       {memory.isRetrieved && (
         <div className="absolute -left-px top-2 bottom-2 w-[2px] rounded-full bg-gold shadow-[0_0_6px_rgba(227,179,65,0.4)]" />
       )}
 
-      {/* Top row: category icon + tick + importance */}
+      {/* Top row: category icon + tick + heat indicator dot */}
       <div className="flex items-center gap-2 mb-1">
         <CategoryIcon category={memory.category} />
         <span className="text-[10px] text-text-muted tabular-nums">T{memory.tick}</span>
         <span className="text-[10px] text-text-muted capitalize opacity-60">{memory.category}</span>
+        {/* Heat indicator dot instead of numbered badge */}
         <span className="ml-auto">
-          <ImportanceBadge score={memory.importance} />
+          <span
+            className={cn(
+              'inline-block w-2 h-2 rounded-full',
+              memory.importance >= 5 && 'bg-gold shadow-[0_0_6px_rgba(227,179,65,0.5)]',
+              memory.importance === 4 && 'bg-amber-400/80 shadow-[0_0_4px_rgba(245,158,11,0.3)]',
+              memory.importance === 3 && 'bg-text-secondary/50',
+              memory.importance === 2 && 'bg-text-muted/40',
+              memory.importance <= 1 && 'bg-text-muted/20',
+            )}
+            title={`Importance: ${memory.importance}/5`}
+          />
         </span>
       </div>
 
@@ -326,7 +447,47 @@ function WorkingMemorySection({ facts }: { facts: string[] }) {
 }
 
 // ---------------------------------------------------------------------------
-// Reflections section — distinct visual (italic, muted, thoughtful)
+// Reflection card — with typewriter reveal and breathing purple border
+// ---------------------------------------------------------------------------
+
+function ReflectionCard({ reflection, index }: { reflection: SynthReflection; index: number }) {
+  const prefersReducedMotion = usePrefersReducedMotion()
+  const enableTypewriter = !prefersReducedMotion
+
+  const typewriter = useTypewriter(
+    reflection.content,
+    enableTypewriter,
+    300 + index * 200, // stagger delay per card
+    12, // slower than thought bubble for contemplative feel
+  )
+
+  return (
+    <div
+      className={cn(
+        'px-3 py-2.5 rounded-lg border-2',
+        'bg-purple-500/[0.04]',
+        // Breathing purple border (like gold breathing border but purple)
+        'animate-breathing-border-purple',
+      )}
+    >
+      <span className="text-[10px] text-text-muted tabular-nums block mb-1">
+        Tick {reflection.tick}
+      </span>
+      <p className="text-sm text-text-secondary italic leading-relaxed m-0">
+        {typewriter.displayed}
+        {typewriter.showCursor && (
+          <span
+            className="inline-block w-[2px] h-[12px] ml-0.5 align-middle animate-cursor-blink"
+            style={{ backgroundColor: '#7c3aed' }}
+          />
+        )}
+      </p>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Reflections section
 // ---------------------------------------------------------------------------
 
 function ReflectionsSection({ reflections }: { reflections: SynthReflection[] }) {
@@ -364,21 +525,8 @@ function ReflectionsSection({ reflections }: { reflections: SynthReflection[] })
 
       {isExpanded && (
         <div className="grid gap-2">
-          {reflections.map((ref) => (
-            <div
-              key={ref.id}
-              className={cn(
-                'px-3 py-2.5 rounded-lg border border-purple-500/15',
-                'bg-purple-500/[0.04]',
-              )}
-            >
-              <span className="text-[10px] text-text-muted tabular-nums block mb-1">
-                Tick {ref.tick}
-              </span>
-              <p className="text-sm text-text-secondary italic leading-relaxed m-0">
-                {ref.content}
-              </p>
-            </div>
+          {reflections.map((ref, index) => (
+            <ReflectionCard key={ref.id} reflection={ref} index={index} />
           ))}
         </div>
       )}
@@ -403,6 +551,13 @@ export function AgentMemoryInspector({ agent, onClose }: AgentMemoryInspectorPro
   const panelRef = useRef<HTMLDivElement>(null)
   const dragStartY = useRef<number | null>(null)
   const currentTranslateY = useRef(0)
+  const [isEntering, setIsEntering] = useState(true)
+
+  // Entrance ritual: remove entering state after animation completes
+  useEffect(() => {
+    const timer = setTimeout(() => setIsEntering(false), 350)
+    return () => clearTimeout(timer)
+  }, [])
 
   // Synthesize memories from narrative events
   const { workingMemory, stream, reflections } = useMemo(
@@ -410,17 +565,22 @@ export function AgentMemoryInspector({ agent, onClose }: AgentMemoryInspectorPro
     [agent.name, narrativeEvents],
   )
 
-  // Filter stream by search query
-  const filteredStream = useMemo(() => {
-    if (!searchQuery.trim()) return stream
+  // Search matching set (for spotlight effect)
+  const searchMatchIds = useMemo(() => {
+    if (!searchQuery.trim()) return new Set<string>()
     const q = searchQuery.toLowerCase()
-    return stream.filter(m =>
-      m.content.toLowerCase().includes(q) ||
-      m.category.includes(q),
-    )
+    const matches = new Set<string>()
+    stream.forEach(m => {
+      if (m.content.toLowerCase().includes(q) || m.category.includes(q)) {
+        matches.add(m.id)
+      }
+    })
+    return matches
   }, [stream, searchQuery])
 
-  // Filtered working memory
+  const isSearchActive = searchQuery.trim().length > 0
+
+  // Filtered working memory (still filter these since they're short labels)
   const filteredFacts = useMemo(() => {
     if (!searchQuery.trim()) return workingMemory
     const q = searchQuery.toLowerCase()
@@ -470,9 +630,12 @@ export function AgentMemoryInspector({ agent, onClose }: AgentMemoryInspectorPro
 
   return (
     <>
-      {/* Backdrop */}
+      {/* Backdrop — entrance ritual: radial gold spotlight expanding */}
       <div
-        className="fixed inset-0 z-40 bg-black/60 backdrop-blur-[2px] animate-gpu"
+        className={cn(
+          'fixed inset-0 z-40 bg-black/60 backdrop-blur-[2px]',
+          isEntering ? 'animate-mind-dive-backdrop' : 'animate-gpu',
+        )}
         onClick={onClose}
         aria-hidden
       />
@@ -485,14 +648,13 @@ export function AgentMemoryInspector({ agent, onClose }: AgentMemoryInspectorPro
         className={cn(
           'fixed z-50 flex flex-col',
           'bg-bg-secondary border-border',
-          'transition-transform duration-200 ease-out',
           // Mobile: full-height bottom sheet
           'inset-x-0 bottom-0 max-h-[90vh] rounded-t-2xl border-t',
           // Desktop: right-side panel
           'md:inset-y-0 md:right-0 md:left-auto md:bottom-auto',
           'md:w-[420px] md:max-h-full md:rounded-t-none md:rounded-l-xl md:border-l md:border-t-0',
-          // Slide-in animation
-          'animate-card-in',
+          // Entrance ritual: scale + blur -> focus
+          isEntering ? 'animate-mind-dive-panel' : 'transition-transform duration-200 ease-out',
         )}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
@@ -530,7 +692,10 @@ export function AgentMemoryInspector({ agent, onClose }: AgentMemoryInspectorPro
         {/* Search bar */}
         <div className="shrink-0 px-4 py-2 border-b border-border/50">
           <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+            <Search size={14} className={cn(
+              'absolute left-3 top-1/2 -translate-y-1/2 transition-colors duration-200',
+              isSearchActive ? 'text-gold' : 'text-text-muted',
+            )} />
             <input
               type="text"
               placeholder="Search memories..."
@@ -542,6 +707,8 @@ export function AgentMemoryInspector({ agent, onClose }: AgentMemoryInspectorPro
                 'text-text-primary placeholder:text-text-muted/50',
                 'focus:outline-none focus:border-gold/40 focus:shadow-[0_0_8px_rgba(227,179,65,0.1)]',
                 'transition-all duration-150',
+                // Spotlight mode indicator
+                isSearchActive && 'border-gold/30 shadow-[0_0_12px_rgba(227,179,65,0.08)]',
               )}
             />
             {searchQuery && (
@@ -553,6 +720,12 @@ export function AgentMemoryInspector({ agent, onClose }: AgentMemoryInspectorPro
               </button>
             )}
           </div>
+          {/* Search spotlight status */}
+          {isSearchActive && (
+            <span className="text-[10px] text-gold mt-1 block">
+              {searchMatchIds.size} of {stream.length} memories illuminated
+            </span>
+          )}
         </div>
 
         {/* Tab bar */}
@@ -593,19 +766,24 @@ export function AgentMemoryInspector({ agent, onClose }: AgentMemoryInspectorPro
 
           {activeTab === 'stream' && (
             <div className="px-4 py-3">
-              {filteredStream.length === 0 ? (
+              {stream.length === 0 ? (
                 <div className="text-center py-8">
                   <Brain size={32} className="mx-auto text-text-muted/30 mb-3" />
                   <p className="text-sm text-text-muted">
-                    {searchQuery
-                      ? 'No memories match your search.'
-                      : 'No memories recorded yet. Start the simulation to observe this agent\'s experiences.'}
+                    No memories recorded yet. Start the simulation to observe this agent's experiences.
                   </p>
                 </div>
               ) : (
                 <div className="grid gap-2">
-                  {filteredStream.map((memory) => (
-                    <MemoryCard key={memory.id} memory={memory} />
+                  {stream.map((memory, index) => (
+                    <MemoryCard
+                      key={memory.id}
+                      memory={memory}
+                      index={index}
+                      totalCount={stream.length}
+                      isSearchMatch={searchMatchIds.has(memory.id)}
+                      isSearchActive={isSearchActive}
+                    />
                   ))}
                 </div>
               )}
