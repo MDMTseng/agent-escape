@@ -2911,3 +2911,90 @@ Known issues:
       short enough to complete well within the window.
     - The borderColor inheritance on the speech bubble tail uses CSS inherit
       which may not perfectly track the breathing animation in all browsers.
+
+[REVIEW-CURATOR-RECHECK] Features: P1-007, P1-008, P2-001 Elevation Grades
+  Agent: ui-reviewer / curator (Claude Code / Opus 4.6)
+  Date: 2026-03-27
+  Context: Builder implemented elevation suggestions from prior curator review.
+  Build: TypeScript --noEmit PASS, Vite build PASS (644 KB JS, 105 KB CSS)
+  Console errors: ZERO across all pages (Home, Library, Create, Monitor)
+  Regressions: NONE detected. All existing features remain functional.
+
+  ============================================================================
+  P1-007 Interactive Map -- ELEVATION RECHECK
+  ============================================================================
+
+  --- Implementation Check ---
+  All six elevation items CONFIRMED:
+  1. Radial gradient room nodes with inner glow (layered radial-gradient bg)
+  2. Glowing orb agent markers (radial-gradient core + box-shadow glow)
+  3. Staggered entrance animation (50ms per room, roomFadeIn 400ms)
+  4. Ink-draw edge animation (stroke-dashoffset 1000->0 over 1200ms)
+  5. Atmospheric fog background (3 radial gradients replacing dot grid)
+  6. Hover lift effect (scale 1.02, translateY -2px, gold box-shadow)
+
+  --- New Grade: Gallery-ready ---
+  The map graduated from functional diagram to atmospheric artifact. Layered
+  backgrounds, staggered entrance, ink-drawn edges create sense of place.
+  Room popup with description, occupants, entities is informative without
+  breaking the mood.
+
+  --- One Polish Suggestion (not blocking) ---
+  Agent orb pulse is uniform across all agents. Staggered pulse offsets per
+  agent would make the map feel alive like fireflies at their own rhythm.
+
+  ============================================================================
+  P1-008 Save/Load UI -- ELEVATION RECHECK
+  ============================================================================
+
+  --- Implementation Check ---
+  All six elevation items CONFIRMED:
+  1. Save ceremony with circular clip-path gold wipe (sealReveal keyframe)
+  2. Persistent Saved at Tick N badge (lastSaveTick state, gold pill badge)
+  3. Load list as dossier case files (alternating rotation, Case Files title)
+  4. Paper-fold corners + LATEST classified stamp (::after triangle, red stamp)
+  5. Load transition with glitch/dissolve (skewX + blur + opacity over 800ms)
+  6. Typewriter tick numbers (TICK 004, gold monospace, 0.1em letter-spacing)
+
+  --- New Grade: Gallery-ready ---
+  Saving feels like sealing an envelope with wax. The Case Files panel with
+  scattered dossier cards, paper-fold corners, and LATEST stamp creates the
+  impression of rifling through a detective case box.
+
+  --- One Polish Suggestion (not blocking) ---
+  Load glitch is subtle enough to miss on a blink. Extending to 1000ms with
+  a brief static/noise flash-frame would add more dramatic weight.
+
+  ============================================================================
+  P2-001 Thought Bubbles -- ELEVATION RECHECK
+  ============================================================================
+
+  --- Implementation Check ---
+  All four elevation items CONFIRMED:
+  1. Typewriter reveal with blinking gold cursor (useTypewriter hook, staggered)
+  2. Breathing gold border pulse (3s cycle, 0.25-0.65 opacity, ease-in-out)
+  3. Exit animation: border extinguishes (200ms) then content dissolves (500ms)
+  4. prefers-reduced-motion support (CSS + JS, instant text when reduced)
+
+  --- New Grade: Gallery-ready ---
+  Thought bubbles evolved from tooltips into living artifacts of cognition.
+  Typewriter reveal, breathing border, two-phase exit -- craft, not competence.
+
+  --- One Polish Suggestion (not blocking) ---
+  Bubble tail uses borderColor: inherit which may desync from breathing
+  animation in some browsers. Static gold on the tail would be a safe fix.
+
+  ============================================================================
+  SUMMARY
+  ============================================================================
+
+  | Feature   | Previous Grade | New Grade     | Elevation Implemented? |
+  |-----------|---------------|---------------|------------------------|
+  | P1-007    | Workshop      | Gallery-ready | YES -- all 6 items     |
+  | P1-008    | Workshop      | Gallery-ready | YES -- all 6 items     |
+  | P2-001    | Studio-quality| Gallery-ready | YES -- all 4 items     |
+
+  All three features are now exhibition-ready. The builder executed every
+  elevation item with fidelity and craft. Animations smooth, atmospheric
+  details consistent with escape room theme, reduced-motion accessibility
+  comprehensive. Zero console errors, zero regressions, clean builds.
