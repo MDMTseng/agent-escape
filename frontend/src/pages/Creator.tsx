@@ -9,6 +9,7 @@ import { RoomsTab } from '@/components/creator/RoomsTab'
 import { PuzzlesTab } from '@/components/creator/PuzzlesTab'
 import { AgentsTab } from '@/components/creator/AgentsTab'
 import { ValidateTab } from '@/components/creator/ValidateTab'
+import { SceneExportImport } from '@/components/creator/SceneExportImport'
 import type { AgentItem, AgentRelationship } from '@/components/creator/AgentsTab'
 
 /* ------------------------------------------------------------------ */
@@ -499,10 +500,19 @@ export default function Creator() {
     <div className="flex flex-col min-h-full">
       {/* Page header */}
       <div className="px-4 pt-4 pb-2 md:px-6 md:pt-6">
-        <h1 className="text-gold font-bold tracking-tight">Scene Creator</h1>
-        <p className="text-text-secondary text-sm mt-0.5">
-          Build your escape room step by step
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-gold font-bold tracking-tight">Scene Creator</h1>
+            <p className="text-text-secondary text-sm mt-0.5">
+              Build your escape room step by step
+            </p>
+          </div>
+          {/* Export/Import controls (P3-003) */}
+          <SceneExportImport
+            sceneState={sceneState}
+            onImport={(imported) => setSceneState(imported)}
+          />
+        </div>
       </div>
 
       {/* Tab bar — horizontally scrollable on mobile */}
