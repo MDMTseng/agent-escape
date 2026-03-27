@@ -33,7 +33,6 @@ import {
   BookOpen,
   Eye,
   MessageCircle,
-  Footprints,
   Zap,
   AlertTriangle,
   ChevronDown,
@@ -41,7 +40,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useNarrativeEvents, useTick } from '@/stores/gameStore'
-import type { AgentState, NarrativeEntry, TickEvent } from '@/types/game'
+import type { AgentState, NarrativeEntry } from '@/types/game'
 
 // ---------------------------------------------------------------------------
 // Synthesized memory types (mirrors backend memory.py MemoryEntry)

@@ -32,7 +32,6 @@ import { cn } from '@/lib/utils'
 import {
   useNarrativeEvents,
   useAgents,
-  useTick,
   useIsProcessing,
 } from '@/stores/gameStore'
 import type { TickEvent, NarrativeEntry } from '@/types/game'
@@ -385,7 +384,6 @@ function Bubble({
 export function ThoughtBubbles() {
   const narrativeEvents = useNarrativeEvents()
   const agentsRecord = useAgents()
-  const tick = useTick()
   const isProcessing = useIsProcessing()
 
   const agents = useMemo(() => Object.values(agentsRecord), [agentsRecord])

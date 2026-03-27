@@ -321,7 +321,7 @@ function ValidationItem({ check }: { check: ValidationCheck }) {
 
 export function ValidateTab({
   sceneState,
-  setSceneState,
+  setSceneState: _setSceneState,
 }: {
   sceneState: SceneCreatorState
   setSceneState: React.Dispatch<React.SetStateAction<SceneCreatorState>>
@@ -338,8 +338,6 @@ export function ValidateTab({
   const failCount = checks.filter(c => c.status === 'fail').length
   const warnCount = checks.filter(c => c.status === 'warn').length
   const passCount = checks.filter(c => c.status === 'pass').length
-  const allPass = failCount === 0
-
   const overallStatus = failCount > 0
     ? { label: 'Issues Found', color: 'text-danger', bg: 'bg-danger/10', border: 'border-danger/30' }
     : warnCount > 0

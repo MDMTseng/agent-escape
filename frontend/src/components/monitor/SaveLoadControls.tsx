@@ -469,7 +469,6 @@ function LoadPanel({
 // ---------------------------------------------------------------------------
 
 export function SaveLoadControls() {
-  const tick = useTick()
   const [showSave, setShowSave] = useState(false)
   const [showLoad, setShowLoad] = useState(false)
   const [lastSaveTick, setLastSaveTick] = useState<number | null>(null)

@@ -40,7 +40,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useRooms, useDoors, useAgents } from '@/stores/gameStore'
-import type { AgentState, Entity, Door, Room } from '@/types/game'
+import type { AgentState, Entity, Door } from '@/types/game'
 
 // ---------------------------------------------------------------------------
 // Entity display card — with warmth tint and stagger animation support

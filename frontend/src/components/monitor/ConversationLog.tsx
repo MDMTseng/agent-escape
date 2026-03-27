@@ -22,14 +22,13 @@ import {
   MessageCircle,
   ChevronDown,
   ChevronUp,
-  Search,
   Sparkles,
   X,
   Users,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useNarrativeEvents, useAgentList } from '@/stores/gameStore'
-import type { NarrativeEntry, TickEvent } from '@/types/game'
+import { useNarrativeEvents } from '@/stores/gameStore'
+import type { NarrativeEntry } from '@/types/game'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -353,7 +352,6 @@ function EmptyConversations() {
 
 export function ConversationLog() {
   const narrativeEvents = useNarrativeEvents()
-  const agents = useAgentList()
   const [isExpanded, setIsExpanded] = useState(false)
   const [selectedPair, setSelectedPair] = useState<string | null>(null)
   const [showCluesOnly, setShowCluesOnly] = useState(false)

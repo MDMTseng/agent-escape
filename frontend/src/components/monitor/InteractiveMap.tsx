@@ -18,7 +18,7 @@
  *  - Hover depth effect (scale + glow lift)
  */
 
-import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
+import { useState, useCallback, useMemo, useRef } from 'react'
 import {
   ReactFlow,
   Controls,

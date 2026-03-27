@@ -26,12 +26,7 @@ import {
 import { cn } from '@/lib/utils'
 import type {
   SceneCreatorState,
-  RoomNode,
-  DoorEdge,
-  PuzzleItem,
 } from '@/pages/Creator'
-import type { AgentItem, AgentRelationship } from '@/components/creator/AgentsTab'
-
 // ---------------------------------------------------------------------------
 // Export format — versioned envelope
 // ---------------------------------------------------------------------------

@@ -18,7 +18,6 @@ import {
   Film,
   Loader2,
   Trash2,
-  Plus,
   AlertTriangle,
   Camera,
 } from 'lucide-react'

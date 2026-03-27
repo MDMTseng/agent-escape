@@ -117,7 +117,7 @@ function WarmthIndicator({ ratio }: { ratio: number }) {
 /*  Individual puzzle card (expandable)                                 */
 /* ------------------------------------------------------------------ */
 
-function PuzzleCard({ step, index }: { step: EscapeChainStep; index: number }) {
+function PuzzleCard({ step }: { step: EscapeChainStep }) {
   const [expanded, setExpanded] = useState(false)
   const rooms = useRooms()
   const agents = useAgents()
@@ -127,10 +127,6 @@ function PuzzleCard({ step, index }: { step: EscapeChainStep; index: number }) {
 
   // Calculate warmth based on step position relative to solved steps
   // Steps closer to being solved (active) are warmer
-  const warmthRatio = step.status === 'solved' ? 1.0
-    : step.status === 'active' ? 0.5
-    : 0.0
-
   // Count entities in the room that could be clues (non-default state)
   const roomEntities = room ? Object.values(room.entities) : []
   const discoveredEntities = roomEntities.filter(
@@ -339,7 +335,7 @@ export function PuzzleProgressDashboard() {
           {/* Grid on desktop, single column on mobile */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {escapeChain.map((step, index) => (
-              <PuzzleCard key={step.entity_id || index} step={step} index={index} />
+              <PuzzleCard key={step.entity_id || index} step={step} />
             ))}
           </div>
         </div>

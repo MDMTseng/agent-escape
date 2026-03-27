@@ -25,8 +25,6 @@ import {
   Star,
   Search,
   MessageCircle,
-  ChevronLeft,
-  ChevronRight,
   Clock,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -38,13 +36,6 @@ import type { NarrativeEntry, TickEvent } from '@/types/game'
 // ---------------------------------------------------------------------------
 
 type MarkerType = 'puzzle' | 'discovery' | 'conversation'
-
-interface TickMarker {
-  tick: number
-  type: MarkerType
-  label: string
-  count: number
-}
 
 // ---------------------------------------------------------------------------
 // Classify events on a tick

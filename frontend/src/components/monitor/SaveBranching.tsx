@@ -818,21 +818,6 @@ export function SaveBranching() {
     setDeletingBranch(null)
   }, [deletingBranch, branchStore])
 
-  // Register a new save on the active branch
-  const registerSaveOnBranch = useCallback((saveId: number) => {
-    setBranchStore(prev => {
-      if (!prev) return prev
-      return {
-        ...prev,
-        branches: prev.branches.map(b =>
-          b.id === prev.activeBranchId
-            ? { ...b, saveIds: [...b.saveIds, saveId] }
-            : b,
-        ),
-      }
-    })
-  }, [])
-
   const branchCount = branchStore?.branches.length ?? 0
   const activeBranch = branchStore?.branches.find(b => b.id === branchStore.activeBranchId)
 

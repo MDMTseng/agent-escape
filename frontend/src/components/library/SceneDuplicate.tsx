@@ -21,7 +21,7 @@ interface SceneDuplicateProps {
 }
 
 export function SceneDuplicate({
-  storyId,
+  storyId: _storyId,
   storyTitle,
   theme,
   premise,

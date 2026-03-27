@@ -30,10 +30,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import {
   MessageCircle,
-  Search,
-  Target,
-  Users,
-  X,
   ChevronDown,
   ChevronUp,
   Clock,

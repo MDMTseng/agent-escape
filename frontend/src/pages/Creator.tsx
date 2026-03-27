@@ -450,24 +450,6 @@ function WorldBibleCard({ bible }: { bible: WorldBible }) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Placeholder tab content                                            */
-/* ------------------------------------------------------------------ */
-
-function PlaceholderTab({ name }: { name: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="size-16 rounded-full bg-bg-tertiary flex items-center justify-center mb-4">
-        <BookOpen className="size-7 text-text-muted" />
-      </div>
-      <h3 className="text-text-secondary font-semibold mb-1">{name}</h3>
-      <p className="text-text-muted text-sm max-w-xs">
-        This tab is coming soon. Complete the Story tab first to unlock world-building tools.
-      </p>
-    </div>
-  )
-}
-
-/* ------------------------------------------------------------------ */
 /*  Main Scene Creator Page                                            */
 /* ------------------------------------------------------------------ */
 
