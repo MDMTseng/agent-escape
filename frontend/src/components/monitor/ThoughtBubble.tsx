@@ -10,6 +10,13 @@
  * a brief inferred observation.
  *
  * Dark theme: bubble bg #1c2128, gold border for active thinking.
+ *
+ * Exhibition-grade elevation:
+ *  - Typewriter reveal: text appears line-by-line with character-by-character
+ *    typing effect and a blinking gold cursor
+ *  - Breathing border: gold border pulses on a 3-second cycle
+ *  - Exit animation: dissolve with blur + scaleY shrink, border extinguishes
+ *    200ms before content
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
@@ -162,7 +169,58 @@ function buildThoughts(
 }
 
 // ---------------------------------------------------------------------------
-// Single thought bubble component
+// useTypewriter — custom hook for character-by-character text reveal
+// ---------------------------------------------------------------------------
+
+function useTypewriter(
+  text: string,
+  enabled: boolean,
+  delay: number, // ms before typing starts
+  speed: number = 15, // ms per character
+): { displayed: string; isDone: boolean; showCursor: boolean } {
+  const [charIndex, setCharIndex] = useState(0)
+  const [started, setStarted] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (!enabled) {
+      setCharIndex(text.length)
+      setStarted(true)
+      return
+    }
+
+    setCharIndex(0)
+    setStarted(false)
+
+    // Initial delay before typing starts
+    const startTimer = setTimeout(() => {
+      setStarted(true)
+    }, delay)
+
+    return () => clearTimeout(startTimer)
+  }, [text, enabled, delay])
+
+  useEffect(() => {
+    if (!started || charIndex >= text.length) return
+
+    timerRef.current = setTimeout(() => {
+      setCharIndex((prev) => prev + 1)
+    }, speed)
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+  }, [started, charIndex, text.length, speed])
+
+  return {
+    displayed: text.slice(0, charIndex),
+    isDone: charIndex >= text.length,
+    showCursor: started && charIndex < text.length,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Single thought bubble component — with typewriter reveal and breathing border
 // ---------------------------------------------------------------------------
 
 function Bubble({
@@ -174,19 +232,76 @@ function Bubble({
   onDismiss: () => void
   isVisible: boolean
 }) {
+  // Track if we are in the exit phase (border extinguishes before content)
+  const [isExiting, setIsExiting] = useState(false)
+  const prevVisible = useRef(isVisible)
+
+  useEffect(() => {
+    if (prevVisible.current && !isVisible) {
+      // Started exiting — border extinguishes first
+      setIsExiting(true)
+    }
+    prevVisible.current = isVisible
+  }, [isVisible])
+
+  // Check prefers-reduced-motion
+  const prefersReducedMotion = useMemo(() => {
+    if (typeof window === 'undefined') return false
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  }, [])
+
+  const enableTypewriter = isVisible && !prefersReducedMotion
+
+  // Typewriter reveals for each line, staggered
+  const observation = useTypewriter(
+    thought.observation,
+    enableTypewriter,
+    200, // 200ms delay before observation starts
+    20,
+  )
+  const action = useTypewriter(
+    thought.action,
+    enableTypewriter,
+    200 + thought.observation.length * 20 + 100, // starts after observation + gap
+    15, // 15ms per char for action (faster for longer text)
+  )
+  const reasoning = useTypewriter(
+    thought.reasoning,
+    enableTypewriter,
+    200 + thought.observation.length * 20 + 100 + thought.action.length * 15 + 200, // starts after action + gap
+    18,
+  )
+
+  // Determine which line the cursor should be on
+  const cursorLine = !observation.isDone
+    ? 'observation'
+    : !action.isDone
+    ? 'action'
+    : !reasoning.isDone
+    ? 'reasoning'
+    : null
+
   return (
     <div
       className={cn(
         'relative max-w-[300px] md:max-w-[340px]',
-        'rounded-xl border px-3 py-2.5 shadow-lg',
-        'transition-all duration-500 ease-out',
+        'rounded-xl border-2 px-3 py-2.5 shadow-lg',
         // Dark theme bubble styling
-        'bg-[#1c2128] border-gold/30',
-        // Fade in/out
+        'bg-[#1c2128]',
+        // Breathing border when visible (not exiting)
+        isVisible && !isExiting && 'animate-breathing-border',
+        // Border extinguish when starting to exit
+        isExiting && !isVisible && 'animate-border-extinguish',
+        // Exit dissolve animation
         isVisible
           ? 'opacity-100 translate-y-0 scale-100'
-          : 'opacity-0 translate-y-2 scale-95 pointer-events-none',
+          : 'animate-thought-dissolve pointer-events-none',
+        // Transition for non-animated properties
+        'transition-none',
       )}
+      style={{
+        borderColor: isVisible && !isExiting ? undefined : 'rgba(227, 179, 65, 0.25)',
+      }}
     >
       {/* Dismiss button */}
       <button
@@ -208,32 +323,57 @@ function Bubble({
         </span>
       </div>
 
-      {/* Observation */}
-      <div className="flex items-start gap-1.5 mb-1">
+      {/* Observation — first to appear */}
+      <div className="flex items-start gap-1.5 mb-1 min-h-[18px]">
         <Eye size={10} className="text-text-muted mt-0.5 shrink-0" />
         <span className="text-[11px] text-text-secondary leading-snug">
-          {thought.observation}
+          {observation.displayed}
+          {cursorLine === 'observation' && (
+            <span
+              className="inline-block w-[2px] h-[11px] ml-0.5 align-middle animate-cursor-blink"
+              style={{ backgroundColor: '#e3b341' }}
+            />
+          )}
         </span>
       </div>
 
-      {/* Action */}
-      <div className="flex items-start gap-1.5 mb-1">
+      {/* Action — types out character-by-character */}
+      <div className="flex items-start gap-1.5 mb-1 min-h-[18px]">
         <ArrowRight size={10} className="text-gold-dim mt-0.5 shrink-0" />
         <span className="text-[11px] text-text-primary leading-snug line-clamp-2">
-          {thought.action}
+          {action.displayed}
+          {cursorLine === 'action' && (
+            <span
+              className="inline-block w-[2px] h-[11px] ml-0.5 align-middle animate-cursor-blink"
+              style={{ backgroundColor: '#e3b341' }}
+            />
+          )}
         </span>
       </div>
 
-      {/* Reasoning */}
-      <div className="flex items-start gap-1.5">
+      {/* Reasoning — fades in last */}
+      <div className="flex items-start gap-1.5 min-h-[16px]">
         <MessageCircle size={10} className="text-text-muted mt-0.5 shrink-0" />
         <span className="text-[10px] text-text-muted italic leading-snug">
-          {thought.reasoning}
+          {reasoning.displayed}
+          {cursorLine === 'reasoning' && (
+            <span
+              className="inline-block w-[2px] h-[10px] ml-0.5 align-middle animate-cursor-blink"
+              style={{ backgroundColor: '#e3b341' }}
+            />
+          )}
         </span>
       </div>
 
       {/* Speech bubble tail */}
-      <div className="absolute -bottom-1.5 left-6 w-3 h-3 rotate-45 bg-[#1c2128] border-b border-r border-gold/30" />
+      <div
+        className="absolute -bottom-1.5 left-6 w-3 h-3 rotate-45 bg-[#1c2128]"
+        style={{
+          borderBottom: '2px solid',
+          borderRight: '2px solid',
+          borderColor: 'inherit',
+        }}
+      />
     </div>
   )
 }
@@ -294,8 +434,8 @@ export function ThoughtBubbles() {
     // Start fade-out after 6 seconds
     fadeTimerRef.current = setTimeout(() => {
       setVisibleIds(new Set())
-      // Actually remove after transition completes
-      setTimeout(() => setThoughts([]), 500)
+      // Actually remove after dissolve transition completes (500ms for dissolve)
+      setTimeout(() => setThoughts([]), 600)
     }, 6000)
 
     return () => {
@@ -307,7 +447,7 @@ export function ThoughtBubbles() {
   useEffect(() => {
     if (isProcessing) {
       setVisibleIds(new Set())
-      setTimeout(() => setThoughts([]), 500)
+      setTimeout(() => setThoughts([]), 600)
     }
   }, [isProcessing])
 
