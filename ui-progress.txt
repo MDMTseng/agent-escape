@@ -2198,3 +2198,86 @@ One-hand usability: PASS
 P0-001 through P0-010: No regressions. Library, Monitor, Creator all functional.
 P1-001 through P1-003: No regressions. Theme, rooms, puzzles all verified.
 TypeScript clean. Build passes (577KB). Zero console errors.
+
+--- 2026-03-27 ---
+[BUILD] P1-007: Interactive Map panel — COMPLETE
+  Agent: ui-builder (Claude Code / Opus 4.6)
+  What was done:
+    - New component: frontend/src/components/monitor/InteractiveMap.tsx
+    - Read-only React Flow graph showing room topology from Zustand store
+    - Custom MapRoomNode: room name, entity count, animated agent markers (gold dots w/ names)
+    - Custom MapDoorEdge: red (locked, dashed) / green (unlocked) colored edges
+    - Click room to open detail popup: entity list with state badges, current occupants
+    - Heat map toggle: rooms colored by visit frequency from narrative events
+    - Auto-layout: rooms positioned in grid when no positions stored
+    - Mobile: full-screen overlay triggered by gold FAB button (bottom-right, above controls)
+    - Desktop: collapsible inline panel with toggle bar showing room/agent counts
+    - Pinch-to-zoom and pan via React Flow built-in gestures
+    - Integrated into Monitor.tsx between PuzzleProgressDashboard and narrative feed
+  Files created/modified:
+    frontend/src/components/monitor/InteractiveMap.tsx — new (400 lines)
+    frontend/src/pages/Monitor.tsx — added import + component
+  Mobile/gesture notes:
+    - FAB is 56px, in thumb zone (bottom-right above controls)
+    - Full-screen overlay with close button (44px touch target)
+    - Pinch-to-zoom native via React Flow
+    - Room detail popup renders as bottom sheet on mobile
+    - Heat toggle button has 44px min-h
+  Known issues:
+    - Room positions are auto-grid; if backend provided room coordinates they would be preferred
+    - Heat map normalizes per-session; resets when page reloads
+  Screenshots: screenshots/build-p1007-p1008-p2001-mobile.png, screenshots/build-p1007-p1008-p2001-desktop.png
+
+[BUILD] P1-008: Save/Load UI in Game Monitor — COMPLETE
+  Agent: ui-builder (Claude Code / Opus 4.6)
+  What was done:
+    - New component: frontend/src/components/monitor/SaveLoadControls.tsx
+    - Save button: opens dialog with optional name input, calls POST /api/save?name=...
+    - Load panel: fetches GET /api/saves, filters by current storyId, lists saves
+    - Each save entry shows: name, tick number (gold mono), relative timestamp
+    - Load action: POST /api/load/{save_id}, backend broadcasts snapshot to refresh store
+    - Delete save: DELETE /api/saves/{save_id}, removes from list
+    - Auto-save indicator: shows relative time since last manual save
+    - Integrated into SimulationControls.tsx (appears between tick counter and quit button)
+    - Mobile: save/load panels render as bottom sheets with drag handles
+    - Desktop: panels positioned as popovers near bottom-right of screen
+  Files created/modified:
+    frontend/src/components/monitor/SaveLoadControls.tsx — new (490 lines)
+    frontend/src/components/monitor/SimulationControls.tsx — added import + component
+  Mobile/gesture notes:
+    - Save/Load buttons are 44px min-h touch targets
+    - Dialogs are bottom sheets on mobile with backdrop dismiss
+    - Save name input has 44px min-h
+    - Load entries have 44px min-h load and delete buttons
+  Known issues:
+    - No auto-save polling (shows time since last manual save only)
+    - Save name defaults to "Tick N" if left empty (matches backend behavior)
+  Screenshots: screenshots/build-p1007-p1008-p2001-mobile.png, screenshots/build-p1007-p1008-p2001-desktop.png
+
+[BUILD] P2-001: Agent thought bubbles — COMPLETE
+  Agent: ui-builder (Claude Code / Opus 4.6)
+  What was done:
+    - New component: frontend/src/components/monitor/ThoughtBubble.tsx
+    - Renders thought bubbles when tick events arrive, one per agent per tick
+    - Synthesizes thoughts from TickEvent data: observation, action, reasoning
+    - Event types mapped to contextual observations (examine -> "Something caught my attention")
+    - Bubbles animate in (scale+opacity), auto-fade after 6 seconds
+    - Bubbles also dismiss when next processing cycle starts
+    - Per-agent toggle strip: eye/eye-off buttons to mute/unmute individual agents
+    - Bubble design: #1c2128 bg, gold/30 border, speech tail triangle
+    - Shows Brain icon + agent name, Eye icon + observation, Arrow + action, MessageCircle + reasoning
+    - Integrated into Monitor.tsx below AgentStatusStrip, above EscapeChainProgress
+    - Mobile: horizontal scroll for toggle strip and bubbles
+    - Desktop: wrapping layout for bubbles
+  Files created/modified:
+    frontend/src/components/monitor/ThoughtBubble.tsx — new (380 lines)
+    frontend/src/pages/Monitor.tsx — added import + component
+  Mobile/gesture notes:
+    - Toggle buttons are 32px min-h (compact but touch-friendly in horizontal scroll)
+    - Bubbles have dismiss X button
+    - Horizontal scroll for both toggle strip and bubbles on mobile
+  Known issues:
+    - Backend doesn't send explicit LLM reasoning; thoughts are synthesized from event types
+    - Agent name extraction from event descriptions is heuristic (substring match)
+    - If agent names appear in other agents' events, wrong agent might get attributed
+  Screenshots: screenshots/build-p1007-p1008-p2001-mobile.png, screenshots/build-p1007-p1008-p2001-desktop.png
