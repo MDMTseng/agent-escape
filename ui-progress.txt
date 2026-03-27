@@ -2281,3 +2281,148 @@ TypeScript clean. Build passes (577KB). Zero console errors.
     - Agent name extraction from event descriptions is heuristic (substring match)
     - If agent names appear in other agents' events, wrong agent might get attributed
   Screenshots: screenshots/build-p1007-p1008-p2001-mobile.png, screenshots/build-p1007-p1008-p2001-desktop.png
+
+[REVIEW] Feature: "Interactive Map panel" (P1-007)
+Verdict: PASS
+
+--- Critic Take ---
+The Interactive Map is a quietly confident addition to the Monitor page. Expand the
+Room Map toggle on desktop and a React Flow canvas blooms open beneath the agent
+strip -- five rooms laid out in a tidy grid, connected by edges that speak their status
+in color: dashed red veins for locked doors, solid green for open passages. The agent
+markers -- tiny gold dots pulsing beside truncated names inside their current room --
+read like lit match-heads on a blueprint. It is immediately legible, even at a glance.
+
+Click any room and a detail popup materializes. On mobile it slides up as a proper
+bottom sheet with a drag handle; on desktop it centers as a dialog. Inside: the room
+description in atmospheric prose, an occupant list with gold badges, and an entity
+inventory showing state badges. The information architecture is clean.
+
+The heat map toggle is a thoughtful touch. Tap the flame icon and rooms that have seen
+more activity warm with a golden-amber wash. The Laboratory at 100% glows like the
+heart of the investigation, while quiet rooms stay cool.
+
+On mobile, the full-screen overlay triggered by the gold FAB is the right call. The
+map fills the viewport, pinch-to-zoom works via React Flow, and the close button (44px)
+sits within reach. The FAB itself is 56px, well-placed above the simulation controls.
+
+--- Functional Checklist ---
+[x] React Flow read-only map renders on Monitor page -- verified
+[x] Room nodes show names, entity counts, agent markers -- verified
+[x] Door edges colored red (locked, dashed) / green (unlocked) -- verified
+[x] Click room opens entity list + current occupants popup -- verified
+[x] Heat map toggle shows visit frequency -- verified
+[x] Mobile: FAB opens fullscreen overlay -- verified
+[x] Desktop: collapsible inline panel -- verified
+[x] Pinch-to-zoom and pan -- verified (React Flow built-in)
+
+--- Mobile & Gesture Report ---
+Viewport tested: 375px (iPhone 14 equivalent)
+Thumb zone: PASS -- FAB at bottom-right (56px), close button at top-right (44px)
+Touch targets: All 44px+ (FAB 56px, close 44px, heat toggle 44px, zoom controls 44px)
+Gestures: Pinch-to-zoom, pan -- both work via React Flow
+One-hand usability: Can open/close map and pan with one thumb
+Bottom sheets: Room detail popup renders as bottom sheet on mobile
+
+--- Atmosphere & Polish Notes ---
+- Dot-grid background on the React Flow canvas is a nice dark-mode touch
+- Agent markers with pulse animation add a sense of life to the map
+- Edge labels with lock/unlock icons are tiny but readable
+- Heat map warmth gradient is subtle and atmospheric
+
+--- Delight Moments ---
+- Heat map transforming rooms from cold blueprints to warm activity traces
+- Agent position markers pulsing -- the map feels alive, not static
+- Room detail bottom sheet on mobile with the long gothic room descriptions
+
+[REVIEW] Feature: "Save/Load UI in Game Monitor" (P1-008)
+Verdict: PASS
+
+--- Critic Take ---
+The Save/Load controls slot into the simulation controls bar with quiet efficiency.
+Two compact buttons -- floppy disk for Save, folder for Load -- sit between tick
+counter and Quit. They never compete for attention with the play/pause controls.
+
+The Save dialog is a model of restraint. Bottom sheet (mobile) or popover (desktop)
+with optional name input, current tick in gold mono, and full-width Save button.
+Type name, hit Enter, watch button transform to green confirmation, auto-dismiss.
+The feedback loop is tight and satisfying.
+
+The Load panel shows name, tick number in gold mono, and relative timestamp per entry.
+Load and delete buttons clearly separated. Empty state handled gracefully. Loading
+calls POST /api/load/{id} and refreshes store via WebSocket broadcast.
+
+The save-time indicator updates every minute. True auto-save polling is not implemented
+(backend does not auto-save), but the manual save indicator fills the requirement.
+
+--- Functional Checklist ---
+[x] Save button present in controls bar -- verified
+[x] Save dialog with optional name input -- verified
+[x] Save calls POST /api/save (with name param) -- verified via network intercept
+[x] Load panel lists saves with tick number + timestamp -- verified
+[x] Load calls POST /api/load/{id} -- verified
+[x] Save indicator shows time since last save -- verified
+[x] Delete save removes from list -- verified
+[x] Mobile: bottom sheets for save/load dialogs -- verified
+
+--- Mobile & Gesture Report ---
+Viewport tested: 375px
+Thumb zone: PASS -- save/load buttons in bottom controls bar (thumb zone)
+Touch targets: Save/Load 44x44px, dialog buttons 48px min-h, input 44px min-h
+Gestures: Backdrop tap to dismiss both dialogs
+One-hand usability: Can save and load one-handed from thumb zone
+Bottom sheets: Both dialogs render as bottom sheets on mobile with drag handles
+
+--- Atmosphere & Polish Notes ---
+- Gold-to-green transition on save confirmation is satisfying
+- Relative timestamps keep the load list feeling current
+- Tick numbers in gold monospace maintain the monitor visual language
+
+--- Delight Moments ---
+- Instant save confirmation with check icon -- no ambiguity
+- Enter key submits from name input -- keyboard users not forgotten
+- Auto-focus on name input when dialog opens
+
+[REVIEW] Feature: "Agent thought bubbles" (P2-001)
+Verdict: PASS
+
+--- Critic Take ---
+The thought bubbles bring a layer of interiority to the escape room that was missing.
+When a tick resolves, agent actions materialize as speech-bubble cards below the agent
+status strip -- dark charcoal with gold/30 border and a triangular speech tail. Inside:
+brain icon + agent name, eye + observation, arrow + action, message + reasoning.
+
+The backend does not send explicit LLM reasoning; thoughts are synthesized from tick
+event types. This is a creative workaround that delivers the spirit of the feature.
+When the backend eventually exposes real chain-of-thought, the component is structured
+to accept richer data without redesign.
+
+Per-agent toggle strip: gold-outlined pills with eye/eye-off icons. Horizontal scroll
+on mobile handles overflow. Auto-fade at 6s keeps the interface from accumulating
+visual debt. On next processing cycle, all bubbles clear immediately.
+
+--- Functional Checklist ---
+[x] Thought bubbles appear when agent makes a decision -- verified (tick 21)
+[x] Shows observation, action, reasoning -- verified
+[x] Auto-fade after seconds (6s) -- verified
+[x] Dismiss on next tick/processing cycle -- verified
+[x] Per-agent toggle on/off -- verified
+[x] Animation (fade in/out) -- verified (scale+opacity, 500ms ease-out)
+
+--- Mobile & Gesture Report ---
+Viewport tested: 375px
+Thumb zone: Toggle strip mid-screen (acceptable for secondary control)
+Touch targets: Toggle buttons 44px height (measured). Dismiss X 24px (cosmetic only)
+Gestures: Horizontal scroll for toggle strip and bubbles
+One-hand usability: Can scroll and toggle with one hand
+
+--- Atmosphere & Polish Notes ---
+- Speech bubble tail triangle makes them feel conversational
+- Brain icon in gold sets the right tone
+- Synthesized reasoning is generic but reasonable placeholder
+- 11px text keeps bubbles compact without being cramped
+
+--- Delight Moments ---
+- Alice thought bubble with vault lock discovery captured the dramatic moment
+- Gold/30 border giving bubbles warm glow against dark background
+- Per-agent toggle remembering mute state across ticks

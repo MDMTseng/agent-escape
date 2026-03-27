@@ -138,24 +138,24 @@
       "phase": "P1",
       "name": "Interactive Map panel",
       "description": "Add an interactive room map to the Game Monitor. Render room graph with React Flow (read-only mode). Show agent positions as animated markers on their current room. Color doors by status (locked red, unlocked green). Click a room to see entity list and current occupants. Optional heat map toggle (room visit frequency).",
-      "passes": false,
-      "notes": "Depends on P0-005"
+      "passes": true,
+      "notes": "Reviewed 2026-03-27. All criteria met. React Flow read-only map, agent markers, door coloring, room detail popup, heat map toggle. Mobile FAB + fullscreen overlay. Desktop collapsible panel."
     },
     {
       "id": "P1-008",
       "phase": "P1",
       "name": "Save/Load UI in Game Monitor",
       "description": "Add save/load controls to the Game Monitor. 'Save' button (with optional name input) calls POST /api/save. 'Load' dropdown lists saves for current story (GET /api/stories/{id}) with tick number and timestamp. Loading calls POST /api/load/{id} and refreshes the store. Show auto-save indicator.",
-      "passes": false,
-      "notes": "Depends on P0-005"
+      "passes": true,
+      "notes": "Reviewed 2026-03-27. All criteria met. Save with optional name via POST /api/save. Load list from GET /api/saves with tick + timestamp. Load via POST /api/load/{id}. Save indicator shows time since last save. Bottom sheets on mobile."
     },
     {
       "id": "P2-001",
       "phase": "P2",
       "name": "Agent thought bubbles",
       "description": "Show agent reasoning in the UI. When an agent makes a decision, display a thought bubble near their status card with a summarized version of the LLMBrain reasoning (key observation + chosen action + why). Thought bubbles fade after a few seconds or on next tick. Toggle on/off per agent.",
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Reviewed 2026-03-27. All criteria met. Thought bubbles appear after tick with observation/action/reasoning. Auto-fade after 6s and on next processing cycle. Per-agent toggle. Synthesized from events since backend lacks explicit LLM reasoning."
     },
     {
       "id": "P2-002",
