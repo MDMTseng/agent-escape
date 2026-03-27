@@ -73,10 +73,13 @@ export function NarrativeCard({ entry, animate = false }: NarrativeCardProps) {
 
   return (
     <article
+      data-tick={entry.tick}
       className={cn(
         // Card base — mobile first
         'relative rounded-lg border border-border bg-bg-secondary',
         'px-4 py-3',
+        // Transition for timeline scrubber highlight
+        'transition-[ring,ring-color] duration-300',
         // Entrance animation
         animate && 'animate-card-in',
       )}

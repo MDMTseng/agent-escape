@@ -22,6 +22,7 @@ import { InteractiveMap } from '@/components/monitor/InteractiveMap'
 import { ThoughtBubbles } from '@/components/monitor/ThoughtBubble'
 import { NudgeSystem } from '@/components/monitor/NudgeSystem'
 import { ConversationLog } from '@/components/monitor/ConversationLog'
+import { TimelineScrubber } from '@/components/monitor/TimelineScrubber'
 import { Wifi, WifiOff, Loader2, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -111,6 +112,9 @@ export default function Monitor() {
 
       {/* Spectator nudge system — collapsible panel (P2-004) */}
       <NudgeSystem />
+
+      {/* Timeline scrubber — film-strip with event markers (P3-001) */}
+      <TimelineScrubber />
 
       {/* Simulation controls — sticky bottom bar (P0-009) */}
       <SimulationControls />
