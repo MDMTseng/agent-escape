@@ -9,14 +9,19 @@
  *
  * Mobile: full-screen overlay triggered by a map FAB, pinch-to-zoom.
  * Desktop: inline collapsible panel.
+ *
+ * Exhibition-grade elevation:
+ *  - Layered card-style room nodes with inner glow/vignette, rough-edge border
+ *  - Agent markers as glowing orbs with drop-shadow
+ *  - Staggered entrance animation (rooms fade in 50ms apart, edges ink-draw)
+ *  - Atmospheric parchment/fog background with vignette overlay
+ *  - Hover depth effect (scale + glow lift)
  */
 
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import {
   ReactFlow,
   Controls,
-  Background,
-  BackgroundVariant,
   type Node,
   type Edge,
   BaseEdge,
@@ -61,6 +66,7 @@ type MapRoomNodeData = {
   entityCount: number
   heatValue: number // 0-1, how often this room is visited
   showHeat: boolean
+  entranceDelay: number // staggered animation delay in ms
 }
 
 type MapDoorEdgeData = {
@@ -69,7 +75,7 @@ type MapDoorEdgeData = {
 }
 
 // ---------------------------------------------------------------------------
-// Custom Room Node — shows name + agent markers
+// Custom Room Node — layered card with inner glow, rough-edge feel, agent orbs
 // ---------------------------------------------------------------------------
 
 function MapRoomNode({ data, selected }: NodeProps<Node<MapRoomNodeData>>) {
@@ -81,13 +87,25 @@ function MapRoomNode({ data, selected }: NodeProps<Node<MapRoomNodeData>>) {
   return (
     <div
       className={cn(
-        'px-3 py-2.5 rounded-xl border-2 min-w-[120px] max-w-[180px] transition-colors cursor-pointer',
-        'bg-bg-secondary shadow-lg shadow-black/30',
+        'animate-room-entrance map-room-node',
+        'relative px-3 py-2.5 rounded-xl border-2 min-w-[120px] max-w-[180px] cursor-pointer',
+        'shadow-lg shadow-black/40',
         selected
           ? 'border-gold ring-2 ring-gold/30'
           : 'border-border hover:border-text-muted',
       )}
-      style={heatBg ? { backgroundColor: heatBg } : undefined}
+      style={{
+        // Staggered entrance animation delay
+        animationDelay: `${data.entranceDelay}ms`,
+        // Layered background: inner vignette + base color
+        background: heatBg
+          ? `radial-gradient(ellipse at center, ${heatBg} 0%, rgba(13, 17, 23, 0.85) 100%)`
+          : 'radial-gradient(ellipse at center, #1c2128 0%, #13171e 60%, #0d1117 100%)',
+        // Subtle inner glow
+        boxShadow: selected
+          ? '0 0 20px rgba(227, 179, 65, 0.15), inset 0 0 16px rgba(227, 179, 65, 0.05), 0 8px 24px rgba(0, 0, 0, 0.4)'
+          : 'inset 0 0 12px rgba(255, 255, 255, 0.02), 0 4px 16px rgba(0, 0, 0, 0.4)',
+      }}
     >
       {/* Connection handles (hidden but functional for layout) */}
       <Handle type="target" position={Position.Top} className="!w-0 !h-0 !bg-transparent !border-0 !min-w-0 !min-h-0" />
@@ -107,16 +125,27 @@ function MapRoomNode({ data, selected }: NodeProps<Node<MapRoomNodeData>>) {
         </div>
       )}
 
-      {/* Agent markers — colored dots with names */}
+      {/* Agent markers — glowing orbs with soft drop-shadow */}
       {data.agents.length > 0 && (
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1.5">
           {data.agents.map((agent) => (
             <span
               key={agent.id}
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-gold/15 text-gold text-[10px] font-medium"
+              className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium"
               title={agent.name}
+              style={{
+                background: 'rgba(227, 179, 65, 0.1)',
+                color: '#e3b341',
+              }}
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-gold animate-pulse" />
+              {/* Glowing orb marker */}
+              <span
+                className="w-2 h-2 rounded-full animate-pulse"
+                style={{
+                  background: 'radial-gradient(circle, #f0c95c 0%, #e3b341 40%, rgba(227, 179, 65, 0.4) 100%)',
+                  boxShadow: '0 0 6px rgba(227, 179, 65, 0.6), 0 0 12px rgba(227, 179, 65, 0.2)',
+                }}
+              />
               {agent.name.length > 8 ? agent.name.slice(0, 7) + '...' : agent.name}
             </span>
           ))}
@@ -137,7 +166,7 @@ function MapRoomNode({ data, selected }: NodeProps<Node<MapRoomNodeData>>) {
 }
 
 // ---------------------------------------------------------------------------
-// Custom Door Edge — colored by lock status
+// Custom Door Edge — colored by lock status, with ink-draw entrance animation
 // ---------------------------------------------------------------------------
 
 function MapDoorEdge({
@@ -163,15 +192,18 @@ function MapDoorEdge({
 
   return (
     <>
-      <BaseEdge
-        path={edgePath}
-        style={{
-          ...style,
-          stroke: locked ? '#f85149' : '#3fb950',
-          strokeWidth: 2,
-          strokeDasharray: locked ? '6 3' : undefined,
-        }}
-      />
+      {/* Wrap in a group with ink-draw animation class */}
+      <g className="animate-ink-draw">
+        <BaseEdge
+          path={edgePath}
+          style={{
+            ...style,
+            stroke: locked ? '#f85149' : '#3fb950',
+            strokeWidth: 2,
+            strokeDasharray: locked ? '6 3' : undefined,
+          }}
+        />
+      </g>
       <EdgeLabelRenderer>
         <div
           style={{
@@ -192,6 +224,25 @@ function MapDoorEdge({
         </div>
       </EdgeLabelRenderer>
     </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Atmospheric background overlay — parchment/fog feel with vignette
+// ---------------------------------------------------------------------------
+
+function AtmosphericBackground() {
+  return (
+    <div
+      className="absolute inset-0 pointer-events-none z-0"
+      style={{
+        background: `
+          radial-gradient(ellipse at 30% 20%, rgba(227, 179, 65, 0.015) 0%, transparent 50%),
+          radial-gradient(ellipse at 70% 80%, rgba(227, 179, 65, 0.01) 0%, transparent 50%),
+          radial-gradient(ellipse at center, transparent 40%, rgba(0, 0, 0, 0.4) 100%)
+        `,
+      }}
+    />
   )
 }
 
@@ -401,10 +452,10 @@ export function InteractiveMap() {
     return map
   }, [agents])
 
-  // Build React Flow nodes
+  // Build React Flow nodes — with staggered entrance delay
   const nodes: Node<MapRoomNodeData>[] = useMemo(
     () =>
-      roomList.map((room) => ({
+      roomList.map((room, index) => ({
         id: room.id,
         type: 'mapRoom',
         position: positionsRef.current[room.id] || { x: 0, y: 0 },
@@ -415,6 +466,7 @@ export function InteractiveMap() {
           entityCount: Object.keys(room.entities).length,
           heatValue: roomHeat[room.id] || 0,
           showHeat,
+          entranceDelay: index * 50, // 50ms stagger per room
         },
         selectable: true,
         draggable: false,
@@ -459,6 +511,9 @@ export function InteractiveMap() {
   // The map content (shared between mobile overlay and desktop panel)
   const mapContent = (
     <div className="w-full h-full relative">
+      {/* Atmospheric fog/parchment background with vignette */}
+      <AtmosphericBackground />
+
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -475,7 +530,11 @@ export function InteractiveMap() {
         panOnDrag
         zoomOnPinch
         zoomOnScroll
-        className="bg-bg-primary"
+        className="bg-transparent"
+        style={{
+          // Subtle parchment-like tint under the graph
+          background: 'radial-gradient(ellipse at center, #111820 0%, #0d1117 100%)',
+        }}
         proOptions={{ hideAttribution: true }}
       >
         <Controls
@@ -483,12 +542,7 @@ export function InteractiveMap() {
           showInteractive={false}
           className="!bg-bg-secondary !border-border !rounded-lg !shadow-lg [&>button]:!bg-bg-secondary [&>button]:!border-border [&>button]:!text-text-secondary [&>button:hover]:!bg-bg-tertiary [&>button]:!min-h-[44px] [&>button]:!min-w-[44px] [&>button]:!w-11 [&>button]:!h-11 [&>button>svg]:!fill-text-secondary"
         />
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={20}
-          size={1}
-          color="#30363d"
-        />
+        {/* No Background grid — replaced by atmospheric overlay */}
       </ReactFlow>
 
       {/* Heat map toggle */}
