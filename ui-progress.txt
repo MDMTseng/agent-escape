@@ -2426,3 +2426,225 @@ One-hand usability: Can scroll and toggle with one hand
 - Alice thought bubble with vault lock discovery captured the dramatic moment
 - Gold/30 border giving bubbles warm glow against dark background
 - Per-agent toggle remembering mute state across ticks
+
+--- 2026-03-27 ---
+
+[REVIEW-CURATOR] Feature: P1-007 -- Interactive Map panel
+Verdict: PASS (functional) | Exhibition Readiness: Workshop
+
+--- Curator Critique ---
+
+The Interactive Map is a competent cartographer tool, but it is not yet a world
+you want to lean into. Open the map on desktop and you see rooms arranged in a
+tidy grid -- nodes evenly spaced, bezier curves connecting them, React Flow
+dot-grid background tiling away behind it all. It works. It is legible. It is
+also profoundly generic. This could be a network diagram in a Cisco admin panel.
+The rooms of an escape room should feel like they were drawn by candlelight on
+the back of a napkin -- tense, mysterious, spatial. Instead they sit on a
+spreadsheet.
+
+The gold agent-marker pills are a nice touch -- the pulsing dot inside each one
+does convey aliveness. But the nodes themselves are flat rectangles with 12px
+rounded corners and a 2px border. There is no depth, no atmosphere, no sense
+that these rooms exist in physical space. The heat map toggle is clever in
+concept but underwhelming in execution: a faint orange wash that barely
+registers against the dark background. Heat should burn -- it should make you
+feel which rooms are crowded, contested, alive. The lock/unlock indicators on
+edges (red dashed vs green solid) are functional but visually timid -- tiny 9px
+labels that disappear at any zoom level below 100%.
+
+The mobile FAB (the gold circle with a map icon) is well-positioned and
+satisfying to tap, and the full-screen overlay is a smart pattern. But the
+overlay itself is just the same map, bigger. There is no entrance animation,
+no sense of unfolding a treasure map or pulling out a blueprint. It snaps open
+like a lightbox. For a feature that is fundamentally about spatial storytelling,
+the map tells no story at all.
+
+--- Curator Brief ---
+
+1. ROOM NODE REDESIGN -- Replace the flat rectangles with layered card-style
+   nodes that have a subtle inner glow or vignette. Add a thin atmospheric
+   gradient (radial, from dark center to slightly lighter edge) to each node.
+   Use a hand-drawn or rough-edge border style (CSS clip-path or SVG filter
+   feTurbulence + feDisplacementMap) to make rooms feel sketched rather than
+   manufactured. Consider a subtle parchment texture overlay (CSS
+   background-image with a noise SVG or data URI).
+
+2. ANIMATED AGENT MARKERS -- Replace the static pulsing dots with small avatar
+   circles (first letter of the agent name, or a tiny silhouette icon) that
+   slide smoothly between rooms on movement events. Use a CSS transition on
+   the node position change: when an agent moves from Room A to Room B,
+   briefly show a trail line or ghost echo at the old position that fades out
+   over 800ms. This single animation would transform the map from a snapshot
+   into a living diorama.
+
+3. HEAT MAP WITH CONVICTION -- When heat map is active, use a radial gradient
+   overlay per room that bleeds beyond the node boundaries (absolutely
+   positioned, larger than the node, with a feathered edge). Use a warm-to-hot
+   color ramp (amber to orange to cherry red) instead of a single gold opacity
+   wash. Add a subtle flickering animation to high-heat rooms (randomize
+   opacity between 0.7 and 1.0 every 2s with a custom ease curve). The heat
+   should feel thermal, not tinted.
+
+4. MAP OPENING CEREMONY -- When the mobile overlay opens, add a 400ms entrance:
+   the map fades from black with a slight scale-up (0.95 to 1.0) and the nodes
+   stagger-animate in from opacity 0 with a 50ms delay per node, radiating
+   outward from center. On desktop, when the collapsible panel expands, use a
+   height transition with a slow ease-out (500ms cubic-bezier(0.16, 1, 0.3, 1))
+   instead of the current instant appear.
+
+5. EDGE DRAMA -- Locked doors should pulse with a dim red glow (box-shadow or
+   drop-shadow filter on the edge label, animated). Unlocked doors should have
+   a brief green flash animation when they first transition to unlocked state.
+   The dashed-line pattern for locked doors is good but needs more contrast --
+   use strokeWidth 3 and a bolder dash pattern (8 4 instead of 6 3).
+
+
+[REVIEW-CURATOR] Feature: P1-008 -- Save/Load UI
+Verdict: PASS (functional) | Exhibition Readiness: Workshop
+
+--- Curator Critique ---
+
+The Save/Load UI is honest, workmanlike, and utterly forgettable. The Save
+dialog rises as a bottom sheet on mobile -- correct pattern, well-executed
+mechanics, proper drag handle, focused input on mount. The gold Save button
+has the right weight. The Saved confirmation state flips to green with a check
+icon. All the boxes are checked. And yet, opening this dialog feels exactly
+like clicking Save As in a text editor. There is no ceremony, no weight, no
+sense that you are preserving a moment in a story.
+
+The Load panel is worse: it is a list. A vertical stack of rows with save
+names, tick numbers, and relative timestamps. Tick 14, 3m ago. This is
+metadata, not narrative. In an escape room, loading a save should feel like
+opening a sealed case file, pulling a photograph from an evidence board, or
+rewinding a tape recorder. Instead it feels like browsing your Downloads
+folder. The empty state -- a folder icon with No saves found -- is functionally
+adequate but atmospherically dead.
+
+The save/load buttons in the control bar are icon-only on mobile (floppy disk,
+folder), which is the right call for space. But they blend into the background
+as anonymous gray glyphs, indistinguishable from the step button at a glance.
+There is no visual language that says this is about time, about memory, about
+preserving your story.
+
+--- Curator Brief ---
+
+1. SAVE CEREMONY -- When the save completes, instead of a simple green check,
+   play a brief sealing animation: the save dialog content dims slightly, a
+   circular reveal wipe (CSS clip-path circle() transition) sweeps across the
+   button from left to right in gold, then the button shrinks to a compact
+   Saved badge with a gentle bounce (scale 1.05 to 1.0). Add a soft scale
+   pulse to the entire dialog (scale 1.0 to 1.01 to 1.0, 200ms). The gold
+   should feel like a wax seal being pressed.
+
+2. SAVE CARDS NOT ROWS -- Replace the Load panel flat list rows with small
+   cards that have a left border accent (gold for recent saves, fading to
+   gray-blue for older ones). Each card should show a tiny visual snapshot:
+   the number of agents alive, the escape chain progress as a micro progress
+   bar (3px tall, inline), and perhaps a one-line narrative excerpt from the
+   tick (truncated to ~60 chars). This transforms Tick 14 -- 3m ago into a
+   memory with context.
+
+3. ENTRY ANIMATION FOR LOAD LIST -- When the Load panel opens, stagger-animate
+   the save entries in from the bottom, 60ms apart, using translateY(8px) +
+   opacity 0 to translateY(0) + opacity 1. This gives the list a files-being-
+   pulled-from-a-drawer feeling. The empty state should have the folder icon
+   drift in with a slow float animation (translateY oscillating 2px, 3s
+   infinite ease-in-out) to feel less static.
+
+4. VISUAL DISTINCTION FROM CONTROLS -- The save/load buttons should have a
+   distinct visual identity from the play/pause/step controls. Consider giving
+   them a slightly different shape (pill-shaped with more horizontal padding)
+   or a subtle left-border divider separating the transport controls from the
+   persistence controls.
+
+5. TIMESTAMP AS NARRATIVE -- Replace 3m ago with more atmospheric language for
+   recent saves: moments ago, a short while ago, earlier today. The mechanical
+   precision of 3m ago breaks the spell. Time in an escape room should feel
+   elastic, not metered.
+
+
+[REVIEW-CURATOR] Feature: P2-001 -- Agent thought bubbles
+Verdict: PASS (functional) | Exhibition Readiness: Studio-quality
+
+--- Curator Critique ---
+
+The thought bubbles are the closest thing to genuine atmosphere in the current
+Monitor page. The dark bubble (#1c2128) with its gold border shimmer, the
+three-line structure (observation / action / reasoning), the speech-bubble tail
+pointing downward -- there is a visual vocabulary here that communicates
+interiority. When a thought appears, the transition (opacity + translateY +
+scale, 500ms ease-out) is smooth and has weight. The auto-fade after 6 seconds
+is the right call: thoughts are transient, and the UI respects that rhythm
+instead of cluttering.
+
+The per-agent toggle pills in the header strip are well-crafted. Gold border
+for active, muted gray for disabled, with the eye/eye-off icon swap. This is a
+small control that communicates its state clearly without instruction. The
+dismiss button (tiny X in the top-right corner) is appropriately understated.
+The Brain icon in gold is a nice branded touch.
+
+Where this feature falls short of exhibition-grade is in the drama of
+appearance and disappearance. The transition is smooth but uniform -- every
+thought fades in exactly the same way, at exactly the same speed, with exactly
+the same easing. In an escape room, an agent having a breakthrough revelation
+should hit differently than an agent routinely examining a bookshelf. The
+synthesized reasoning text (Looking for new clues or paths forward) is generic
+and repetitive -- it reads like placeholder copy, not like a mind at work. The
+bubble content lacks the electricity of genuine thought. It is a notification
+card wearing a thought bubble costume.
+
+--- Curator Brief ---
+
+1. TYPEWRITER REVEAL -- Instead of the entire bubble appearing at once with a
+   fade-in, reveal the text inside line-by-line with a typewriter effect. The
+   observation line appears first (200ms delay), then the action line types out
+   character-by-character over 600ms, then the reasoning line fades in last.
+   Use a blinking cursor (gold, 530ms blink interval) that advances through
+   the text. This transforms a static card into a living thought process.
+
+2. URGENCY TIERS -- Introduce visual urgency levels based on event type. A
+   state_change or use event (puzzle progress) should trigger a breakthrough
+   bubble: slightly larger, with a brief gold border flash (box-shadow 0 0
+   12px rgba(227,179,65,0.4) that decays over 1s), and the observation text
+   in gold instead of muted gray. A fail event gets a subtle red-tinted border.
+   A talk event gets a speech-specific icon instead of Brain. These tiers give
+   each thought emotional texture without changing the layout.
+
+3. FLOATING POSITION NEAR AGENT CARDS -- If technically feasible, position each
+   thought bubble directly below or beside its corresponding agent card in the
+   status strip, using absolute positioning relative to the agent card element.
+   This spatial association (thought physically emerging from the agent it
+   belongs to) creates a comic-book panel effect that is far more evocative
+   than the current horizontal scroll row.
+
+4. EXIT WITH INTENTION -- The current fade-out is fine but generic. For
+   departure, the bubble content dissolves first (text opacity to 0 over
+   300ms), then the bubble border fades (200ms), then the background collapses
+   (height to 0, 200ms). This layered exit mimics a thought dissipating rather
+   than a card disappearing. A slight upward drift (translateY -4px) during
+   fade gives the impression of a thought floating away.
+
+5. RICHER SYNTHESIS TEXT -- The current generic reasoning strings should be
+   varied and context-aware. Maintain 3-4 variants per event type, randomly
+   selected, to prevent repetition fatigue. For movement: Time to change
+   perspective / This room has shown me everything it will / Something is
+   calling from beyond that door. For examine: There is more here than meets
+   the eye / Let me look closer / What is this thing hiding? The text should
+   read like inner monologue, not log entries.
+
+
+--- Overall Exhibition Readiness ---
+
+| Feature                | Current Grade  | Key Elevation Needed                                        |
+|------------------------|----------------|-------------------------------------------------------------|
+| P1-007 Interactive Map | Workshop       | Atmospheric node design, movement animation, heat conviction |
+| P1-008 Save/Load UI   | Workshop       | Narrative framing, save ceremony, card-based load list       |
+| P2-001 Thought Bubbles | Studio-quality | Typewriter reveal, urgency tiers, richer synthesis text      |
+
+The thought bubbles are the most polished of the three -- they have a visual
+identity and emotional logic. The map and save/load are functional but visually
+interchangeable with any React admin panel. They need a signature moment, an
+atmospheric hook, something that makes a user pause and think someone cared
+about this. The Curator Brief items above are ordered by impact: item 1 in
+each list is the single highest-ROI change for that feature.
