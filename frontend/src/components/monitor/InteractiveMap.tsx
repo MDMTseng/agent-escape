@@ -393,7 +393,181 @@ function autoLayout(roomIds: string[]): Record<string, { x: number; y: number }>
 }
 
 // ---------------------------------------------------------------------------
-// Main InteractiveMap component
+// Inline map component — renders just the map content, no FAB/overlay/collapse.
+// Used by MobileMonitorTabs to embed the map as a tab panel.
+// ---------------------------------------------------------------------------
+
+export function InteractiveMapInline() {
+  const rooms = useRooms()
+  const agentsRecord = useAgents()
+  const doorsRecord = useDoors()
+  const narrativeEvents = useNarrativeEvents()
+  const agents = useMemo(() => Object.values(agentsRecord), [agentsRecord])
+  const roomList = useMemo(() => Object.values(rooms), [rooms])
+  const doorList = useMemo(() => Object.values(doorsRecord), [doorsRecord])
+
+  const [showHeat, setShowHeat] = useState(false)
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null)
+
+  const positionsRef = useRef<Record<string, { x: number; y: number }>>({})
+  const prevRoomIdsRef = useRef<string>('')
+  const roomIds = useMemo(() => Object.keys(rooms).sort(), [rooms])
+  const roomIdsKey = roomIds.join(',')
+
+  if (roomIdsKey !== prevRoomIdsRef.current) {
+    positionsRef.current = autoLayout(roomIds)
+    prevRoomIdsRef.current = roomIdsKey
+  }
+
+  const roomHeat = useMemo(() => {
+    const counts: Record<string, number> = {}
+    let maxCount = 1
+    for (const entry of narrativeEvents) {
+      for (const evt of entry.events) {
+        if (evt.room) {
+          counts[evt.room] = (counts[evt.room] || 0) + 1
+          if (counts[evt.room] > maxCount) maxCount = counts[evt.room]
+        }
+      }
+    }
+    const heat: Record<string, number> = {}
+    for (const [roomId, count] of Object.entries(counts)) {
+      heat[roomId] = count / maxCount
+    }
+    return heat
+  }, [narrativeEvents])
+
+  const agentsByRoom = useMemo(() => {
+    const map: Record<string, AgentState[]> = {}
+    for (const agent of agents) {
+      if (!map[agent.room_id]) map[agent.room_id] = []
+      map[agent.room_id].push(agent)
+    }
+    return map
+  }, [agents])
+
+  const nodes: Node<MapRoomNodeData>[] = useMemo(
+    () =>
+      roomList.map((room, index) => ({
+        id: room.id,
+        type: 'mapRoom',
+        position: positionsRef.current[room.id] || { x: 0, y: 0 },
+        data: {
+          label: room.name,
+          description: room.description,
+          agents: agentsByRoom[room.id] || [],
+          entityCount: Object.keys(room.entities).length,
+          heatValue: roomHeat[room.id] || 0,
+          showHeat,
+          entranceDelay: index * 50,
+        },
+        selectable: true,
+        draggable: false,
+      })),
+    [roomList, agentsByRoom, roomHeat, showHeat],
+  )
+
+  const edges: Edge<MapDoorEdgeData>[] = useMemo(
+    () =>
+      doorList.map((door: Door) => ({
+        id: door.id,
+        source: door.room_a,
+        target: door.room_b,
+        type: 'mapDoor',
+        data: {
+          locked: door.locked,
+          label: door.name || (door.locked ? 'Locked' : 'Open'),
+        },
+      })),
+    [doorList],
+  )
+
+  const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
+    setSelectedRoomId(node.id)
+  }, [])
+
+  const onPaneClick = useCallback(() => {
+    setSelectedRoomId(null)
+  }, [])
+
+  const selectedRoom = selectedRoomId ? rooms[selectedRoomId] : null
+  const selectedRoomAgents = selectedRoomId ? (agentsByRoom[selectedRoomId] || []) : []
+
+  if (roomList.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full text-sm text-text-muted">
+        <div className="text-center">
+          <Map size={32} className="mx-auto mb-2 text-text-muted/40" />
+          <p>No rooms loaded yet. Start a simulation to see the map.</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="w-full h-full relative">
+      <AtmosphericBackground />
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodeClick={onNodeClick}
+        onPaneClick={onPaneClick}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        fitView
+        minZoom={0.2}
+        maxZoom={3}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        elementsSelectable={true}
+        panOnDrag
+        zoomOnPinch
+        zoomOnScroll
+        className="bg-transparent"
+        style={{
+          background: 'radial-gradient(ellipse at center, #111820 0%, #0d1117 100%)',
+        }}
+        proOptions={{ hideAttribution: true }}
+      >
+        <Controls
+          position="bottom-left"
+          showInteractive={false}
+          className="!bg-bg-secondary !border-border !rounded-lg !shadow-lg [&>button]:!bg-bg-secondary [&>button]:!border-border [&>button]:!text-text-secondary [&>button:hover]:!bg-bg-tertiary [&>button]:!min-h-[44px] [&>button]:!min-w-[44px] [&>button]:!w-11 [&>button]:!h-11 [&>button>svg]:!fill-text-secondary"
+        />
+      </ReactFlow>
+
+      {/* Heat map toggle */}
+      <button
+        onClick={() => setShowHeat((h) => !h)}
+        className={cn(
+          'absolute top-3 right-3 z-10',
+          'flex items-center gap-1.5 px-3 py-2 rounded-lg',
+          'text-xs font-medium min-h-[44px]',
+          'border transition-colors',
+          showHeat
+            ? 'bg-warning/15 border-warning/30 text-warning'
+            : 'bg-bg-secondary border-border text-text-secondary hover:text-text-primary',
+        )}
+        aria-label={showHeat ? 'Hide heat map' : 'Show heat map'}
+      >
+        <Flame size={14} />
+        Heat
+      </button>
+
+      {/* Room detail popup */}
+      {selectedRoom && (
+        <RoomDetailPopup
+          room={selectedRoom}
+          agents={selectedRoomAgents}
+          onClose={() => setSelectedRoomId(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Main InteractiveMap component (FAB + overlay for mobile, collapsible for desktop)
 // ---------------------------------------------------------------------------
 
 export function InteractiveMap() {

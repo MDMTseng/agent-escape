@@ -1,14 +1,14 @@
 /**
- * Monitor page — the main game viewing page.
+ * Monitor page -- the main game viewing page.
  *
- * Connects to the WebSocket on mount and displays the narrative feed
- * as the primary panel. Layout is designed to accommodate future panels:
- * - Agent status strip (top, P0-007)
- * - Escape chain progress (P0-008)
- * - Simulation controls (bottom, P0-009)
+ * MOBILE (<640px): Tabbed interface via MobileMonitorTabs.
+ *   Only one panel visible at a time (Story / Agents / Progress / Tools).
+ *   The narrative feed gets the full content area height.
+ *   Simulation controls are always visible at the bottom.
  *
- * Mobile-first: single-column, full-width narrative feed.
- * Desktop: narrative feed centered with max-width, room for side panels later.
+ * TABLET/DESKTOP (>=640px): All panels stacked vertically as before.
+ *   Narrative feed is the flex-1 primary content.
+ *   Side panels and strips are all visible.
  */
 
 import { useWebSocket } from '@/hooks/useWebSocket'
@@ -23,6 +23,7 @@ import { ThoughtBubbles } from '@/components/monitor/ThoughtBubble'
 import { NudgeSystem } from '@/components/monitor/NudgeSystem'
 import { ConversationLog } from '@/components/monitor/ConversationLog'
 import { TimelineScrubber } from '@/components/monitor/TimelineScrubber'
+import { MobileMonitorTabs } from '@/components/monitor/MobileMonitorTabs'
 import { Wifi, WifiOff, Loader2, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -64,7 +65,7 @@ export default function Monitor() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Monitor header — tick count + connection status */}
+      {/* Monitor header -- compact on mobile, slightly more spacious on desktop */}
       <header className="shrink-0 flex items-center justify-between px-3 py-2 md:px-4 border-b border-border bg-bg-primary">
         <div className="flex items-center gap-3">
           <h1 className="text-gold font-bold tracking-tight text-lg m-0">
@@ -84,39 +85,52 @@ export default function Monitor() {
         <ConnectionBadge />
       </header>
 
-      {/* Agent status strip — horizontal scrollable agent cards */}
-      <AgentStatusStrip />
-
-      {/* Agent thought bubbles — appear after each tick (P2-001) */}
-      <ThoughtBubbles />
-
-      {/* Escape chain progress bar — compact bar + expandable checklist */}
-      <EscapeChainProgress />
-
-      {/* Puzzle progress dashboard — collapsible panel (P1-006) */}
-      <PuzzleProgressDashboard />
-
-      {/* Interactive room map — collapsible panel (desktop) / FAB overlay (mobile) (P1-007) */}
-      <InteractiveMap />
-
-      {/* Main content area — narrative feed */}
-      <div className="flex-1 min-h-0 relative">
-        {/* On desktop, center the feed with a max-width for readability */}
-        <div className="h-full w-full max-w-3xl mx-auto">
-          <NarrativeFeed />
-        </div>
+      {/* ================================================================= */}
+      {/* MOBILE LAYOUT (<640px): Tabbed interface                          */}
+      {/* Only one panel visible at a time. Narrative feed gets full height. */}
+      {/* ================================================================= */}
+      <div className="flex flex-col flex-1 min-h-0 sm:hidden">
+        <MobileMonitorTabs />
       </div>
 
-      {/* Agent conversation log — collapsible chat panel (P2-005) */}
-      <ConversationLog />
+      {/* ================================================================= */}
+      {/* DESKTOP/TABLET LAYOUT (>=640px): All panels stacked               */}
+      {/* This is the existing layout, unchanged.                           */}
+      {/* ================================================================= */}
+      <div className="hidden sm:flex sm:flex-col sm:flex-1 sm:min-h-0">
+        {/* Agent status strip -- horizontal scrollable agent cards */}
+        <AgentStatusStrip />
 
-      {/* Spectator nudge system — collapsible panel (P2-004) */}
-      <NudgeSystem />
+        {/* Agent thought bubbles */}
+        <ThoughtBubbles />
 
-      {/* Timeline scrubber — film-strip with event markers (P3-001) */}
-      <TimelineScrubber />
+        {/* Escape chain progress bar */}
+        <EscapeChainProgress />
 
-      {/* Simulation controls — sticky bottom bar (P0-009) */}
+        {/* Puzzle progress dashboard */}
+        <PuzzleProgressDashboard />
+
+        {/* Main content area -- narrative feed */}
+        <div className="flex-1 min-h-0 relative">
+          <div className="h-full w-full max-w-3xl mx-auto">
+            <NarrativeFeed />
+          </div>
+        </div>
+
+        {/* Agent conversation log */}
+        <ConversationLog />
+
+        {/* Spectator nudge system */}
+        <NudgeSystem />
+
+        {/* Timeline scrubber */}
+        <TimelineScrubber />
+
+        {/* Interactive map -- desktop collapsible panel + FAB (hidden on mobile, Map is a tab there) */}
+        <InteractiveMap />
+      </div>
+
+      {/* Simulation controls -- always visible at bottom, all viewports */}
       <SimulationControls />
     </div>
   )

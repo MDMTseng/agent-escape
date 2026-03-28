@@ -10,7 +10,7 @@
  *   POST /api/step    -> advance one tick (only when paused)
  */
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Play,
@@ -18,6 +18,7 @@ import {
   SkipForward,
   LogOut,
   Loader2,
+  MoreHorizontal,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SaveLoadControls } from '@/components/monitor/SaveLoadControls'
@@ -197,35 +198,142 @@ export function SimulationControls() {
         )}
       </div>
 
-      {/* --- Save/Load controls (P1-008) --- */}
-      <SaveLoadControls />
+      {/* --- Desktop: Save/Load/Branch/Quit inline (hidden on mobile) --- */}
+      <div className="hidden sm:flex sm:items-center sm:gap-2">
+        <SaveLoadControls />
+        <SaveBranching />
+        <button
+          onClick={handleQuit}
+          disabled={quitLoading}
+          aria-label="Quit to library"
+          title="Pause and return to library"
+          className={cn(
+            'flex items-center justify-center gap-1.5',
+            'h-11 min-h-[44px] px-3 rounded-lg',
+            'transition-all duration-150',
+            'text-text-secondary text-xs font-medium',
+            'hover:bg-bg-tertiary hover:text-text-primary active:scale-95',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold',
+            quitLoading && 'opacity-50 cursor-not-allowed',
+          )}
+        >
+          {quitLoading ? (
+            <Loader2 size={16} className="animate-spin" />
+          ) : (
+            <LogOut size={16} />
+          )}
+          <span>Quit</span>
+        </button>
+      </div>
 
-      {/* --- Branch timeline controls (P3-002) --- */}
-      <SaveBranching />
+      {/* --- Mobile: overflow menu for Save/Load/Branch/Quit --- */}
+      <MobileOverflowMenu onQuit={handleQuit} quitLoading={quitLoading} />
+    </div>
+  )
+}
 
-      {/* --- Quit to Library button --- */}
+// ---------------------------------------------------------------------------
+// MobileOverflowMenu -- "..." button that opens a popover with Save/Load/Branch/Quit
+// Only visible on mobile (<sm breakpoint)
+// ---------------------------------------------------------------------------
+
+function MobileOverflowMenu({
+  onQuit,
+  quitLoading,
+}: {
+  onQuit: () => void
+  quitLoading: boolean
+}) {
+  const [isOpen, setIsOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  // Close on outside click
+  useEffect(() => {
+    if (!isOpen) return
+    const handler = (e: MouseEvent | TouchEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as HTMLElement)) {
+        setIsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    document.addEventListener('touchstart', handler)
+    return () => {
+      document.removeEventListener('mousedown', handler)
+      document.removeEventListener('touchstart', handler)
+    }
+  }, [isOpen])
+
+  return (
+    <div className="relative sm:hidden" ref={menuRef}>
       <button
-        onClick={handleQuit}
-        disabled={quitLoading}
-        aria-label="Quit to library"
-        title="Pause and return to library"
+        onClick={() => setIsOpen((o) => !o)}
         className={cn(
-          'flex items-center justify-center gap-1.5',
-          'h-11 min-h-[44px] px-3 rounded-lg',
+          'flex items-center justify-center',
+          'w-11 h-11 min-w-[44px] min-h-[44px] rounded-lg',
           'transition-all duration-150',
-          'text-text-secondary text-xs font-medium',
-          'hover:bg-bg-tertiary hover:text-text-primary active:scale-95',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold',
-          quitLoading && 'opacity-50 cursor-not-allowed',
+          'bg-bg-tertiary text-text-secondary hover:bg-border active:scale-95',
+          isOpen && 'bg-border text-text-primary',
         )}
+        aria-label="More actions"
+        aria-expanded={isOpen}
       >
-        {quitLoading ? (
-          <Loader2 size={16} className="animate-spin" />
-        ) : (
-          <LogOut size={16} />
-        )}
-        <span className="hidden sm:inline">Quit</span>
+        <MoreHorizontal size={20} />
       </button>
+
+      {/* Popover menu -- opens upward (since controls are at the bottom) */}
+      {isOpen && (
+        <div
+          className={cn(
+            'absolute bottom-full right-0 mb-2 z-50',
+            'w-56 rounded-xl border border-border bg-bg-secondary shadow-xl shadow-black/40',
+            'py-1',
+            'animate-in slide-in-from-bottom-2 duration-150',
+          )}
+        >
+          {/* Save/Load controls rendered inline in the menu */}
+          <div className="px-3 py-2 border-b border-border/50">
+            <span className="text-[10px] text-text-muted uppercase tracking-wider font-semibold">
+              Save & Load
+            </span>
+            <div className="mt-1.5">
+              <SaveLoadControls />
+            </div>
+          </div>
+
+          {/* Branch controls */}
+          <div className="px-3 py-2 border-b border-border/50">
+            <span className="text-[10px] text-text-muted uppercase tracking-wider font-semibold">
+              Branching
+            </span>
+            <div className="mt-1.5">
+              <SaveBranching />
+            </div>
+          </div>
+
+          {/* Quit button */}
+          <button
+            onClick={() => {
+              setIsOpen(false)
+              onQuit()
+            }}
+            disabled={quitLoading}
+            className={cn(
+              'flex items-center gap-2 w-full px-3 py-3',
+              'text-sm text-danger font-medium',
+              'active:bg-danger/10 transition-colors',
+              'min-h-[44px]',
+              quitLoading && 'opacity-50',
+            )}
+          >
+            {quitLoading ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <LogOut size={16} />
+            )}
+            Quit to Library
+          </button>
+        </div>
+      )}
     </div>
   )
 }

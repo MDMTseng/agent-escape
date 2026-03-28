@@ -3930,3 +3930,94 @@ P3-004 Version History:    Gallery-ready
 
 All 27 features PASS. No regressions. Both P3-002 and P3-004 at Gallery-
 ready. The escape room UI is ready for exhibition.
+
+--- 2026-03-28 ---
+
+[BUILD] CRITICAL: Mobile Monitor Tabbed Layout Rework
+  Agent: ui-builder (Claude Code / Opus 4.6)
+  Priority: CRITICAL (app was unusable on mobile)
+
+  Problem:
+    On a 375px iPhone screen, ALL panels were stacked vertically, leaving the
+    narrative feed with ~50px of visible space. Users could not read or interact
+    with anything meaningfully.
+
+  Solution -- 5-tab mobile layout:
+    Instead of stacking every panel, the mobile Monitor now uses a tabbed
+    interface. Only ONE panel is visible at a time, giving each panel the
+    full remaining screen height.
+
+    Layout (top to bottom):
+      Agent Cards (compact, ~70px, always visible, horizontal scroll)
+      Tab Bar (44px, 5 tabs: Story | Puzzles | Chat | Map | Nudge)
+      ACTIVE TAB CONTENT (flex-1, all remaining space)
+      Sim Controls (56px, always visible at bottom)
+      Bottom Nav (56px, always visible)
+
+    Tab definitions:
+      1. Story (default) -- Compact escape chain (1-line "3/8 solved" + mini bar,
+         expandable on tap) + narrative feed with filter chips (gets MOST space)
+      2. Puzzles -- Full-height escape chain + puzzle progress dashboard
+      3. Chat -- Full-height conversation log
+      4. Map -- Full-height interactive map (replaces FAB overlay on mobile)
+      5. Nudge -- Spectator nudge controls + timeline scrubber
+
+  Files modified:
+    frontend/src/components/monitor/MobileMonitorTabs.tsx -- REWRITTEN
+      - 5 tabs instead of 4 (added Map and Chat, removed Agents/Tools)
+      - Agent strip rendered ABOVE tabs (always visible)
+      - Compact escape chain summary in Story tab header
+      - InteractiveMapInline for the Map tab
+      - Swipe left/right to switch tabs
+      - Each tab scrolls independently
+      - All tab buttons 44px+ touch targets
+
+    frontend/src/components/monitor/InteractiveMap.tsx -- EXTENDED
+      - Added new export: InteractiveMapInline component
+      - Renders just the map content (ReactFlow + controls + heat toggle)
+      - No FAB, no overlay, no collapse -- pure inline map
+      - Used by MobileMonitorTabs Map tab
+
+    frontend/src/pages/Monitor.tsx -- UPDATED
+      - Moved InteractiveMap into the desktop-only section (hidden sm:block)
+      - Mobile uses Map tab instead of FAB overlay
+      - Desktop layout completely unchanged
+
+    frontend/src/components/monitor/SimulationControls.tsx -- UPDATED
+      - Added MobileOverflowMenu component ("..." button)
+      - On mobile: play/pause/step/tick always visible, save/load/branch/quit
+        in overflow popover menu that opens upward
+      - On desktop: all controls inline (unchanged)
+      - Menu closes on outside click/tap
+
+  Mobile/gesture notes:
+    - Tab bar: 44px height, icon + label, gold underline on active tab
+    - Swipe left/right between tabs (60px threshold, ignores vertical)
+    - Agent cards: snap scroll, always visible above tabs
+    - Compact escape chain: tap to expand full checklist, tap to collapse
+    - Overflow menu: tap "..." to open, tap outside to close
+    - All interactive elements are 44px+ touch targets
+    - No horizontal overflow anywhere
+    - AgentMemoryInspector already works as mobile bottom sheet (90vh, swipe to dismiss)
+
+  Desktop preservation:
+    - Desktop layout (>=640px) is COMPLETELY UNCHANGED
+    - The tabbed layout is ONLY rendered inside sm:hidden
+    - All desktop panels (stacked layout) inside hidden sm:flex
+    - InteractiveMap FAB only shows on desktop (moved into desktop section)
+
+  Screenshots:
+    screenshots/mobile-tabs-375.png -- Mobile 375x812, Story tab active
+    screenshots/desktop-monitor-1280.png -- Desktop 1280x800, unchanged layout
+
+  Known issues:
+    - Tab swipe can conflict with horizontal scrolling inside tab content
+      (e.g., filter chips in Story tab). Mitigated by requiring <40px vertical
+      delta, but some edge cases may exist.
+    - The overflow menu for Save/Load/Branch renders the SaveLoadControls and
+      SaveBranching components inline in the popover. Depending on their
+      internal layout, they may need CSS tweaks to look good in the narrow menu.
+    - Map tab loads ReactFlow on demand (not lazy-loaded with React.lazy yet)
+
+  Build: PASSES (tsc --noEmit + vite build both succeed)
+  Tested: 375x812 mobile + 1280x800 desktop screenshots verified
