@@ -814,9 +814,18 @@ def _build_rooms_and_puzzles(
         puzzle_type = char.get("puzzle_type", "combination_lock")
         code = char.get("code", "1234")
 
+        # Doors always get a descriptive name based on destination.
+        # The puzzle lock entity in the room keeps the character's lock_name.
+        # This avoids name collisions (e.g. "Ashworth's Strongbox" being both
+        # a room entity and a door, which confuses agents).
+        next_room_name = ws.rooms[room_ids[i + 1]].name
+        door_name = f"Door to {next_room_name}"
+
+        lock_hint = f" It is locked — solve the puzzle in this room to open it." if is_locked else ""
         door = Door(
             id=door_id,
-            name=char.get("lock_name", f"Door to {ws.rooms[room_ids[i + 1]].name}"),
+            name=door_name,
+            description=f"A door leading to {next_room_name}.{lock_hint}",
             room_a=room_ids[i],
             room_b=room_ids[i + 1],
             locked=is_locked,
@@ -843,11 +852,23 @@ def _build_rooms_and_puzzles(
         raw_clue = char.get("clue_artifact", "")
         clue_name = _short_name(raw_clue, f"{char['name']}'s Journal")
         clue_desc = char.get("clue_artifact_desc", raw_clue or f"Something left by {char['name']}.")
+
+        # Ensure the clue text actually contains the puzzle solution so agents
+        # can discover it.  The AI-generated description may omit the code.
+        if code and str(code) not in clue_desc:
+            if puzzle_type == "combination_lock":
+                clue_desc += f' Among the pages, you find the numbers "{code}" circled repeatedly.'
+            elif puzzle_type == "password_door":
+                clue_desc += f" The text emphasizes the word '{code}' — it seems important."
+            else:
+                clue_desc += f' A note in the margin reads: "{code}".'
+
         clue_id = _stable_id(f"clue-{i}-{clue_name}")
-        source_room.add_entity(Entity(
+        source_room.add_entity(Item(
             id=clue_id,
             name=clue_name,
             description=clue_desc,
+            portable=True,
             properties={
                 "on_examine": {"message": clue_desc},
                 "clue_for": door_id,
@@ -866,8 +887,9 @@ def _build_rooms_and_puzzles(
         acc_name = _short_name(raw_acc, f"{char['name']}'s Traces")
         acc_desc = char.get("accidental_clue_desc", raw_acc or f"Evidence of {char['name']}'s habits.")
         acc_id = _stable_id(f"aclue-{i}-{acc_name}")
-        source_room.add_entity(Entity(
+        source_room.add_entity(Item(
             id=acc_id, name=acc_name, description=acc_desc,
+            portable=True,
             properties={"on_examine": {"message": acc_desc}},
         ))
 
@@ -1045,80 +1067,49 @@ def _build_rooms_and_puzzles(
         "check_type": "finish",
     })
 
-    # --- Cooperative puzzle: information asymmetry ---
-    # A clue in the start room that must be spoken at a ward near the exit.
-    # Agents start in different rooms, forcing Talk to share the password.
-    if len(room_ids) >= 3 and difficulty >= 3:
-        coop_password = bible["characters"][0]["name"].lower()
-        coop_room = ws.rooms[start_room_id]
-        coop_clue_id = _stable_id("coop-clue")
-        coop_clue = Entity(
-            id=coop_clue_id,
-            name="Whispered Inscription",
-            description="Faint words etched into the wall, barely visible.",
-            properties={
-                "on_examine": {
-                    "message": (
-                        f'The inscription reads: "When all seems lost, '
-                        f"speak the word '{coop_password}' to the final ward.\""
-                    ),
-                },
-                "cooperative": True,
-            },
-        )
-        coop_room.add_entity(coop_clue)
-
-        # Ward near the exit
-        exit_room = ws.rooms[exit_room_id]
-        coop_ward_id = _stable_id("coop-ward")
-        coop_ward = Entity(
-            id=coop_ward_id,
-            name="Final Ward",
-            description="A shimmering barrier. It seems to listen for a spoken word.",
-            properties={
-                "puzzle_type": "password_door",
-                "password": coop_password,
-                "case_sensitive": False,
-                "cooperative": True,
-                "on_solve": {
-                    "set_state": "solved",
-                    "message": "The Final Ward dissolves! The way is clear.",
-                },
-            },
-        )
-        exit_room.add_entity(coop_ward)
-        escape_chain.append({
-            "step": len(escape_chain) + 1,
-            "action": "solve",
-            "target": "Final Ward",
-            "entity_id": coop_ward_id,
-            "room": exit_room.name,
-            "room_id": exit_room_id,
-            "description": f"Say '{coop_password}' to the Final Ward (requires cooperation!)",
-            "status": "pending",
-            "check_type": "solve",
-            "cooperative": True,
-        })
-
     # Renumber escape chain
     for idx, step in enumerate(escape_chain):
         step["step"] = idx + 1
 
-    # --- Create agents in DIFFERENT rooms ---
-    agent_b_room = room_ids[1] if len(room_ids) >= 3 and difficulty >= 3 else start_room_id
+    # --- Build goal hints from escape chain ---
+    goal_steps: list[str] = []
+    for step in escape_chain:
+        desc = step.get("description", "")
+        room = step.get("room", "")
+        if desc:
+            goal_steps.append(f"- {desc} (in {room})" if room else f"- {desc}")
+    goal_hint = "\n".join(goal_steps[:8])  # Cap to avoid giant prompts
+
+    # --- Create agents in the SAME starting room ---
+    # (Starting in different rooms caused agents to be unable to communicate
+    # and left Bob stranded in a puzzle room without any clues.)
     agent_a = AgentState(
         id="investigator_a",
         name="Alice",
         description="A sharp-eyed scholar who reads between the lines",
         room_id=start_room_id,
-        goal="Examine everything carefully. Share ALL discoveries with Bob via Talk — he needs your clues! Find a way out together.",
+        goal=(
+            "Escape this place! You are the CLUE READER. "
+            "Examine every object in each room for clues — codes, passwords, hidden items. "
+            "Share ALL discoveries with Bob via Talk. "
+            "When you find a code or password, use it immediately on the matching lock. "
+            "To escape, interact with the Exit Door in the final room. "
+            f"Puzzle chain:\n{goal_hint}"
+        ),
     )
     agent_b = AgentState(
         id="investigator_b",
         name="Bob",
         description="A bold explorer who acts first and thinks later",
-        room_id=agent_b_room,
-        goal="Explore rooms, try doors and mechanisms. Ask Alice what she's found — she has clues you need. Work together to escape.",
+        room_id=start_room_id,
+        goal=(
+            "Escape this place! You are the ACTION TAKER. "
+            "Pick up items, drop heavy objects on plates, use keys on locked doors. "
+            "Listen to Alice — she finds codes and passwords you need. "
+            "If an item is gone, skip it and move on. Don't backtrack endlessly. "
+            "To escape, interact with the Exit Door in the final room. "
+            f"Puzzle chain:\n{goal_hint}"
+        ),
     )
     ws.add_agent(agent_a)
     ws.add_agent(agent_b)

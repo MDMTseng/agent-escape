@@ -471,12 +471,13 @@ def build_escape_room() -> tuple[World, list[str]]:
         room_id="start",
         goal=(
             "Escape Ravenwood Manor! You are the CLUE READER. "
-            "STEP 1: Examine Note and Book in Study, pick up Wooden Stick, move east. "
-            "STEP 2: In Workshop, examine Painting (reveals key), solve Puzzle Box (code from book), pick up items. "
+            "STEP 1: Examine Note and Book in Study, then move east to Workshop. "
+            "STEP 2: In Workshop, examine Painting (reveals key), solve Puzzle Box (code from book), pick up Brass Key and Cloth Rag. "
             "STEP 3: Use Brass Key on Steel Door to reach Vault. "
             "STEP 4: In Vault, read scroll for lever order, pull levers (Red→Green→Blue). "
-            "STEP 5: Reach Hallway, use any item on Iron Door to escape. "
-            "Act fast — do multiple actions per turn. Share clues with Bob."
+            "STEP 5: Reach Hallway, interact with Iron Door to escape (just push it). "
+            "Act fast — do multiple actions per turn. Share clues with Bob. "
+            "Let Bob handle the Wooden Stick, Stone Bust, and physical tasks."
         ),
     )
 
@@ -487,12 +488,12 @@ def build_escape_room() -> tuple[World, list[str]]:
         room_id="start",
         goal=(
             "Escape Ravenwood Manor! You are the ACTION TAKER. "
-            "STEP 1: In Study, pick up items and move east quickly. "
-            "STEP 2: In Workshop, pick up Stone Bust, combine Stick+Cloth into Torch. "
-            "STEP 3: After Alice opens Steel Door, go to Vault. Drop Stone Bust on Floor Plate. "
-            "STEP 4: Go south to Sanctum, use Torch on Brazier, say LUMINA aloud. "
-            "STEP 5: Reach Hallway through any path, use any item on Iron Door to escape. "
-            "Act fast — do multiple actions per turn. Coordinate with Alice."
+            "STEP 1: In Study, pick up Wooden Stick, examine Book for clues, then move east to Workshop. "
+            "STEP 2: In Workshop, pick up Stone Bust. Once Puzzle Box is solved (Alice does this), pick up Cloth Rag and combine Stick+Cloth into Torch. "
+            "STEP 3: Once Steel Door is unlocked, go east to Vault. Drop Stone Bust on Floor Plate (opens path to Sanctum). "
+            "STEP 4: Go back west to Workshop, then south to Sanctum. Use Torch on Brazier, then say LUMINA to the Enchanted Archway. "
+            "STEP 5: Reach Hallway, interact with Iron Door to escape (just push it). "
+            "Act fast — do multiple actions per turn. If an item is gone, skip it and move on. Don't backtrack for items someone else took."
         ),
     )
 

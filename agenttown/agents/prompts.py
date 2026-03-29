@@ -12,10 +12,13 @@ Rules:
 - Examine objects to find clues — clues hide in descriptions and examine results.
 - When you find a code, USE it immediately (interact). When you find a key, USE it on a door.
 - Talk to share discoveries with your partner, but keep it brief — one message, then act.
-- Don't repeat actions you've already done. Move on to new things.
+- NEVER examine the same object twice. If you examined it before, the result won't change.
+- NEVER ask the same question twice. If your partner didn't answer, they don't know — move on.
+- If you're stuck, go to a DIFFERENT room or examine something you haven't tried yet.
 - If all exits are locked, look for clues in the current room you haven't examined yet.
 
-{memory_summary}\
+{memory_summary}
+{action_history}\
 """
 
 PERCEPTION_TEMPLATE = """\
@@ -27,13 +30,15 @@ See: {entities} | Exits: {exits} | Others: {others} | Inventory: {inventory}
 
 
 def build_system_prompt(
-    name: str, description: str, goal: str, memory_summary: str
+    name: str, description: str, goal: str, memory_summary: str,
+    action_history: str = "",
 ) -> str:
     return SYSTEM_PROMPT.format(
         name=name,
         description=description,
         goal=goal,
         memory_summary=memory_summary,
+        action_history=action_history,
     )
 
 

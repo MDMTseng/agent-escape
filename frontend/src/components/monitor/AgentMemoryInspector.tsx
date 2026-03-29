@@ -74,6 +74,9 @@ function synthesizeMemories(
   const reflections: SynthReflection[] = []
   let memoryIdCounter = 0
 
+  const roomsVisited = new Set<string>()
+  const objectsExamined = new Set<string>()
+
   for (const entry of narrativeEvents) {
     for (const event of entry.events) {
       const desc = event.description.toLowerCase()
@@ -90,14 +93,57 @@ function synthesizeMemories(
       if (event.type === 'move') {
         category = 'observation'
         importance = 1
+        // Track rooms visited
+        const enterMatch = event.description.match(/enters?\s+(.+)/i)
+        if (enterMatch) roomsVisited.add(enterMatch[1].slice(0, 30))
       } else if (event.type === 'examine') {
         category = 'observation'
         importance = 3
-        // Extract discoveries from examine events
+
+        // "X examines ObjName: description" — extract object name
+        const examineMatch = event.description.match(/examines?\s+(.+?):/i)
+        if (examineMatch) {
+          objectsExamined.add(examineMatch[1].slice(0, 40))
+        }
+
+        // Extract quoted clues/inscriptions
         const quotedMatch = event.description.match(/"([^"]{5,})"/)
         if (quotedMatch) {
-          facts.add(quotedMatch[1].slice(0, 60))
+          facts.add(`Clue: "${quotedMatch[1].slice(0, 55)}"`)
           importance = 4
+        }
+
+        // Extract single-quoted passwords/keywords
+        const singleQuoted = event.description.match(/'([^']{3,30})'/g)
+        if (singleQuoted) {
+          singleQuoted.forEach(q => {
+            const word = q.replace(/'/g, '')
+            facts.add(`Keyword: "${word}"`)
+          })
+          importance = Math.max(importance, 4)
+        }
+
+        // Extract object state info ("It is unlocked", "It is locked")
+        const stateMatch = event.description.match(/It is (unlocked|locked|open|closed|broken|sealed)/i)
+        if (stateMatch && examineMatch) {
+          facts.add(`${examineMatch[1].slice(0, 25)}: ${stateMatch[1]}`)
+          importance = Math.max(importance, 3)
+        }
+
+        // Extract "reads:" clue text
+        const readsMatch = event.description.match(/reads?:\s*"?([^"]{5,80})"?/i)
+        if (readsMatch) {
+          facts.add(`Inscription: "${readsMatch[1].slice(0, 55)}"`)
+          importance = 4
+        }
+
+        // Discover/reveal events within examine
+        if (desc.includes('reveal') || desc.includes('hidden') || desc.includes('secret')) {
+          const revealMatch = event.description.match(/(?:reveals?|hidden|secret)\s+(.{5,50})/i)
+          if (revealMatch) {
+            facts.add(`Found: ${revealMatch[1].slice(0, 45)}`)
+            importance = 5
+          }
         }
       } else if (event.type === 'pick_up') {
         category = 'discovery'
@@ -114,9 +160,9 @@ function synthesizeMemories(
         }
       } else if (event.type === 'talk') {
         category = 'conversation'
-        importance = 3
-        const speechMatch = event.description.match(/says?\s*:?\s*"?([^"]{5,60})"?/i)
-        if (speechMatch) facts.add(`Heard: "${speechMatch[1].slice(0, 50)}"`)
+        importance = 2
+        // Don't extract speech fragments as facts — they pollute working memory.
+        // Real clues come from examine/interact results.
       } else if (event.type === 'fail') {
         category = 'failure'
         importance = 3
@@ -124,11 +170,13 @@ function synthesizeMemories(
         if (failMatch) facts.add(`FAILED: ${failMatch[1].slice(0, 40)}`)
       }
 
-      // Extract number codes
-      const codes = event.description.match(/\b(\d{3,})\b/g)
-      if (codes) {
-        codes.forEach(c => facts.add(`Code: ${c}`))
-        importance = Math.max(importance, 4)
+      // Extract number codes from non-talk events
+      if (event.type !== 'talk') {
+        const codes = event.description.match(/\b(\d{3,})\b/g)
+        if (codes) {
+          codes.forEach(c => facts.add(`Code: ${c}`))
+          importance = Math.max(importance, 4)
+        }
       }
 
       stream.push({
@@ -168,13 +216,35 @@ function synthesizeMemories(
     }
   }
 
+  // Add exploration summary facts
+  if (roomsVisited.size > 0) {
+    facts.add(`Visited: ${Array.from(roomsVisited).join(', ')}`)
+  }
+  if (objectsExamined.size > 0) {
+    facts.add(`Examined: ${Array.from(objectsExamined).slice(-6).join(', ')}`)
+  }
+
+  // Prioritize: codes & keywords first, then clues, then solved, then explored, then failures last
+  const prioritized = Array.from(facts).sort((a, b) => {
+    const rank = (f: string) => {
+      if (f.startsWith('Code:') || f.startsWith('Keyword:')) return 0
+      if (f.startsWith('Clue:') || f.startsWith('Inscription:')) return 1
+      if (f.startsWith('Found:') || f.startsWith('Has:')) return 2
+      if (f.startsWith('SOLVED:')) return 3
+      if (f.startsWith('Visited:') || f.startsWith('Examined:')) return 4
+      if (f.startsWith('FAILED:')) return 5
+      return 3
+    }
+    return rank(a) - rank(b)
+  })
+
   // Mark last 3 memories as "retrieved" for latest decision highlight
   const lastTick = stream.length > 0 ? stream[stream.length - 1].tick : 0
   const latestMems = stream.filter(m => m.tick === lastTick)
   latestMems.forEach(m => { m.isRetrieved = true })
 
   return {
-    workingMemory: Array.from(facts).slice(-10),
+    workingMemory: prioritized.slice(0, 12),
     stream: stream.reverse(), // Most recent first
     reflections: reflections.reverse(),
   }

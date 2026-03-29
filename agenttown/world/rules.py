@@ -79,14 +79,17 @@ def _handle_solve(
                     entity.state = EntityState.DEFAULT
                     events.append(
                         _make_event(tick, "state_change", agent, room.id,
-                                    f"{entity.name} is revealed!", world)
+                                    f"{entity.name} is revealed!", world,
+                                    change="revealed", target=entity.name)
                     )
 
     if "set_state" in on_solve and target is not None:
         target.state = EntityState(on_solve["set_state"])
         events.append(
             _make_event(tick, "state_change", agent, room.id,
-                        f"{target.name} is now {target.state.value}.", world)
+                        f"{target.name} is now {target.state.value}.", world,
+                        change="set_state", target=target.name,
+                        state=target.state.value)
         )
 
     if "unlock_door" in on_solve:
@@ -97,7 +100,8 @@ def _handle_solve(
             door.state = EntityState.UNLOCKED
             events.append(
                 _make_event(tick, "state_change", agent, room.id,
-                            f"{door.name} unlocks with a click!", world)
+                            f"{door.name} unlocks with a click!", world,
+                            change="unlocked", target=door.name)
             )
 
     if "spawn_item" in on_solve:
@@ -106,7 +110,8 @@ def _handle_solve(
         room.add_entity(new_item)
         events.append(
             _make_event(tick, "state_change", agent, room.id,
-                        f"{new_item.name} appears!", world)
+                        f"{new_item.name} appears!", world,
+                        change="spawned", target=new_item.name)
         )
 
     if "message" in on_solve:
@@ -195,7 +200,7 @@ def _execute_move(action: Move, agent: AgentState, world: WorldState, tick: int)
             success=False,
             events=[_make_event(tick, "fail", agent, room.id,
                                 f"{agent.name} tries to go {action.direction} but the door is locked.",
-                                world)],
+                                world, target=door.name, reason="locked")],
             reason="Door is locked",
         )
 
@@ -206,9 +211,11 @@ def _execute_move(action: Move, agent: AgentState, world: WorldState, tick: int)
 
     events = [
         _make_event(tick, "move", agent, old_room_id,
-                    f"{agent.name} leaves through the {action.direction} door.", world),
+                    f"{agent.name} leaves through the {action.direction} door.", world,
+                    direction=action.direction),
         _make_event(tick, "move", agent, new_room_id,
-                    f"{agent.name} enters {new_room.name}.", world),
+                    f"{agent.name} enters {new_room.name}.", world,
+                    direction=action.direction, room_name=new_room.name),
     ]
     return ActionResult(success=True, events=events)
 
@@ -221,33 +228,36 @@ def _execute_pick_up(action: PickUp, agent: AgentState, world: WorldState, tick:
     room = world.get_agent_room(agent)
     matches = room.get_entities_by_name(action.target)
 
-    items = [e for e in matches if isinstance(e, Item) and e.state != EntityState.HIDDEN]
-    if not items:
+    # Use portable flag instead of isinstance(Item) — after save/load,
+    # Items may deserialize as Entity but still have portable=True.
+    pickable = [e for e in matches if e.portable and e.state != EntityState.HIDDEN]
+    if not pickable:
         return ActionResult(
             success=False,
             events=[_make_event(tick, "fail", agent, room.id,
                                 f"{agent.name} looks for '{action.target}' but can't find anything to pick up.",
-                                world)],
+                                world, target=action.target, reason="not_found")],
             reason=f"No pickable item '{action.target}' found",
         )
 
-    item = items[0]
-    if not item.portable:
-        return ActionResult(
-            success=False,
-            events=[_make_event(tick, "fail", agent, room.id,
-                                f"{agent.name} tries to pick up {item.name} but it's too heavy or fixed in place.",
-                                world)],
-            reason="Item is not portable",
+    entity = pickable[0]
+    room.remove_entity(entity.id)
+    # Ensure it's an Item for inventory (may have deserialized as Entity)
+    if isinstance(entity, Item):
+        item = entity
+    else:
+        item = Item(
+            id=entity.id, name=entity.name, description=entity.description,
+            state=entity.state, portable=entity.portable,
+            usable_on=entity.usable_on, properties=entity.properties,
         )
-
-    room.remove_entity(item.id)
     agent.add_item(item)
 
     return ActionResult(
         success=True,
         events=[_make_event(tick, "pick_up", agent, room.id,
-                            f"{agent.name} picks up {item.name}.", world)],
+                            f"{agent.name} picks up {item.name}.", world,
+                            item=item.name)],
     )
 
 
@@ -271,7 +281,8 @@ def _execute_drop(action: Drop, agent: AgentState, world: WorldState, tick: int)
     room.add_entity(item)
 
     events = [_make_event(tick, "drop", agent, room.id,
-                          f"{agent.name} drops {item.name}.", world)]
+                          f"{agent.name} drops {item.name}.", world,
+                          item=item.name)]
 
     # --- Mechanism 2: Pressure Plate ---
     trigger_events = _check_pressure_plates(item, agent, room, world, tick)
@@ -352,7 +363,8 @@ def _execute_use(action: Use, agent: AgentState, world: WorldState, tick: int) -
             success=True,
             events=[_make_event(tick, "use", agent, room.id,
                                 f"{agent.name} uses {item.name} on {target.name}. The door unlocks with a click!",
-                                world)],
+                                world, item=item.name, target=target.name,
+                                result="unlocked", consumed=True)],
         )
 
     # Generic usable_on check
@@ -361,7 +373,8 @@ def _execute_use(action: Use, agent: AgentState, world: WorldState, tick: int) -
             success=False,
             events=[_make_event(tick, "fail", agent, room.id,
                                 f"{agent.name} tries to use {item.name} on {target.name} but nothing happens.",
-                                world)],
+                                world, item=item.name, target=target.name,
+                                reason="incompatible")],
             reason="Item can't be used on this target",
         )
 
@@ -418,24 +431,28 @@ def _execute_examine(action: Examine, agent: AgentState, world: WorldState, tick
         return ActionResult(
             success=True,
             events=[_make_event(tick, "examine", agent, room.id,
-                                f"{agent.name} examines {inv_item.name}: {full_desc}", world)],
+                                f"{agent.name} examines {inv_item.name}: {full_desc}", world,
+                                target=inv_item.name, text=full_desc)],
         )
 
     # Examine room entity
     matches = room.get_entities_by_name(action.target)
     visible = [e for e in matches if e.state != EntityState.HIDDEN]
 
-    # Also check doors
-    for direction, door_id in room.doors.items():
-        door = world.doors[door_id]
-        if action.target.lower() in door.name.lower():
-            lock_status = "locked" if door.locked else "unlocked"
-            return ActionResult(
-                success=True,
-                events=[_make_event(tick, "examine", agent, room.id,
-                                    f"{agent.name} examines {door.name}: {door.description} It is {lock_status}.",
-                                    world)],
-            )
+    if not visible:
+        # No visible entity matched — check doors as fallback
+        for direction, door_id in room.doors.items():
+            door = world.doors[door_id]
+            if action.target.lower() in door.name.lower():
+                lock_status = "locked" if door.locked else "unlocked"
+                return ActionResult(
+                    success=True,
+                    events=[_make_event(tick, "examine", agent, room.id,
+                                        f"{agent.name} examines {door.name}: {door.description} It is {lock_status}.",
+                                        world, target=door.name,
+                                        text=f"{door.description} It is {lock_status}.",
+                                        state=lock_status)],
+                )
 
     if not visible:
         return ActionResult(
@@ -453,7 +470,8 @@ def _execute_examine(action: Examine, agent: AgentState, world: WorldState, tick
 
     events = [
         _make_event(tick, "examine", agent, room.id,
-                    f"{agent.name} examines {entity.name}: {full_desc}", world)
+                    f"{agent.name} examines {entity.name}: {full_desc}", world,
+                    target=entity.name, text=full_desc)
     ]
 
     # Examining can reveal hidden things
@@ -467,12 +485,14 @@ def _execute_examine(action: Examine, agent: AgentState, world: WorldState, tick
                         events.append(
                             _make_event(tick, "state_change", agent, room.id,
                                         f"Something was hidden behind {entity.name}! {e.name} is now visible.",
-                                        world)
+                                        world, change="revealed",
+                                        target=e.name, source=entity.name)
                         )
         if "message" in on_examine:
             events.append(
                 _make_event(tick, "examine", agent, room.id,
-                            on_examine["message"], world)
+                            on_examine["message"], world,
+                            target=entity.name, text=on_examine["message"])
             )
 
     return ActionResult(success=True, events=events)
@@ -587,6 +607,16 @@ def _execute_interact(action: Interact, agent: AgentState, world: WorldState, ti
     elif puzzle_type == "password_door":
         return _interact_password(action, target, agent, room, world, tick)
     else:
+        # Fallback: trigger on_use without requiring an inventory item
+        # (e.g. pushing the Iron Door to escape)
+        on_use = target.properties.get("on_use")
+        if on_use:
+            events = _handle_solve(on_use, agent, room, world, tick, target=target)
+            if not events:
+                events = [_make_event(tick, "use", agent, room.id,
+                                      f"{agent.name} interacts with {target.name}.", world)]
+            return ActionResult(success=True, events=events)
+
         return ActionResult(
             success=False,
             events=[_make_event(tick, "fail", agent, room.id,
@@ -617,7 +647,8 @@ def _interact_combination_lock(
         events = [
             _make_event(tick, "use", agent, room.id,
                         f'{agent.name} enters "{entered_code}" on {target.name}. It\'s correct!',
-                        world)
+                        world, target=target.name, code=entered_code,
+                        result="solved")
         ]
         events.extend(_handle_solve(on_solve, agent, room, world, tick, target=target))
         return ActionResult(success=True, events=events)
@@ -626,7 +657,8 @@ def _interact_combination_lock(
             success=False,
             events=[_make_event(tick, "fail", agent, room.id,
                                 f'{agent.name} enters "{entered_code}" on {target.name}. Wrong code!',
-                                world)],
+                                world, target=target.name, code=entered_code,
+                                reason="wrong_code")],
             reason="Wrong combination",
         )
 
@@ -654,7 +686,8 @@ def _interact_password(
         events = [
             _make_event(tick, "state_change", agent, room.id,
                         f'{agent.name} speaks the password to {target.name}. The magic words take effect!',
-                        world)
+                        world, target=target.name, result="solved",
+                        password=action.payload)
         ]
         events.extend(_handle_solve(on_solve, agent, room, world, tick, target=target))
         return ActionResult(success=True, events=events)
@@ -663,7 +696,8 @@ def _interact_password(
             success=False,
             events=[_make_event(tick, "fail", agent, room.id,
                                 f'{agent.name} tries "{action.payload}" on {target.name}. Nothing happens.',
-                                world)],
+                                world, target=target.name,
+                                password=action.payload, reason="wrong_password")],
             reason="Wrong password",
         )
 

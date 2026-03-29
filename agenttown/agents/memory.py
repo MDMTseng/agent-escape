@@ -239,11 +239,11 @@ class AgentMemory:
         if refs:
             parts.append("Plan: " + refs[-1].content)
 
-        # Top retrieved memories (compact)
-        retrieved = self.retrieve(current_tick, query=query, top_k=4)
+        # Top retrieved memories (more context)
+        retrieved = self.retrieve(current_tick, query=query, top_k=6)
         if retrieved:
-            mem_lines = [f"T{m.tick}:{m.content[:60]}" for m in retrieved]
-            parts.append("Memories: " + " | ".join(mem_lines))
+            mem_lines = [f"T{m.tick}:{m.content[:100]}" for m in retrieved]
+            parts.append("Memories:\n" + "\n".join(mem_lines))
 
         return "\n".join(parts) if parts else "No memories yet."
 

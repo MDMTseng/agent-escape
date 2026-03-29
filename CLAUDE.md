@@ -65,3 +65,10 @@ In dev mode, open `http://localhost:5173` for hot-reloading React. The Vite prox
 - **Subagents** (versioned under `.cursor/agents/`): `ui-builder` implements one feature per session from `ui-feature-list.json` and updates `ui-progress.txt`; `ui-reviewer` independently verifies and may set `passes` in the feature list. Invoke with `/ui-builder` or `/ui-reviewer`.
 - **Tracking files** (at repo root when UI work is active): `ui-feature-list.json`, `ui-progress.txt`.
 - **Loop**: pick highest-priority failing feature → `/ui-builder` → `/ui-reviewer`; on FAIL, iterate with builder until PASS. (Claude Code users may mirror agents under `.claude/agents/` locally; Cursor uses `.cursor/agents/` only.)
+
+## Notifications
+
+Send progress updates via ntfy.sh during dev loops:
+```bash
+curl -d "your message here" ntfy.sh/mdm_dev_notify
+```

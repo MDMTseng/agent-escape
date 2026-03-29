@@ -145,6 +145,16 @@ class World:
 
         recent_events = self.event_log.events_for_agent(agent.id, tick=self.state.tick - 1)
         event_descriptions = [e.description for e in recent_events]
+        # Structured event data for programmatic fact extraction (no regex needed)
+        structured_events = [
+            {
+                "type": e.event_type,
+                "actor": e.actor_id,
+                "description": e.description,
+                **e.data,
+            }
+            for e in recent_events
+        ]
 
         # Compute changes since last perception
         changes = self._compute_changes(agent, room, others, visible_entities, doors)
@@ -197,6 +207,7 @@ class World:
                 {"name": item.name, "description": item.describe()} for item in agent.inventory
             ],
             "recent_events": event_descriptions,
+            "structured_events": structured_events,
             "last_results": last_results,
             "hints": hints,
             "changes": changes,
